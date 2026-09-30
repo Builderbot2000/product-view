@@ -1,0 +1,39 @@
+# Product View configuration.
+#
+# Precedence: command-line flag > this file > built-in default
+# (src/product_view/config.py). Omitted keys take the built-in default;
+# unknown keys are an error. Nothing secret goes here.
+
+app:
+  id: com.rbc.mobile.android
+  country: ca
+
+# Holds raw/ and meta/ (the source archive, never deleted), export/ (CSV),
+# reviews.db (rebuilt clean on every `pv run` / `pv db build`) and cache.db
+# (translations + segment vectors, kept because they cost ~25 min to recompute).
+data_dir: data
+
+fetch:
+  all_langs: true          # always: Play partitions reviews by locale
+  langs: [en]              # used only when all_langs is false
+  max_reviews: 1000        # per locale, per run
+  page_size: 200           # the endpoint's ceiling
+  sleep_seconds: 1.0       # between pages; be polite
+
+corpus:
+  min_chars: 20            # shorter reviews are never translated or clustered
+
+cluster:
+  polarities: [negative, positive]   # streams `pv run` clusters
+  algorithm: leiden        # leiden | agglomerative | hdbscan
+  granularity: balanced    # broad 15-25 | balanced 40-60 | fine 80-120 | "MIN-MAX"
+  min_cluster_size:
+    negative: 25
+    positive: 15           # positive stream is about a third the size
+  cohesion_floor: 0.35     # mean cosine to centroid; below this is a grab-bag
+  merge_threshold: 0.45    # adjacent segments this similar join one complaint unit
+  knn_k: 15
+  seed: 42
+  tau_days: 365            # recency decay: each review weighs exp(-age_days / tau)
+  momentum_window_days: 365
+  native_override: null    # set the strategy's own knob, skipping the search

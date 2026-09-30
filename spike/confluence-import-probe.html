@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Product View - Confluence import probe</title>
+<!--
+  Milestone 1 spike. Import this file into the target Confluence and read the
+  result: each numbered check says what you should see if that feature
+  survived. Record pass/fail per check in Project.md section 0; the renderer
+  (pv report) may only use features that pass.
+-->
+<style>
+  .probe-style { color: #fff; background: #1a7f37; padding: 2px 6px; }
+  .probe-flex { display: flex; gap: 12px; }
+  .probe-flex > div { flex: 1; border: 2px solid #0969da; padding: 8px; }
+  .probe-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .probe-grid > div { background: #ddf4ff; padding: 8px; text-align: center; }
+  @media (prefers-color-scheme: dark) { .probe-dark { outline: 3px dashed orange; } }
+</style>
+</head>
+<body>
+
+<h1>Confluence import probe</h1>
+<p>Each check below says what you should see if the feature survived the import.
+Anything different means the feature was stripped or rewritten.</p>
+
+<h2>1. Baseline markup</h2>
+<p>Headings, <strong>bold</strong>, <em>italic</em>, <code>inline code</code>, a
+<a href="https://play.google.com/store/apps/details?id=com.rbc.mobile.android">link</a>.</p>
+<ul><li>Bulleted item</li><li>Second item</li></ul>
+<ol><li>Numbered item</li><li>Second item</li></ol>
+<blockquote>A blockquote: “The remember me option does not work”</blockquote>
+<p><strong>Pass:</strong> all of the above render with their formatting.</p>
+
+<h2>2. Table</h2>
+<table>
+  <thead><tr><th>Pain point</th><th>Size</th><th>Impact</th></tr></thead>
+  <tbody>
+    <tr><td>Keeps telling me to update</td><td>375</td><td>91.2</td></tr>
+    <tr><td>Trusted device code never arrives</td><td>288</td><td>84.0</td></tr>
+    <tr><td>Interac e-transfer fails</td><td>241</td><td>77.5</td></tr>
+  </tbody>
+</table>
+<p><strong>Pass:</strong> a 3-row table with a header row.</p>
+
+<h2>3. &lt;style&gt; block in &lt;head&gt;</h2>
+<p><span class="probe-style">This text is white on green.</span></p>
+<p><strong>Pass:</strong> white on green. Plain black text means class-based CSS was stripped.</p>
+
+<h2>4. Inline style attributes</h2>
+<p><span style="color:#cf222e;font-weight:bold">This text is bold red.</span>
+<span style="background:#fff8c5;padding:2px 6px">This has a yellow background.</span></p>
+<div style="width:40%;height:14px;background:#0969da"></div>
+<p><strong>Pass:</strong> red text, yellow highlight, and a blue bar about 40% wide (the bar is how a bar chart would be drawn without SVG).</p>
+
+<h2>5. Flexbox and grid layout</h2>
+<div class="probe-flex"><div>Left column</div><div>Right column</div></div>
+<div class="probe-grid" style="margin-top:8px"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div></div>
+<p><strong>Pass:</strong> two blue-bordered columns side by side, then a 3×2 grid of light-blue tiles.</p>
+
+<h2>6. JavaScript</h2>
+<p id="probe-js">✗ Scripts did NOT run.</p>
+<script>
+  document.getElementById('probe-js').textContent = '✓ Scripts ran.';
+</script>
+<p><button onclick="this.textContent='✓ onclick handlers work'">Click me</button></p>
+<p><strong>Pass:</strong> "Scripts ran", and clicking the button changes its label. If this fails, sortable tables and filters must be dropped.</p>
+
+<h2>7. Inline SVG chart</h2>
+<svg width="320" height="80" viewBox="0 0 320 80" role="img" aria-label="Monthly share sparkline">
+  <polyline fill="none" stroke="#0969da" stroke-width="2"
+    points="0,70 30,66 60,68 90,60 120,62 150,20 180,40 210,55 240,58 270,52 300,50 320,48"/>
+  <circle cx="150" cy="20" r="4" fill="#cf222e"/>
+</svg>
+<p><strong>Pass:</strong> a blue line with a spike marked by a red dot. If this fails, trend lines must be images or tables.</p>
+
+<h2>8. Image as a data: URI</h2>
+<img alt="data-uri test" width="120" height="40" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iNDAiPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iNDAiIGZpbGw9IiMxYTdmMzciLz48dGV4dCB4PSI2MCIgeT0iMjYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj5kYXRhIFVSSTwvdGV4dD48L3N2Zz4=">
+<p><strong>Pass:</strong> a green box reading "data URI". Check whether Confluence kept it inline or turned it into an attachment.</p>
+
+<h2>9. Collapsible section</h2>
+<details>
+  <summary>Click to expand the supporting quotes</summary>
+  <p>“Keeps telling me to update. there are no updates available”</p>
+</details>
+<p><strong>Pass:</strong> a closed section that opens on click. If it is flattened to plain text, expand macros are the fallback.</p>
+
+<h2>10. In-page anchors</h2>
+<p><a href="#probe-target">Jump to the anchor target</a></p>
+
+<h2>11. Text encoding</h2>
+<p>French: « L’empreinte digitale ne fonctionne plus » · emoji: 🏦 📉 ⭐ · CJK: 无法登录</p>
+<p><strong>Pass:</strong> all characters appear correctly, with no � or mojibake.</p>
+
+<h2>12. Dark mode media query</h2>
+<p class="probe-dark">Orange dashed outline in dark mode only.</p>
+<p><strong>Pass:</strong> the outline appears only when Confluence (or the OS) is in dark mode. Low priority.</p>
+
+<h2 id="probe-target">Anchor target</h2>
+<p><strong>Pass for check 10:</strong> the link above scrolled here.</p>
+
+</body>
+</html>

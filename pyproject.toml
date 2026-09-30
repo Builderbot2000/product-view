@@ -1,0 +1,38 @@
+[project]
+name = "product-view"
+version = "0.1.0"
+description = "Aggregate Google Play reviews into clustered product pain points"
+requires-python = ">=3.10"
+dependencies = [
+    "google-play-scraper>=1.2.7",
+    # Clustering stage. `sentence-transformers` and `transformers` both pull
+    # `torch`, which dominates the download: ~250 MB CPU wheel on Windows and
+    # macOS, but plain PyPI on Linux resolves to the ~2.5 GB CUDA build. See
+    # the README for the CPU-only index URL that keeps a Linux install sane.
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "scikit-learn>=1.3",          # AgglomerativeClustering + HDBSCAN (1.3+)
+    "sentence-transformers>=2.2",
+    "transformers>=4.30",         # MarianMT, fr->en
+    "sentencepiece>=0.1.99",      # MarianMT tokenizer
+    "py3langid>=0.2",             # pure-Python language detection, ~2 MB
+    "python-igraph>=0.11",        # abi3 wheels, no compiler on any target
+    "leidenalg>=0.10",
+    "platformdirs>=3.0",          # model cache location, cross-platform
+    "pyyaml>=6.0",                # config.yaml
+]
+
+[project.optional-dependencies]
+# umap-learn -> numba -> llvmlite is the most install-fragile chain in this
+# space. Gated so the core install stays light and cross-platform.
+umap = ["umap-learn>=0.5"]
+
+[project.scripts]
+pv = "product_view.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

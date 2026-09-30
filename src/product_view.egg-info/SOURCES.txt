@@ -1,0 +1,15 @@
+README.md
+pyproject.toml
+src/product_view/__init__.py
+src/product_view/archive.py
+src/product_view/cli.py
+src/product_view/models.py
+src/product_view.egg-info/PKG-INFO
+src/product_view.egg-info/SOURCES.txt
+src/product_view.egg-info/dependency_links.txt
+src/product_view.egg-info/entry_points.txt
+src/product_view.egg-info/requires.txt
+src/product_view.egg-info/top_level.txt
+src/product_view/ingest/__init__.py
+src/product_view/ingest/base.py
+src/product_view/ingest/play_store.py

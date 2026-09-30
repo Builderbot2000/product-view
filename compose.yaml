@@ -1,0 +1,15 @@
+services:
+  pv:
+    build: .
+    image: product-view
+    volumes:
+      # Archive and databases, shared with the host so `pv` runs on either
+      # side see the same corpus. Don't run both at once against one database.
+      - ./data:/app/data
+      # Edit config on the host without rebuilding the image.
+      - ./config.yaml:/app/config.yaml:ro
+      # all-MiniLM-L6-v2 + opus-mt-fr-en, ~390 MB, downloaded on first use.
+      - models:/cache
+
+volumes:
+  models:
