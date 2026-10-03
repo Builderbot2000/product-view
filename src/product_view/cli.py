@@ -26,7 +26,7 @@ from pathlib import Path
 
 from .archive import CSV_COLUMNS
 
-from . import commands, config, publish
+from . import commands, config, publish, render
 from .archive import ReviewArchive, corpus_known_ids, dataset_slug, iter_corpus
 from .ingest.play_store import (
     DEFAULT_LANGS,
@@ -269,6 +269,7 @@ def build_parser() -> argparse.ArgumentParser:
     # Clustering stage lives in commands.py so this file stays parsing and
     # presentation for the ingest stage.
     commands.add_parsers(sub, common, add_fetch_options)
+    render.add_parser(sub, common)
     publish.add_parser(sub)
     return parser
 

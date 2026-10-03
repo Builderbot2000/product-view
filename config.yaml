@@ -38,6 +38,13 @@ cluster:
   momentum_window_days: 365
   native_override: null    # set the strategy's own knob, skipping the search
 
+# `pv report`: a periodic overview. Negative reviews run at ~55-80 a month,
+# so a period much shorter than 4 weeks leaves most issues at 0-3 reviews.
+report:
+  period_days: 28          # the reporting period, ending on the newest review's day
+  baseline_periods: 6      # "usual" = mean of this many equal periods before it
+  curation: curation.yaml  # areas, roles, labels and merges
+
 # `pv publish` target. Credentials are NOT here: CONFLUENCE_BASE_URL,
 # CONFLUENCE_USER and ATLASSIAN_TOKEN come from the environment or .env.
 confluence:

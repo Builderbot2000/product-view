@@ -61,6 +61,14 @@ DEFAULTS: dict[str, Any] = {
         "momentum_window_days": 365.0,
         "native_override": None,
     },
+    # `pv report`: a periodic overview, not all of history (report-design.md
+    # D15). The period ends on the newest review's day; the baseline is the
+    # mean of that many equal periods before it.
+    "report": {
+        "period_days": 28,
+        "baseline_periods": 6,
+        "curation": "curation.yaml",
+    },
     # Where `pv publish` puts the page. Credentials are not here: they come
     # from the environment (see publish/confluence.py).
     "confluence": {
@@ -91,6 +99,9 @@ FLAG_KEYS: dict[str, str] = {
     "tau_days": "cluster.tau_days",
     "momentum_window": "cluster.momentum_window_days",
     "native_override": "cluster.native_override",
+    "period_days": "report.period_days",
+    "baseline_periods": "report.baseline_periods",
+    "curation": "report.curation",
     "space": "confluence.space",
     "title": "confluence.title",
     "parent_id": "confluence.parent_id",

@@ -18,6 +18,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -153,6 +154,25 @@ class Client:
             return self.update_page(existing["id"], title, body, message), False
         return self.create_page(sid, title, body, parent_id), True
 
+    def set_full_width(self, page_id: str) -> None:
+        """Full-width appearance, the content properties the editor itself
+        sets (report-design.md D3). Updated in place when already present."""
+        for key in ("content-appearance-published", "content-appearance-draft"):
+            path = f"/rest/api/content/{page_id}/property/{key}"
+            try:
+                current = self._request("GET", path)
+            except ConfluenceError as exc:
+                if "HTTP 404" not in str(exc):
+                    raise
+                current = None
+            if current is None:
+                self._request("POST", f"/rest/api/content/{page_id}/property",
+                              json_body={"key": key, "value": "full-width"})
+            elif current.get("value") != "full-width":
+                self._request("PUT", path, json_body={
+                    "key": key, "value": "full-width",
+                    "version": {"number": current["version"]["number"] + 1}})
+
     def page_url(self, page: dict) -> str:
         webui = (page.get("_links") or {}).get("webui", "")
         return self.base + webui if webui else f"{self.base}/pages/{page['id']}"
@@ -208,7 +228,16 @@ class Client:
             b'Content-Disposition: form-data; name="minorEdit"\r\n\r\ntrue',
             f"\r\n--{boundary}--\r\n".encode(),
         ])
-        self._request(
-            "POST", path, data=body,
-            headers={"Content-Type": f"multipart/form-data; boundary={boundary}",
-                     "X-Atlassian-Token": "no-check"})
+        # Cloud occasionally answers an attachment write with HTTP 500
+        # ("transaction rolled back"); the same request then succeeds.
+        for attempt in range(3):
+            try:
+                self._request(
+                    "POST", path, data=body,
+                    headers={"Content-Type": f"multipart/form-data; boundary={boundary}",
+                             "X-Atlassian-Token": "no-check"})
+                return
+            except ConfluenceError as exc:
+                if "HTTP 5" not in str(exc) or attempt == 2:
+                    raise
+                time.sleep(2 * (attempt + 1))

@@ -556,6 +556,23 @@ class Store:
             (run_id, pain_point_id, limit),
         ).fetchall()
 
+    def member_reviews(self, run_id: str) -> list[sqlite3.Row]:
+        """One row per complaint unit in the run, with the review fields the
+        report derives its numbers from. Most central unit first, so a reader
+        keeping the first row per (pain point, review) keeps the best quote."""
+        return self.conn.execute(
+            """
+            SELECT m.pain_point_id, m.review_id, m.unit_text, m.similarity,
+                   r.created_at, r.score, r.thumbs_up, r.app_version,
+                   r.reply_content IS NOT NULL AS replied
+              FROM pain_point_members m
+              JOIN reviews r ON r.review_id = m.review_id
+             WHERE m.run_id = ?
+             ORDER BY m.similarity DESC
+            """,
+            (run_id,),
+        ).fetchall()
+
     def unit_texts(
         self, run_id: str, pain_point_id: str, review_ids: Sequence[str]
     ) -> dict[str, str]:

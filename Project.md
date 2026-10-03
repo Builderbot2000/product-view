@@ -35,8 +35,8 @@ not by reasoning about them. A fresh session should not need to re-derive any of
 | End to end | **Done.** `pv run [--fetch]` — rebuilds `reviews.db` clean, then translate → embed → cluster every stream in config |
 | Config | **Done.** [config.yaml](config.yaml); flag > config > built-in default; unknown keys are an error |
 | Container | **Built and verified 2026-09-29** on Docker Desktop 4.30 (Windows). Image 1.46 GB, torch `2.14.0+cpu`. `pv run` in the container took 1m49s on warm caches: 43 negative / 51 positive pain points. The resulting `reviews.db` passes `integrity_check`, and host and container `pv painpoints` output match. [Dockerfile](Dockerfile) + [compose.yaml](compose.yaml) |
-| (F) Render | **Not started.** `pv report` will emit one self-contained HTML page. What it may use is decided by the Confluence probe (milestone 1), whose results are only partly recorded (see "Still open") |
-| (G) Publish | **Built 2026-09-30, uncommitted.** `pv publish FILE [--dry-run]` converts HTML to storage format and creates or updates a page over REST. It replaced the manual zip import. Exercised once against the probe (page id 917505); there are no tests yet. See §2 (G) |
+| (F) Render | **Demo version built 2026-10-03 (uncommitted).** `pv report [--publish]` builds a **periodic** page tree in Confluence storage format: a hub (every area) and one page per role (only that role's areas), with SVG charts. Live on the demo site. Decisions, page plans and progress: [report-design.md](report-design.md); remaining work: "Remaining work" below |
+| (G) Publish | **Built 2026-09-30 (`ff32053`); extended 2026-10-03 (uncommitted).** `pv publish FILE` takes HTML (converted) or a storage-format `.xhtml` (passed through, full width, attachments read from its folder). `publish_tree` publishes a parent page then its children. Transient 5xx on attachment writes are retried. No tests yet. See §2 (G) |
 
 Code lives in [src/product_view/](src/product_view/): [cli.py](src/product_view/cli.py)
 (parsing + ingest), [commands.py](src/product_view/commands.py) (clustering stage + `run`),
@@ -44,8 +44,9 @@ Code lives in [src/product_view/](src/product_view/): [cli.py](src/product_view/
 [models.py](src/product_view/models.py), [archive.py](src/product_view/archive.py),
 [store.py](src/product_view/store.py), and the
 [ingest/](src/product_view/ingest/), [lang/](src/product_view/lang/),
-[embed/](src/product_view/embed/), [cluster/](src/product_view/cluster/) and
-[publish/](src/product_view/publish/) packages.
+[embed/](src/product_view/embed/), [cluster/](src/product_view/cluster/),
+[render/](src/product_view/render/) and [publish/](src/product_view/publish/)
+packages. Report curation (labels, areas, roles) is in [curation.yaml](curation.yaml).
 
 ### Environment
 
@@ -55,9 +56,8 @@ Code lives in [src/product_view/](src/product_view/): [cli.py](src/product_view/
   `scipy`, `scikit-learn`, `sentence-transformers`, `transformers`,
   `sentencepiece`, `py3langid`, `python-igraph`, `leidenalg`, `platformdirs`,
   `pyyaml`. Optional extra `[umap]`, not required and not built.
-- **Git, branch `main`.** One commit so far (`5bec9b9`, 2026-09-30), covering
-  stages A–E. The publish package, the probe builder and the doc updates are
-  still uncommitted.
+- **Git, branch `main`.** `5bec9b9` (2026-09-30) covers stages A–E; `ff32053`
+  adds `pv publish` and the first Confluence probe.
 - **`torch` dominates the install and is easy to get wrong.** Windows and macOS
   resolve to the ~250 MB CPU wheel; plain `pip install` on **Linux pulls the
   ~2.5 GB CUDA build** — use `--index-url https://download.pytorch.org/whl/cpu`.
@@ -193,61 +193,58 @@ These cost real time to discover:
 1. **No LLM anywhere.** Synthesis is algorithmic — c-TF-IDF, medoid, LexRank, MMR.
    Fully local, no credentials, deterministic.
 2. **Positive and negative clustered separately.**
-3. **Cluster all history, rank by recency-weighted impact** — old issues form clusters
-   but sink unless still live.
+3. **Cluster all history; report one period.** Old issues form clusters, which keeps
+   issue definitions stable, but the report counts only the reporting period (default
+   28 days) against the periods before it (report-design.md D15). `impact` still
+   exists for `pv painpoints` but no longer ranks anything in the report.
 4. **Translate French → English, then embed with `all-MiniLM-L6-v2`** rather than using
    a multilingual embedder. Reason: extractive quotes must be readable by an
    English-speaking PM.
 5. **Pluggable cluster strategies** (`leiden` default) behind one interface, one shared
    output schema, one granularity knob.
+6. **The report is split by product area, and roles read areas** (report-design.md
+   D16). Areas and roles are a lookup in `curation.yaml`, not stored data.
 
 ### Still open
 
-- **What renders in Confluence — now the only thing blocking the renderer.**
-  History: on 2026-09-29 the plan became a self-contained HTML page brought in
-  through Confluence's HTML import. On 2026-09-30 `pv publish` (REST, storage
-  format) replaced the import, so **what REST storage format renders is what
-  counts.** The import findings below are kept as a guide.
-
-  **Next step:** open "ProbeDashboard (REST)" (id 917505) beside the imported
-  ProbeDashboard and record which of the 20 checks in
-  [ProbeDashboard.html](spike/confluence-probe/Product%20View%20Probe/ProbeDashboard.html)
-  pass on each. The REST column is the list the renderer may use. Rebuild the
-  probe with [spike/build_confluence_probe.py](spike/build_confluence_probe.py)
-  and republish it with `pv publish`.
-
-  The import route: [Atlassian's docs](https://support.atlassian.com/confluence-cloud/docs/faq-import-data-from-html-to-confluence/)
-  and community threads report that the conversion strips or ignores `<style>`
-  blocks and inline CSS. `<script>` is almost certainly stripped too.
-
-  From the [Cloud FAQ](https://support.atlassian.com/confluence-cloud/docs/faq-import-data-from-html-to-confluence/)
-  (2026-09-30), not yet confirmed by an import:
-  - **Packaging.** Only a `.zip` is accepted, holding one folder of `.html`
-    files. The folder name becomes the **space** name. A page's media goes in a
-    folder named after the page (`Dashboard.html` + `Dashboard/chart.png`).
-  - **Supported:** headings, paragraphs, lists, center alignment, bold/italic,
-    links, images, tables, emoji, quotes, dividers, inline code, superscript.
-  - **Unsupported:** `<title>`, figure, nav, iframe, audio, buttons, code
-    blocks, custom text colours, equations. Embedded video becomes a link.
-  - **Risk to "overwrite one page each run":** the importer creates a space, so
-    a second import may make a second space instead of a new page version.
-    Probe check 20 tests this. If it does, the fallbacks in (G) apply.
-    **Moot since 2026-09-30:** `pv publish` updates pages over REST instead.
-
-  Zip import result (2026-09-30, skenshin2000.atlassian.net): it landed and
-  rendered. The pages went into the existing space "product view test", not a
-  new "Product View Probe" space. Page titles came from the **filenames**, not
-  `<title>` or `<h1>` (check 19). ProbeDashboard and ProbeLinked became
-  **siblings** under the space home (check 18). Checks 1-17 and 20 not yet
-  recorded.
-
-  REST publish of the same probe: page "ProbeDashboard (REST)" (id 917505) in
-  the same space. The storage body keeps the expand macro, `<pre>` and three
-  attachment images. Compare it visually with the imported ProbeDashboard to
-  fill in which checks render.
-- Who owns the scheduled run, and which Confluence space and page.
-  `confluence.space` is still `null` in config.yaml; the probe used the test
-  space "product view test" on skenshin2000.atlassian.net.
+- ~~**What renders in Confluence.**~~ **Settled 2026-10-03** on
+  kevintangcyberium.atlassian.net, space `MFS`, by reading each page in the
+  browser and through the REST `view` body. Two probes:
+  - **Probe 1, HTML through `pv publish`** (page 98532, from
+    [ProbeDashboard.html](spike/confluence-probe/Product%20View%20Probe/ProbeDashboard.html)).
+    Survives: headings, bold/italic, inline code, links, lists, blockquote,
+    tables, `<pre>`, superscript, `text-align`, emoji/French/CJK, `<hr>`,
+    inline SVG and data: URI images (both become attachments), `<details>`
+    (becomes an expand). Inline `color` survives (Confluence rewrites it to
+    its own colour id). **Lost:** `<style>` and classes, flexbox and grid,
+    `<div>`-drawn bars, scripts, inline `background`. **Broken:**
+    `href="#id"` anchors (Confluence prefixes heading ids) and relative links
+    to other pages. Page title: the HTML `<title>`.
+  - **Probe 2, raw storage format**
+    ([spike/build_confluence_probe_native.py](spike/build_confluence_probe_native.py),
+    page 294964). **All render:** full-width page (content properties
+    `content-appearance-published` / `-draft` = `full-width`, set over REST);
+    `ac:layout` sections (`three_equal`, `two_right_sidebar`, …);
+    `panel` with `bgColor` / `borderColor` (works as a KPI tile); styled SVG
+    attachments (fonts, colours and text labels intact); `status` lozenges in
+    all six colours, inline in tables too; `info` / `note` / `warning` / `tip`;
+    `data-highlight-colour` on `<td>`; `<colgroup>` column widths; text
+    `color` and `background-color` on spans; named `excerpt`; `anchor` macro +
+    `ac:link ac:anchor`; `ac:link` to a page by title; `expand` holding a
+    table; `toc`; `<time>`; emoticons; `code`; `details` (page properties);
+    `chart` (renders, but the look is dated). Not yet tested:
+    `excerpt-include` across pages, @mentions.
+  - **Conclusion:** the renderer writes storage format directly. HTML
+    conversion caps the page at plain tables. Charts are our own SVGs, not the
+    `chart` macro.
+  - The zip import route is retired: REST replaced it on 2026-09-30.
+- **Which Confluence space.** `confluence.space` is still `null` in
+  config.yaml. The demo site (since 2026-10-03) is
+  kevintangcyberium.atlassian.net, which has only `MFS` and a personal space;
+  `pv publish` can't create a space. The earlier site,
+  skenshin2000.atlassian.net, held the space "product view test".
+- Who owns the scheduled run. Delivery to team members (page @mentions plus
+  Slack links) is deferred until after the demo.
 - **Generic clusters at the top of the ranking — built 2026-09-24.** On the
   whole-review run of 2026-09-23 the top three negative pain points were "bank
   rbc", "mobile banking" and "royal bank". There were three causes:
@@ -291,11 +288,55 @@ These cost real time to discover:
   - **Merge threshold not tuned.** The 0.45 is from the prototype.
   - **Leftover cache table.** `cache.db` still holds the old whole-review
     `embeddings` table (~27 MB), which nothing reads now. It is safe to drop.
-- Cross-run pain-point matching is **not** built. `pain_point_id` is derived from
-  the medoid review, so it is stable while that review stays the most typical,
-  but there is no Hungarian centroid matching. Trend lines do not need it —
-  clustering all 15 years in one pass gives each pain point its full history on
-  the first run — but comparing *this week's clusters to last week's* would.
+- Cross-run pain-point matching: **solved for the report by anchors, not
+  centroid matching** (2026-10-03). Each curated label in `curation.yaml` lists
+  anchor reviews (the medoids of its clusters when curated). On every run a
+  cluster takes the label whose anchors it holds, so hand labels survive the
+  re-clustering every scheduled run does. Period-over-period comparison needs no
+  matching: one run spans all history, and the report slices it by date.
+
+### Remaining work
+
+Recorded 2026-10-03, after the periodic, role-split report went live. Detail
+for the report items is in [report-design.md](report-design.md) §6.
+
+**Report (F)**
+1. **Quote quality.** A period quote is the review's most central unit in the
+   cluster, which is sometimes off-topic (a translated cheque-photo review
+   under "App won't open"). Prefer units above a similarity floor.
+2. **Validate areas and roles with the team.** The five roles (UI & design,
+   Sign-in & security, Payments, Engineering / QA, Support / CX) and eight
+   areas in `curation.yaml` are a first guess at the org.
+3. **Labels from the company-approved internal model** (D6), replacing hand
+   labels. Which model, and how to call it, is still unknown.
+4. **Curating new clusters.** Uncurated clusters show "auto-labelled" and are
+   filed by keyword. Add a helper that prints a `curation.yaml` stub (label,
+   kind, areas, anchor), and decide who maintains the file.
+5. **Release periods** ("since 4.67") as an alternative to fixed 28 days.
+6. **Developer-reply rate** per issue for the Support / CX page.
+7. **Stale attachments.** Republishing leaves unreferenced charts from older
+   versions on a page; attachment sync could delete what the page no longer
+   references.
+8. Deferred: per-issue pages; `excerpt-include` (untested, not needed while
+   every page is generated).
+
+**Publish (G) and running**
+9. **Tests** for `render/` and `publish/` (none yet).
+10. **Wire `pv report --publish` into `pv run`** and the scheduling recipes.
+11. Set `confluence.space` in config.yaml (still `null`; the demo uses
+    `--space MFS`).
+
+**Clustering (D)**, now lower priority because the report no longer ranks
+by impact: impact weights and `sole_share`; merge threshold 0.45 untuned;
+drop the leftover `embeddings` table in `cache.db` (~27 MB).
+
+**After the demo (delivery)**: a proper service account or OAuth app instead
+of an employee's token; @mentions and Slack links; write access to the
+team's space.
+
+**Housekeeping**: everything since `ff32053` is uncommitted (render/,
+curation.yaml, report-design.md, publish and config changes, probe 2).
+Milestone 1 checks 1–17 and 20 are still unrecorded.
 
 ---
 
@@ -553,33 +594,35 @@ deterministic output that does not drift between runs.
 
 ### (F) Render — `pv report`
 
-Jinja2 → **one self-contained HTML file**: inline CSS, inline SVG, no CDN, no
-external assets. The file is the product. It opens in any browser as-is, and
-`pv publish` turns it into the Confluence page. No zip packaging is needed.
+**Full decisions, page plans and progress: [report-design.md](report-design.md).**
 
-**Which features the page may use is decided by the probe, not by design
-preference.** `pv publish` drops `<script>`, `<style>` and `<button>` on the
-way to storage format, and what else renders is still unrecorded. The renderer
-therefore builds in two layers:
+**Built 2026-10-03.** `pv report` writes Confluence storage format plus SVG
+charts, one folder per page under `out/report/`; `--publish` pushes the tree
+(hub first, role pages under it). HTML is not emitted: the probes showed HTML
+conversion drops every layout and styling feature (§0 "Still open").
 
-1. **Content layer — must survive conversion.** Headings, tables, lists,
-   blockquotes and links: every pain point, its numbers and its quotes. This
-   layer alone must meet the success criteria.
-2. **Enhancement layer — only if the probe says it survives.** Styling, SVG
-   trend lines, collapsible sections, sortable columns. If a feature is
-   stripped, the page must still read correctly without it.
+- **Periodic.** The report covers one period (default 28 days, ending on the
+  newest review's day) against "usual", the mean of the 6 periods before it.
+  A count is *up* or *down* only if a Poisson test at the usual rate says so
+  (p < 0.05, at least 3 reviews); negative reviews run at ~55–80 a month, too
+  few for ratios. Quotes come from the period.
+- **By area and role.** Issues are filed under product areas; each role reads
+  some areas and gets its own page. The hub shows all areas, what changed,
+  general sentiment, what users liked, and the method.
+- **Curation** ([curation.yaml](curation.yaml)): areas (with keywords for
+  filing uncurated clusters), roles, and labels with kind, areas and anchor
+  reviews. Clusters under one label merge; counts are distinct reviews.
+- **Code** ([render/](src/product_view/render/)): `blocks.py` (storage
+  helpers), `svg.py` (sparklines, area chart), `issues.py` (period, change
+  test, label matching, areas), `pages.py` (hub and role pages).
 
-Dashboard contents:
-
-- Header: app name, review window, total reviews, mean score, run timestamp.
-- Pain point cards ranked by impact. Each card: title, summary, size, impact
-  components, representative reviews with score and date.
-- Trends: each pain point's monthly share of the corpus (not raw counts; see
-  README "Trends: always divide by the corpus").
-- Distribution: the corpus rating histogram **beside the store listing's**, so
-  the gap is explained on the page rather than discovered by a reader.
-- Appendix: run parameters and model versions, so a surprising result can be
-  explained rather than argued about.
+**Audience (2026-10-03).** The Mobile division product team. Primarily the
+**analysts who interpret reviews**: the hub gives them evidence to compose
+their own reports, and doesn't replace them. Each team gets a page with only
+what it can act on. A competing internal effort on weaker models is expected
+to produce text summaries and plain tables, so the demo leads with change
+over time, charts and traceable quotes. **Demo first;** delivery
+infrastructure comes later.
 
 ### (G) Publish
 
@@ -603,9 +646,12 @@ needs no one to upload anything.
 - Flags `--space`, `--title`, `--parent-id` override the `confluence:` section
   of config.yaml. The title defaults to the HTML `<title>`, else the filename.
 
-The zip import's feature findings still apply as a guide, but REST storage
-format is a different path: what renders is decided by storage format, not the
-importer. Re-run the probe through `pv publish` to confirm.
+**Storage passthrough and page trees (built 2026-10-03).** A `.xhtml` file
+is published as-is with the attachments its `ri:attachment` elements name,
+read from the same folder, and set to full width. `publish_tree` publishes a
+parent then its children; an existing page keeps its place in the tree.
+Attachment writes that fail with HTTP 5xx (Confluence Cloud occasionally
+answers "transaction rolled back") are retried twice.
 
 Auth: env vars `CONFLUENCE_BASE_URL`, `CONFLUENCE_USER` (account email) and
 `ATLASSIAN_TOKEN`, from the environment or `.env`. Never committed, never in
@@ -621,11 +667,14 @@ As built. Entries marked *(planned)* don't exist yet.
 product-view/
 ├── project.md              # this plan + the session handoff (§0)
 ├── aggregation-plan.md     # clustering-stage design and measured results
+├── report-design.md        # render-stage decisions: audience, Confluence vocabulary, pages, build steps
 ├── README.md
 ├── pyproject.toml
 ├── config.yaml             # every stage's defaults; flags override
+├── curation.yaml           # report taxonomy: areas, roles, issue labels + anchor reviews
 ├── Dockerfile, compose.yaml, .dockerignore
-├── spike/                  # milestone 1: build_confluence_probe.py + confluence-probe/ (zip source)
+├── spike/                  # milestone 1: build_confluence_probe.py + confluence-probe/ (HTML probe),
+│                           #   build_confluence_probe_native.py (storage-format probe)
 ├── src/product_view/
 │   ├── cli.py              # entry point; fetch / export / info / langs
 │   ├── commands.py         # db build / translate / embed / cluster / painpoints / run
@@ -640,10 +689,10 @@ product-view/
 │   ├── lang/               # detect.py, translate.py
 │   ├── embed/              # encoder.py, segment.py
 │   ├── cluster/            # units, graph, strategies, granularity, synthesize, scoring, pipeline
-│   ├── render/             # (planned) milestone 4
-│   └── publish/            # pv publish: storage.py (HTML→storage), confluence.py (REST)
+│   ├── render/             # pv report: blocks.py, svg.py, issues.py (periods, curation), pages.py
+│   └── publish/            # pv publish: storage.py (HTML→storage), confluence.py (REST), page trees
 ├── data/                   # gitignored: raw/, meta/, export/, reviews.db, cache.db
-├── out/                    # gitignored: probe zip, --dry-run storage format; later the report
+├── out/                    # gitignored: probe zip, --dry-run storage format, report/ (one folder per page)
 └── tests/                  # (planned) milestone 6
 ```
 
@@ -686,7 +735,9 @@ environment or a gitignored `.env`.
   This replaced a hidden rule that silently changed 25 to 15 for the positive
   stream, which also caught an explicit `--min-cluster-size 25`.
 
-A `render` section will be added when that stage exists, not before.
+`report` (built 2026-10-03): `period_days` (28), `baseline_periods` (6) and
+`curation` (path to `curation.yaml`). Flags `--period-days`,
+`--baseline-periods` and `--curation` override them.
 
 ## 6. Milestones
 
@@ -696,8 +747,8 @@ A `render` section will be added when that stage exists, not before.
 | 1 | **Confluence spike** (partly done) | Probe built with [spike/build_confluence_probe.py](spike/build_confluence_probe.py), imported by zip and published over REST (2026-09-30). Only checks 18–19 are recorded. **Remaining:** record checks 1–17 and 20 for the REST page. *Constrains milestone 4.* |
 | 2 | Ingest ✅ | **Done.** `pv fetch --all-langs` backfilled 21,506 RBC reviews across 18 locales, resumable and deduped; `pv langs` probes coverage; `pv export` → CSV; `pv info` → summary with store-listing contrast |
 | 3 | Cluster ✅ | **Done.** `pv db build`, `pv translate`, `pv embed`, `pv cluster`, `pv painpoints`. Complaint-unit clustering: 43 negative / 51 positive pain points, 0 reviews uncovered, deterministic, three strategies behind one interface. Design in [aggregation-plan.md](aggregation-plan.md) |
-| 4 | Render ← **next** | `pv report` emits the dashboard as one self-contained HTML file. **Gated on milestone 1:** the probe results decide what it may use |
-| 5 | Publish ✅ (uncommitted) | `pv publish` over REST, built 2026-09-30 ahead of schedule so no run needs a manual upload. Still to do: wire it into `pv run`, and add tests |
+| 4 | Render ✅ (demo, uncommitted) | `pv report` emits a periodic hub plus role pages in Confluence storage format with SVG charts (2026-10-03). Remaining: §0 "Remaining work" |
+| 5 | Publish ✅ | `pv publish` over REST (2026-09-30, committed); storage passthrough, page trees and retries added 2026-10-03 (uncommitted). Still to do: wire `pv report --publish` into `pv run`, and add tests |
 | 6 | Polish (partly done) | ✅ `pv run` end to end, ✅ `config.yaml`, ✅ clean database per run, ✅ container built and verified, ✅ git. Still to do: test suite, scheduling notes, CSV ingest source |
 
 Milestone 1 is ordered ahead of the pipeline work deliberately: discovering the
@@ -716,13 +767,15 @@ cluster only what's new.
 - Manual: run it before the weekly product sync
 
 Weekly is the right cadence — review volume per app is low enough that daily runs
-produce noise, and a week of accumulation gives clusters enough mass.
+produce noise, and a week of accumulation gives clusters enough mass. Each weekly
+run still *reports* a 28-day period (report-design.md D15), so the pages are a
+rolling update; `pv report --publish` is not yet part of `pv run`.
 
 ## 8. Risks
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Confluence storage format can't carry CSS or scripts | High | `pv publish` already drops them; the probe (milestone 1) records what else renders. Fallbacks, in order: design to what survives; attach the full HTML file to the page and link it from a static summary |
+| Confluence storage format can't carry CSS or scripts | Medium (was High) | Confirmed by the probes. Design with native layouts and macros plus SVG chart attachments instead, all of which render (§0 "Still open"). Nothing on the page can be interactive: use separate pages for views and `expand` for detail |
 | `google-play-scraper` breaks on a Play redesign | Medium | Isolated behind `ReviewSource`; the JSONL archive already on disk keeps `pv run` working offline (a CSV source is planned) |
 | Play Store exposes only recent reviews | Medium | Accumulate across runs. The **JSONL archive** is the long-term store, not SQLite, which is rebuilt every run |
 | Generic clusters dominate the ranking | Medium | Clustering now runs on complaint units, and `sole_share` flags generic pain points. `impact` still ranks them high; see §0 "Still open" |
@@ -735,9 +788,9 @@ produce noise, and a week of accumulation gives clusters enough mass.
 
 ## 9. Open questions
 
-1. **What renders through `pv publish`?** Answered by the probe, not by
-   reasoning; see §0 "Still open". Cloud is confirmed as the target
-   (skenshin2000.atlassian.net). Shapes milestone 4.
+1. ~~**What renders through `pv publish`?**~~ Settled 2026-10-03 by two
+   probes: write storage format directly; see §0 "Still open". Cloud is the
+   target (now kevintangcyberium.atlassian.net).
 2. ~~**Which app(s)?**~~ Settled: `com.rbc.mobile.android`, all `ca` locales.
    The corpus is 91.9% English, 7.4% French, 0.2% non-Latin scripts — handled by
    translating French to English in stage (B2).

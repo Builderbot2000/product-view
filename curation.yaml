@@ -1,0 +1,177 @@
+# Taxonomy and hand curation for `pv report` (report-design.md D14-D16).
+#
+# areas:  the product areas issues are filed under. `keywords` file a cluster
+#         nobody has curated yet: its keywords and title are matched against
+#         them, and the area with the most hits wins (none: "other").
+# roles:  who reads which areas. Each role gets its own page holding only the
+#         issues in its areas; the hub shows every area.
+# issues: per stream, keyed by the label shown. Each lists `anchors`, the
+#         review ids that identify it. On every run, a cluster belongs to the
+#         label whose anchor reviews it contains (most anchors wins), so the
+#         curation survives re-clustering; cluster ids do not. Several clusters
+#         matching one label are merged and counted once per review.
+#
+#   kind:  issue (actionable) | mood (no specific cause) | outcome (a
+#          consequence, e.g. switching banks) | hide (left out)
+#   areas: area ids; the first is where the hub files it.
+
+areas:
+  sign-in:   {name: "Sign-in & security", keywords: [login, log, sign, password, 2fa, verification, trusted, fingerprint, biometric, biometrics, locked, access, remember, card, security, permissions]}
+  stability: {name: "Stability & performance", keywords: [crash, crashes, crashing, open, error, technical, difficulties, slow, load, update, updates, reinstall, uninstall, working]}
+  devices:   {name: "Devices & install", keywords: [compatible, device, android, samsung, tablet, galaxy, grapheneos, download, install, root, nfc]}
+  payments:  {name: "Payments & transfers", keywords: [transfer, transfers, etransfer, interac, deposit, cheque, cheques, payment, pay, bill, bills, credit, wallet, tap]}
+  design:    {name: "UI & design", keywords: [design, interface, ui, layout, menu, button, navigation, redesign, old app, language, french, dark, mode, friendly]}
+  investing: {name: "Investing", keywords: [investing, direct, investment, investments, trade]}
+  budgeting: {name: "Budgeting & insights", keywords: [nomi, budget, budgets, insights, spending]}
+  support:   {name: "Customer support", keywords: [service, customer, agent, branch, called, support]}
+
+roles:
+  design:   {name: "UI & design team", areas: [design]}
+  identity: {name: "Sign-in & security team", areas: [sign-in]}
+  payments: {name: "Payments team", areas: [payments, investing, budgeting]}
+  platform: {name: "Engineering / QA: stability & devices", areas: [stability, devices]}
+  support:  {name: "Support / CX", areas: [support, sign-in, payments]}
+
+issues:
+  negative:
+    "2FA / trusted-device verification fails":
+      {kind: issue, areas: [sign-in],
+       anchors: [b1a159ee-612a-4a0c-a1c8-27ebab80d65d]}
+    "Can't log in / password reset loops":
+      {kind: issue, areas: [sign-in],
+       anchors: [defe29dc-d5d3-405a-b3e9-acf3f245b28a]}
+    "Locked out of account":
+      {kind: issue, areas: [sign-in],
+       anchors: [3738cb49-f6dd-447f-8ace-bcff9c35b3bc]}
+    "Can't accept Interac e-Transfers":
+      {kind: issue, areas: [payments],
+       anchors: [64fa891d-a36b-4102-bddc-77f909e5d796]}
+    "Support can't resolve problems":
+      {kind: issue, areas: [support],
+       anchors: [59a51383-eca2-480b-94dd-74318ea612cf]}
+    "Phone or tablet no longer supported":
+      {kind: issue, areas: [devices],
+       anchors: [d2c22460-ec5b-4333-af8c-946aab46cbde, 93591b4f-0079-4610-bfea-a0c0df4da953]}
+    "Blocked on GrapheneOS / custom ROMs":
+      {kind: issue, areas: [devices],
+       anchors: [72e103c7-0b50-4b0f-bc15-f80cbe3f7e97]}
+    "App won't open; reinstalling doesn't help":
+      {kind: issue, areas: [stability],
+       anchors: [46dc7ffd-ad5f-40d3-8a8f-d61cfc173686, d0889ad3-9668-445e-b4e6-0b5454ae0ebe]}
+    "App crashes":
+      {kind: issue, areas: [stability],
+       anchors: [befd06c2-0cd6-4a38-9ed0-11c915656336]}
+    "Stuck on 'update required' prompt":
+      {kind: issue, areas: [stability],
+       anchors: [3690c053-8856-4b5c-b1a2-2dc172d48662, 2444ea7e-abc7-47de-893d-eb13d09c1604]}
+    "'Technical difficulties, try again later' error":
+      {kind: issue, areas: [stability, sign-in],
+       anchors: [68379940-2d5a-4757-a138-a5aa8838d206, bc82051c-9434-4bfe-bc1b-e973fed301fe]}
+    "Credit card payment-due info missing":
+      {kind: issue, areas: [payments, design],
+       anchors: [51f1d1e3-d915-4606-b2b5-c80c9e37183e]}
+    "Can't download or install":
+      {kind: issue, areas: [devices],
+       anchors: [3998b56d-f8d7-428f-bf37-809bbf9878f8]}
+    "Permissions and security concerns":
+      {kind: issue, areas: [sign-in],
+       anchors: [cfa66a95-3c9f-4927-a8d0-00b505311692]}
+    "Doesn't remember card number":
+      {kind: issue, areas: [sign-in],
+       anchors: [ed6c6887-b824-44d7-b905-b05e9973b667, 843e2c0a-c7d4-45ef-926d-83eb2f277bde]}
+    "Direct Investing problems":
+      {kind: issue, areas: [investing],
+       anchors: [7f4376fa-f902-4860-b2df-ae3b27af0e51]}
+    "Mobile cheque deposit fails":
+      {kind: issue, areas: [payments],
+       anchors: [2ff10c06-751f-44d6-991f-a567679a9c6f, 0685fd3f-69c2-439e-8822-797e3a0d987d]}
+    "Redesign is harder to use than the old app":
+      {kind: issue, areas: [design],
+       anchors: [47e03b5b-ea90-4554-b4ad-5b0c00d7f03f, 8c6698dc-3482-4333-9308-6899b56d6a6d]}
+    "Slow to load":
+      {kind: issue, areas: [stability],
+       anchors: [43b92951-dc97-4b60-8914-758fae266155]}
+    "Fingerprint sign-in unavailable":
+      {kind: issue, areas: [sign-in],
+       anchors: [c203d7f2-08a4-4073-b668-071c85041e64]}
+    "No sign-out button":
+      {kind: issue, areas: [design],
+       anchors: [c2da6f01-f945-4ad8-b128-5d34269e7c52]}
+    "Can't switch app language to French":
+      {kind: issue, areas: [design],
+       anchors: [7702323a-fc78-4157-9427-0d0049bdc2d6]}
+    "NOMI budget limits can't be changed":
+      {kind: issue, areas: [budgeting],
+       anchors: [ac89a2d8-5a0c-4840-a324-1e6dfe0a8a4d]}
+    "Mobile Wallet carrier support":
+      {kind: issue, areas: [payments, devices],
+       anchors: [e8b44172-cf6c-4db0-8333-3ffbe5c3997d]}
+    "Say they're switching banks":
+      {kind: outcome,
+       anchors: [4c37f5a4-be99-4719-8d58-15dbf8b0587b]}
+    "Say other banks' apps are better":
+      {kind: outcome,
+       anchors: [4097a7ac-064f-4cb1-b063-f0a3790c9e39]}
+    "Fall back to the website":
+      {kind: outcome,
+       anchors: [408b01b2-23fa-4d5c-badf-226a776960d8]}
+    "\"RBC isn't doing the app well\"":
+      {kind: mood,
+       anchors: [5bf111f9-04bc-452a-b495-7c2ce4fc7bf1]}
+    "\"Can't get my banking done\"":
+      {kind: mood,
+       anchors: [e5900e33-71c9-47f3-b32a-d6a056e4fef7]}
+    "\"It is frustrating\"":
+      {kind: mood,
+       anchors: [65a076f6-c2da-4e40-b9e4-9f40cd4d1ad7]}
+    "\"This app is terrible\"":
+      {kind: mood,
+       anchors: [3fed67be-c9b5-455b-88a3-46a82752c663]}
+    "\"It needs to be fixed\"":
+      {kind: mood,
+       anchors: [f769fc08-4100-4f85-9e49-ebb69188dd07]}
+    "\"Useless, not user friendly\"":
+      {kind: mood,
+       anchors: [88d66428-927b-40d0-8a5b-61ebad7dd233]}
+    "\"This app is garbage\"":
+      {kind: mood,
+       anchors: [1567c1d0-e971-4f13-83aa-b0a2089b1f93]}
+    "\"It does not work\"":
+      {kind: mood,
+       anchors: [7c6422d9-2c4e-49cc-b832-434931b007db]}
+    "\"I'd give it 0 stars\"":
+      {kind: mood,
+       anchors: [96b00455-ebfd-4439-8c62-7d04e0bf270f]}
+  positive:
+    # Praise only: complaints left in 4-5 star reviews are hidden, the
+    # negative stream already covers them.
+    "Easy to use":
+      {kind: issue, areas: [design],
+       anchors: [e47eee54-d514-4cfc-922b-72131a68501e, 8e6e75fb-ad17-41a4-abe1-873eca2bbd28, 2d638232-6685-44f2-8890-25e96ef6b07f]}
+    "Fast and convenient":
+      {kind: issue, areas: [],
+       anchors: [da9dfd1c-4d6f-4c36-a8b8-95e216371d7c, dc83f2f2-5850-47d5-84d3-42957cf4b9f2]}
+    "Reliable, no problems":
+      {kind: issue, areas: [stability],
+       anchors: [871593ae-e411-4506-82ec-c1227a89920d, 3066ca9c-60bd-4de0-9730-f6aa09a7401e, 48f4e6d7-3549-4a3f-b9a1-051d19a13e99, fbf02c79-98fa-4836-9e91-fafab655eda1]}
+    "Good customer service":
+      {kind: issue, areas: [support],
+       anchors: [626b933c-19cc-4889-8ca4-34fc3019ac87]}
+    "Bill payments and transfers":
+      {kind: issue, areas: [payments],
+       anchors: [acdb0505-0168-44f6-b0c7-28e7b88b62da, 0860c3c2-5024-4516-b2ef-588762863702]}
+    "Likes the new design":
+      {kind: issue, areas: [design],
+       anchors: [c4679748-9aea-49ae-8547-51aaa46efb7d, b9886a36-f1fe-45ad-877b-8624060d9ddc, a82a3a5c-a8e5-4be4-84ce-2b0b0b850abf, a2d54fa6-ae14-4532-9a2d-6a7a0515693a]}
+    "Fingerprint login":
+      {kind: issue, areas: [sign-in],
+       anchors: [ab0cb505-f726-411c-9f26-79979c42751b]}
+    "Balance preview without signing in":
+      {kind: issue, areas: [sign-in, design],
+       anchors: [02921349-87fd-4b80-8d6d-25123db4c631]}
+    "General praise":
+      {kind: mood,
+       anchors: [9c4ab0f6-1026-4e24-8911-10c3193c5794, 0f12eb6d-7d1e-403b-97fc-bbbb3d5f3c70, 05e693e5-531a-4466-910c-edce27248754, 8cccbcbb-ab72-49f9-8ee4-3f2b6d5377d1, 679cc06b-3b0d-47a3-85cc-6189c21756ae, 9ba654d3-8db2-4300-a0e1-9ecd60426656, 0384f65d-fc52-46d7-b5d8-3b80da52ec0a, 34f31082-7e60-42f8-b8c2-069051a5a69e, 3e19d8ac-1a82-4295-a81d-eb1674611773, 0e68373b-5aa1-42ff-bebe-7d32aabf08a4, 6188ada8-5f6c-41da-9615-c80f13a04227, 21f02510-7e61-4fff-8259-e44b750b64a5, 8b11cc8a-c9f2-464d-937c-5ae9dd4b255e, 2570f395-a35c-485b-ba89-24d51ae6c8c2, 4f3d3fb7-a6ec-4975-a22d-3306e94f115b, faac6f5f-e6e4-4f63-b418-25b2826b8d84, d6dd4d3c-de4e-458e-b15f-dcb194df2328, fd28746d-19e4-479f-83e5-65e7870630bc, 4c0cb511-cce6-49b6-b4f1-706564f18a7c]}
+    "(complaints in positive reviews)":
+      {kind: hide,
+       anchors: [a5acc3fc-2481-4a3a-b3df-5b12c0bdfaff, f66b2c5d-4822-4e7c-95b9-70b47582ee75, 1983c87f-bcd9-4550-b48d-eba3e6cca2df, 1178883a-e1b7-45bd-b357-ef8ef6a2306f, a17e8a98-2e46-45a6-bac9-f3a22c146ccf, fec5f200-f048-4d74-a210-6b5000c49591, 36fe1e47-86d5-4099-89cd-db69c883b32f, c44b2e11-1086-40a1-97d7-7081886b68f3, 30545c9f-2fad-4d8e-a93e-e91134bbfa90, 6573bb9b-926c-4500-94dd-7d6138d141b3, 4da87dc4-b647-4f40-bfa7-ca173138d3f1, a21d4a2d-9722-4400-a6ad-53d6f14656c7, 6f1d85de-abd4-4278-b466-99a2fb6ac5e8, 63d4379a-ded0-4cb2-baf0-7ab9ea5e1f98]}
