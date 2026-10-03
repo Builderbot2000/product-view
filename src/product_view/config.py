@@ -8,8 +8,8 @@ Unknown keys are an error rather than ignored: a typo such as
 `cohesion_flor: 0.5` would otherwise run silently with the default, and the
 output would look like the setting had no effect.
 
-Nothing secret belongs here. Confluence credentials, when publishing exists,
-come from environment variables only.
+Nothing secret belongs here. Confluence credentials come from environment
+variables only (see publish/confluence.py).
 """
 
 from __future__ import annotations
@@ -61,6 +61,13 @@ DEFAULTS: dict[str, Any] = {
         "momentum_window_days": 365.0,
         "native_override": None,
     },
+    # Where `pv publish` puts the page. Credentials are not here: they come
+    # from the environment (see publish/confluence.py).
+    "confluence": {
+        "space": None,       # space key, as in /wiki/spaces/<KEY>/
+        "title": None,       # None: the HTML <title>, else the filename
+        "parent_id": None,   # new pages go under this page ID
+    },
 }
 
 # argparse dest -> dotted config key. `min_cluster_size` is absent on purpose:
@@ -84,6 +91,9 @@ FLAG_KEYS: dict[str, str] = {
     "tau_days": "cluster.tau_days",
     "momentum_window": "cluster.momentum_window_days",
     "native_override": "cluster.native_override",
+    "space": "confluence.space",
+    "title": "confluence.title",
+    "parent_id": "confluence.parent_id",
 }
 
 

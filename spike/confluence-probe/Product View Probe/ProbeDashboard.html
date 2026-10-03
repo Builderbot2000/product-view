@@ -2,12 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Product View - Confluence import probe</title>
+<title>TITLE-TAG probe title</title>
 <!--
-  Milestone 1 spike. Import this file into the target Confluence and read the
-  result: each numbered check says what you should see if that feature
-  survived. Record pass/fail per check in Project.md section 0; the renderer
-  (pv report) may only use features that pass.
+  Milestone 1 spike. Confluence Cloud's HTML import accepts only a .zip holding
+  one folder of .html files; the folder name becomes the space name, and each
+  page's media sits in a folder named after the page. Build the zip with
+  spike/build_confluence_probe.py, import it, and read the result: each numbered
+  check says what you should see if that feature survived. Record pass/fail per
+  check in Project.md section 0; the renderer (pv report) may only use features
+  that pass.
 -->
 <style>
   .probe-style { color: #fff; background: #1a7f37; padding: 2px 6px; }
@@ -20,7 +23,7 @@
 </head>
 <body>
 
-<h1>Confluence import probe</h1>
+<h1>H1 probe title</h1>
 <p>Each check below says what you should see if the feature survived the import.
 Anything different means the feature was stripped or rewritten.</p>
 
@@ -76,7 +79,7 @@ Anything different means the feature was stripped or rewritten.</p>
 
 <h2>8. Image as a data: URI</h2>
 <img alt="data-uri test" width="120" height="40" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iNDAiPjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iNDAiIGZpbGw9IiMxYTdmMzciLz48dGV4dCB4PSI2MCIgeT0iMjYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj5kYXRhIFVSSTwvdGV4dD48L3N2Zz4=">
-<p><strong>Pass:</strong> a green box reading "data URI". Check whether Confluence kept it inline or turned it into an attachment.</p>
+<p><strong>Pass:</strong> a green box reading "data URI". Check whether Confluence kept it inline or turned it into an attachment. Compare with check 17, which uses the documented media folder.</p>
 
 <h2>9. Collapsible section</h2>
 <details>
@@ -95,6 +98,42 @@ Anything different means the feature was stripped or rewritten.</p>
 <h2>12. Dark mode media query</h2>
 <p class="probe-dark">Orange dashed outline in dark mode only.</p>
 <p><strong>Pass:</strong> the outline appears only when Confluence (or the OS) is in dark mode. Low priority.</p>
+
+<h2>13. Divider</h2>
+<p>Above the line.</p>
+<hr>
+<p>Below the line. <strong>Pass:</strong> a horizontal rule between the two sentences.</p>
+
+<h2>14. Center alignment</h2>
+<p style="text-align:center">Centered with a style attribute.</p>
+<p align="center">Centered with the align attribute.</p>
+<p><strong>Pass:</strong> note which of the two lines is centered. The FAQ lists center alignment as supported but not which markup it reads.</p>
+
+<h2>15. Superscript</h2>
+<p>Impact score<sup>1</sup> and share of corpus<sup>2</sup>.</p>
+<p><strong>Pass:</strong> the 1 and 2 are raised.</p>
+
+<h2>16. Code block</h2>
+<pre><code>strategy: leiden
+resolution: 1.0
+min_cluster_size: 15</code></pre>
+<p><strong>Pass:</strong> a monospaced block keeping its line breaks. The FAQ says code blocks are unsupported; confirm, because the appendix's run parameters would use this.</p>
+
+<h2>17. Image from the page's media folder</h2>
+<img alt="media-folder test" width="120" height="40" src="ProbeDashboard/probe-image.png">
+<p><strong>Pass:</strong> a blue box. This is the layout the FAQ documents (media in a folder named after the page). Check that it became an attachment of this page.</p>
+
+<h2>18. Link to another page in the zip</h2>
+<p><a href="ProbeLinked.html">Go to the linked probe page</a></p>
+<p><strong>Pass:</strong> the link opens the imported "ProbeLinked" page inside Confluence, not a broken or file:// URL. Also note whether ProbeLinked became a child of this page or a sibling.</p>
+
+<h2>19. Page title source</h2>
+<p>The filename is <code>ProbeDashboard.html</code>, the &lt;title&gt; says "TITLE-TAG probe title" and the &lt;h1&gt; says "H1 probe title".</p>
+<p><strong>Pass:</strong> not pass/fail. Record which of the three became the Confluence page title, and whether the &lt;h1&gt; is duplicated in the body. The renderer names its file to match.</p>
+
+<h2>20. Importing into a space that already exists</h2>
+<p>After the first import, import the same zip a second time.</p>
+<p><strong>Record:</strong> whether Confluence refuses, creates a second space, or updates these pages in place (and whether they gain a new version in page history). This decides whether "overwrite one page each run" is possible with the importer.</p>
 
 <h2 id="probe-target">Anchor target</h2>
 <p><strong>Pass for check 10:</strong> the link above scrolled here.</p>

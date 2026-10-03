@@ -2,6 +2,11 @@ services:
   pv:
     build: .
     image: product-view
+    # Confluence credentials for `pv publish`. Passed at run time, never baked
+    # into the image (.dockerignore excludes .env).
+    env_file:
+      - path: .env
+        required: false
     volumes:
       # Archive and databases, shared with the host so `pv` runs on either
       # side see the same corpus. Don't run both at once against one database.

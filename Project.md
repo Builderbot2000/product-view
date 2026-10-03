@@ -35,7 +35,8 @@ not by reasoning about them. A fresh session should not need to re-derive any of
 | End to end | **Done.** `pv run [--fetch]` — rebuilds `reviews.db` clean, then translate → embed → cluster every stream in config |
 | Config | **Done.** [config.yaml](config.yaml); flag > config > built-in default; unknown keys are an error |
 | Container | **Built and verified 2026-09-29** on Docker Desktop 4.30 (Windows). Image 1.46 GB, torch `2.14.0+cpu`. `pv run` in the container took 1m49s on warm caches: 43 negative / 51 positive pain points. The resulting `reviews.db` passes `integrity_check`, and host and container `pv painpoints` output match. [Dockerfile](Dockerfile) + [compose.yaml](compose.yaml) |
-| (F) Render → (G) Publish | **Not started.** Target changed 2026-09-29: the output is one self-contained HTML page, brought into Confluence with its HTML import. Which features survive the import is unverified; [spike/confluence-import-probe.html](spike/confluence-import-probe.html) tests them (milestone 1) |
+| (F) Render | **Not started.** `pv report` will emit one self-contained HTML page. What it may use is decided by the Confluence probe (milestone 1), whose results are only partly recorded (see "Still open") |
+| (G) Publish | **Built 2026-09-30, uncommitted.** `pv publish FILE [--dry-run]` converts HTML to storage format and creates or updates a page over REST. It replaced the manual zip import. Exercised once against the probe (page id 917505); there are no tests yet. See §2 (G) |
 
 Code lives in [src/product_view/](src/product_view/): [cli.py](src/product_view/cli.py)
 (parsing + ingest), [commands.py](src/product_view/commands.py) (clustering stage + `run`),
@@ -43,7 +44,8 @@ Code lives in [src/product_view/](src/product_view/): [cli.py](src/product_view/
 [models.py](src/product_view/models.py), [archive.py](src/product_view/archive.py),
 [store.py](src/product_view/store.py), and the
 [ingest/](src/product_view/ingest/), [lang/](src/product_view/lang/),
-[embed/](src/product_view/embed/) and [cluster/](src/product_view/cluster/) packages.
+[embed/](src/product_view/embed/), [cluster/](src/product_view/cluster/) and
+[publish/](src/product_view/publish/) packages.
 
 ### Environment
 
@@ -53,8 +55,9 @@ Code lives in [src/product_view/](src/product_view/): [cli.py](src/product_view/
   `scipy`, `scikit-learn`, `sentence-transformers`, `transformers`,
   `sentencepiece`, `py3langid`, `python-igraph`, `leidenalg`, `platformdirs`,
   `pyyaml`. Optional extra `[umap]`, not required and not built.
-- **No version control yet, on purpose.** Git comes in once the first iteration
-  is stable.
+- **Git, branch `main`.** One commit so far (`5bec9b9`, 2026-09-30), covering
+  stages A–E. The publish package, the probe builder and the doc updates are
+  still uncommitted.
 - **`torch` dominates the install and is easy to get wrong.** Windows and macOS
   resolve to the ~250 MB CPU wheel; plain `pip install` on **Linux pulls the
   ~2.5 GB CUDA build** — use `--index-url https://download.pytorch.org/whl/cpu`.
@@ -100,8 +103,8 @@ Measured on the real corpus, not estimated:
 | Detected French | **1,335** reviews translated; 42 non-Latin dropped and reported |
 | Cached segment vectors | **45,839** from 17,906 reviews (`all-MiniLM-L6-v2`, 384-dim, L2-normalized) |
 | Complaint units | negative **32,723** (2.5 per review) · positive **9,248**, at merge ≥ 0.45 |
-| Negative clusters | **42** at `balanced`, resolution 1.732, **0 reviews uncovered** |
-| Positive clusters | **52** at `balanced`, resolution 3.519, **0 reviews uncovered** |
+| Negative clusters | **43** at `balanced`, **0 reviews uncovered** (current `reviews.db`, run of 2026-09-29) |
+| Positive clusters | **51** at `balanced`, **0 reviews uncovered** (same run) |
 | Presets land in band | broad **18** · balanced **47** · fine **80** (whole-review run; not re-measured on units) |
 | Sentences in negative stream | 32,785 — 2.5× the review count, so LexRank is capped |
 
@@ -118,8 +121,10 @@ drove an event from those carried along by it.
 
 Clustering is **deterministic** — two runs at the same seed produced identical
 titles, impacts, and all 13,021 memberships (whole-review run). The unit run
-of 2026-09-24 reproduced the same 42 clusters, resolution and impacts on a
-second pass.
+of 2026-09-24 reproduced the same 42 negative / 52 positive clusters
+(resolutions 1.732 / 3.519) and impacts on a second pass. The run of
+2026-09-29, which is in the current `reviews.db`, gives 43 / 51. The cause of
+the shift was not recorded.
 
 **Timings, unit pipeline** (CPU): `pv embed` from cold **4m14s** for 45,839
 segments; `pv cluster` negative **1m45s**. **Whole-review timings** (13k stream, CPU): exact kNN 2.4s · leiden 0.5s/fit · hdbscan
@@ -198,15 +203,51 @@ These cost real time to discover:
 
 ### Still open
 
-- **What survives Confluence's HTML import — now the only thing blocking the renderer.**
-  The objective changed on 2026-09-29: rather than pushing storage format over
-  REST, `pv report` emits one self-contained HTML page that is imported into
-  Confluence. The import converts HTML to storage format, and Atlassian's own
-  docs and community threads report that `<style>` blocks and inline CSS are
-  stripped or ignored in that conversion; `<script>` almost certainly is too.
-  Import [spike/confluence-import-probe.html](spike/confluence-import-probe.html)
-  and record which of its 12 checks pass. That list is what the renderer may use.
-- Who owns the scheduled run, and which Confluence page.
+- **What renders in Confluence — now the only thing blocking the renderer.**
+  History: on 2026-09-29 the plan became a self-contained HTML page brought in
+  through Confluence's HTML import. On 2026-09-30 `pv publish` (REST, storage
+  format) replaced the import, so **what REST storage format renders is what
+  counts.** The import findings below are kept as a guide.
+
+  **Next step:** open "ProbeDashboard (REST)" (id 917505) beside the imported
+  ProbeDashboard and record which of the 20 checks in
+  [ProbeDashboard.html](spike/confluence-probe/Product%20View%20Probe/ProbeDashboard.html)
+  pass on each. The REST column is the list the renderer may use. Rebuild the
+  probe with [spike/build_confluence_probe.py](spike/build_confluence_probe.py)
+  and republish it with `pv publish`.
+
+  The import route: [Atlassian's docs](https://support.atlassian.com/confluence-cloud/docs/faq-import-data-from-html-to-confluence/)
+  and community threads report that the conversion strips or ignores `<style>`
+  blocks and inline CSS. `<script>` is almost certainly stripped too.
+
+  From the [Cloud FAQ](https://support.atlassian.com/confluence-cloud/docs/faq-import-data-from-html-to-confluence/)
+  (2026-09-30), not yet confirmed by an import:
+  - **Packaging.** Only a `.zip` is accepted, holding one folder of `.html`
+    files. The folder name becomes the **space** name. A page's media goes in a
+    folder named after the page (`Dashboard.html` + `Dashboard/chart.png`).
+  - **Supported:** headings, paragraphs, lists, center alignment, bold/italic,
+    links, images, tables, emoji, quotes, dividers, inline code, superscript.
+  - **Unsupported:** `<title>`, figure, nav, iframe, audio, buttons, code
+    blocks, custom text colours, equations. Embedded video becomes a link.
+  - **Risk to "overwrite one page each run":** the importer creates a space, so
+    a second import may make a second space instead of a new page version.
+    Probe check 20 tests this. If it does, the fallbacks in (G) apply.
+    **Moot since 2026-09-30:** `pv publish` updates pages over REST instead.
+
+  Zip import result (2026-09-30, skenshin2000.atlassian.net): it landed and
+  rendered. The pages went into the existing space "product view test", not a
+  new "Product View Probe" space. Page titles came from the **filenames**, not
+  `<title>` or `<h1>` (check 19). ProbeDashboard and ProbeLinked became
+  **siblings** under the space home (check 18). Checks 1-17 and 20 not yet
+  recorded.
+
+  REST publish of the same probe: page "ProbeDashboard (REST)" (id 917505) in
+  the same space. The storage body keeps the expand macro, `<pre>` and three
+  attachment images. Compare it visually with the imported ProbeDashboard to
+  fill in which checks render.
+- Who owns the scheduled run, and which Confluence space and page.
+  `confluence.space` is still `null` in config.yaml; the probe used the test
+  space "product view test" on skenshin2000.atlassian.net.
 - **Generic clusters at the top of the ranking — built 2026-09-24.** On the
   whole-review run of 2026-09-23 the top three negative pain points were "bank
   rbc", "mobile banking" and "royal bank". There were three causes:
@@ -513,15 +554,15 @@ deterministic output that does not drift between runs.
 ### (F) Render — `pv report`
 
 Jinja2 → **one self-contained HTML file**: inline CSS, inline SVG, no CDN, no
-external assets. The file is the product. It opens in any browser as-is, and it
-is what gets imported into Confluence.
+external assets. The file is the product. It opens in any browser as-is, and
+`pv publish` turns it into the Confluence page. No zip packaging is needed.
 
-**Which features the page may use is decided by the import probe, not by
-design preference.** Confluence's HTML import converts the page to storage
-format, which is reported to strip `<style>` blocks, inline CSS and scripts.
-The renderer therefore builds in two layers:
+**Which features the page may use is decided by the probe, not by design
+preference.** `pv publish` drops `<script>`, `<style>` and `<button>` on the
+way to storage format, and what else renders is still unrecorded. The renderer
+therefore builds in two layers:
 
-1. **Content layer — must survive the import.** Headings, tables, lists,
+1. **Content layer — must survive conversion.** Headings, tables, lists,
    blockquotes and links: every pain point, its numbers and its quotes. This
    layer alone must meet the success criteria.
 2. **Enhancement layer — only if the probe says it survives.** Styling, SVG
@@ -542,18 +583,33 @@ Dashboard contents:
 
 ### (G) Publish
 
-Import the HTML file into Confluence. Manual for the demo. Overwrite one page
-each run, and let Confluence's version history do the archiving.
+`pv publish FILE` (built 2026-09-30) pushes the HTML over REST, replacing the
+manual zip import. The zip probe landed and rendered; REST is used so a run
+needs no one to upload anything.
 
-If the import strips too much to be useful, the fallback is to attach the full
-HTML file to the page and link it from a short static summary. Readers get the
-full dashboard by opening the attachment.
+- **Overwrite in place.** The page with the same title in `confluence.space`
+  is updated (a new version in its history); if none exists it is created,
+  under `confluence.parent_id` if set. This settles open question 4.
+- **Conversion** ([publish/storage.py](src/product_view/publish/storage.py)):
+  only `<body>` is kept and re-serialized as well-formed XHTML. `<script>`,
+  `<style>`, `<button>` and `on*` attributes are dropped. `<details>` becomes the
+  expand macro. Local, data: URI and inline-SVG images become page attachments.
+  Input must be well-formed-ish HTML (closed `<p>`/`<li>`); the renderer controls
+  that.
+- **Attachments are synced.** Unchanged ones are skipped, so republishing
+  doesn't pile up attachment versions.
+- `--dry-run` writes the storage format to `out/<name>.storage.xhtml` and lists
+  the attachments, without contacting Confluence.
+- Flags `--space`, `--title`, `--parent-id` override the `confluence:` section
+  of config.yaml. The title defaults to the HTML `<title>`, else the filename.
 
-A scripted `pv publish` (REST, storage format) is deferred until the manual
-import becomes a chore. If it is built:
+The zip import's feature findings still apply as a guide, but REST storage
+format is a different path: what renders is decided by storage format, not the
+importer. Re-run the probe through `pv publish` to confirm.
 
-Auth: API token via env vars (`CONFLUENCE_BASE_URL`, `CONFLUENCE_USER`,
-`CONFLUENCE_API_TOKEN`). Never committed, never in config files.
+Auth: env vars `CONFLUENCE_BASE_URL`, `CONFLUENCE_USER` (account email) and
+`ATLASSIAN_TOKEN`, from the environment or `.env`. Never committed, never in
+config files. compose.yaml passes `.env` to the container at run time.
 
 ---
 
@@ -569,6 +625,7 @@ product-view/
 ├── pyproject.toml
 ├── config.yaml             # every stage's defaults; flags override
 ├── Dockerfile, compose.yaml, .dockerignore
+├── spike/                  # milestone 1: build_confluence_probe.py + confluence-probe/ (zip source)
 ├── src/product_view/
 │   ├── cli.py              # entry point; fetch / export / info / langs
 │   ├── commands.py         # db build / translate / embed / cluster / painpoints / run
@@ -584,9 +641,9 @@ product-view/
 │   ├── embed/              # encoder.py, segment.py
 │   ├── cluster/            # units, graph, strategies, granularity, synthesize, scoring, pipeline
 │   ├── render/             # (planned) milestone 4
-│   └── publish/            # (planned) milestone 5
+│   └── publish/            # pv publish: storage.py (HTML→storage), confluence.py (REST)
 ├── data/                   # gitignored: raw/, meta/, export/, reviews.db, cache.db
-├── out/                    # (planned) gitignored: generated HTML
+├── out/                    # gitignored: probe zip, --dry-run storage format; later the report
 └── tests/                  # (planned) milestone 6
 ```
 
@@ -609,8 +666,9 @@ Windows is the one that breaks, so it is the one to be explicit about:
 ## 5. Configuration
 
 **Built.** [config.yaml](config.yaml) holds settings that are safe to commit. Secrets
-go in environment variables only; there are none yet, and the Confluence
-credentials will be the first.
+go in environment variables only: today that means the Confluence credentials
+(`CONFLUENCE_BASE_URL`, `CONFLUENCE_USER`, `ATLASSIAN_TOKEN`), read from the
+environment or a gitignored `.env`.
 
 - **Precedence:** command-line flag > `config.yaml` > built-in default in
   [config.py](src/product_view/config.py). Any flag config can supply defaults to
@@ -622,24 +680,25 @@ credentials will be the first.
   otherwise run silently with the default.
 - Sections: `app` (id, country), `data_dir`, `fetch`, `corpus.min_chars` (one value
   shared by translate, embed and cluster, so they can't disagree about which
-  reviews count), and `cluster`, including the streams `pv run` clusters.
+  reviews count), `cluster`, including the streams `pv run` clusters, and
+  `confluence` (space, title, parent_id for `pv publish`).
 - `cluster.min_cluster_size` is set per stream (`negative: 25`, `positive: 15`).
   This replaced a hidden rule that silently changed 25 to 15 for the positive
   stream, which also caught an explicit `--min-cluster-size 25`.
 
-`render` and `publish` sections will be added when those stages exist, not before.
+A `render` section will be added when that stage exists, not before.
 
 ## 6. Milestones
 
 | # | Milestone | Deliverable |
 |---|-----------|-------------|
 | 0 | Skeleton ✅ | **Done.** Repo, `pyproject.toml`, CLI, JSONL archive. SQLite deferred to milestone 3, where it earns its place |
-| 1 | **Confluence spike** | Import [spike/confluence-import-probe.html](spike/confluence-import-probe.html) into the target Confluence and record which checks pass. *First — it constrains milestone 4.* |
+| 1 | **Confluence spike** (partly done) | Probe built with [spike/build_confluence_probe.py](spike/build_confluence_probe.py), imported by zip and published over REST (2026-09-30). Only checks 18–19 are recorded. **Remaining:** record checks 1–17 and 20 for the REST page. *Constrains milestone 4.* |
 | 2 | Ingest ✅ | **Done.** `pv fetch --all-langs` backfilled 21,506 RBC reviews across 18 locales, resumable and deduped; `pv langs` probes coverage; `pv export` → CSV; `pv info` → summary with store-listing contrast |
-| 3 | Cluster ✅ | **Done.** `pv db build`, `pv translate`, `pv embed`, `pv cluster`, `pv painpoints`. 47 negative / 51 positive pain points, 0.1% unclustered, deterministic, three strategies behind one interface. Design in [aggregation-plan.md](aggregation-plan.md) |
-| 4 | Render ← **next** | `pv report` emits the dashboard as one self-contained HTML file. **Still gated on milestone 1** — the probe results decide what it may use |
-| 5 | Publish | Import the HTML into Confluence. Manual first; automate with `pv publish` only if the manual step becomes a chore |
-| 6 | Polish (partly done) | ✅ `pv run` end to end, ✅ `config.yaml`, ✅ clean database per run, ✅ container built and verified. Still to do: test suite, scheduling notes, version control (once the first iteration is stable) |
+| 3 | Cluster ✅ | **Done.** `pv db build`, `pv translate`, `pv embed`, `pv cluster`, `pv painpoints`. Complaint-unit clustering: 43 negative / 51 positive pain points, 0 reviews uncovered, deterministic, three strategies behind one interface. Design in [aggregation-plan.md](aggregation-plan.md) |
+| 4 | Render ← **next** | `pv report` emits the dashboard as one self-contained HTML file. **Gated on milestone 1:** the probe results decide what it may use |
+| 5 | Publish ✅ (uncommitted) | `pv publish` over REST, built 2026-09-30 ahead of schedule so no run needs a manual upload. Still to do: wire it into `pv run`, and add tests |
+| 6 | Polish (partly done) | ✅ `pv run` end to end, ✅ `config.yaml`, ✅ clean database per run, ✅ container built and verified, ✅ git. Still to do: test suite, scheduling notes, CSV ingest source |
 
 Milestone 1 is ordered ahead of the pipeline work deliberately: discovering the
 storage-format restriction after building a CSS-heavy dashboard means rebuilding
@@ -663,7 +722,7 @@ produce noise, and a week of accumulation gives clusters enough mass.
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Confluence's HTML import strips CSS and scripts | High | Probe in milestone 1. Fallbacks, in order: design to what survives; attach the full HTML file to the page and link it from a static summary |
+| Confluence storage format can't carry CSS or scripts | High | `pv publish` already drops them; the probe (milestone 1) records what else renders. Fallbacks, in order: design to what survives; attach the full HTML file to the page and link it from a static summary |
 | `google-play-scraper` breaks on a Play redesign | Medium | Isolated behind `ReviewSource`; the JSONL archive already on disk keeps `pv run` working offline (a CSV source is planned) |
 | Play Store exposes only recent reviews | Medium | Accumulate across runs. The **JSONL archive** is the long-term store, not SQLite, which is rebuilt every run |
 | Generic clusters dominate the ranking | Medium | Clustering now runs on complaint units, and `sole_share` flags generic pain points. `impact` still ranks them high; see §0 "Still open" |
@@ -676,17 +735,17 @@ produce noise, and a week of accumulation gives clusters enough mass.
 
 ## 9. Open questions
 
-1. **What survives the HTML import?** Answered by the probe page, not by
-   reasoning. Cloud vs Server/DC still matters, since the two importers differ.
-   Shapes milestone 4.
+1. **What renders through `pv publish`?** Answered by the probe, not by
+   reasoning; see §0 "Still open". Cloud is confirmed as the target
+   (skenshin2000.atlassian.net). Shapes milestone 4.
 2. ~~**Which app(s)?**~~ Settled: `com.rbc.mobile.android`, all `ca` locales.
    The corpus is 91.9% English, 7.4% French, 0.2% non-Latin scripts — handled by
    translating French to English in stage (B2).
 3. ~~**LLM access?**~~ Moot — labeling is algorithmic, so the demo needs no
    credentials of any kind.
-4. **Page ownership?** One page overwritten each run, or a page per run under a
-   parent? Recommend overwrite-in-place, letting Confluence's own version history
-   do the archiving.
+4. ~~**Page ownership?**~~ Settled 2026-09-30: overwrite in place. `pv publish`
+   updates the same-titled page, and Confluence's version history does the
+   archiving.
 5. **Who runs it?** Whether the semi-manual trigger lives with one person or a
    shared scheduled job affects how much the setup docs need to cover.
 

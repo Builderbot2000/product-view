@@ -7,6 +7,9 @@ Clustering: `db build`, `translate`, `embed`, `cluster`, `painpoints` — each a
 stage reading and writing through SQLite, so any one re-runs in isolation.
 `run` chains them over a freshly rebuilt database. Those live in commands.py.
 
+Publish: `publish` creates or updates a Confluence page from an HTML file over
+REST. It lives in publish/.
+
 Defaults come from config.yaml; any flag given on the command line wins.
 """
 
@@ -23,7 +26,7 @@ from pathlib import Path
 
 from .archive import CSV_COLUMNS
 
-from . import commands, config
+from . import commands, config, publish
 from .archive import ReviewArchive, corpus_known_ids, dataset_slug, iter_corpus
 from .ingest.play_store import (
     DEFAULT_LANGS,
@@ -266,6 +269,7 @@ def build_parser() -> argparse.ArgumentParser:
     # Clustering stage lives in commands.py so this file stays parsing and
     # presentation for the ingest stage.
     commands.add_parsers(sub, common, add_fetch_options)
+    publish.add_parser(sub)
     return parser
 
 

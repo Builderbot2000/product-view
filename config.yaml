@@ -37,3 +37,10 @@ cluster:
   tau_days: 365            # recency decay: each review weighs exp(-age_days / tau)
   momentum_window_days: 365
   native_override: null    # set the strategy's own knob, skipping the search
+
+# `pv publish` target. Credentials are NOT here: CONFLUENCE_BASE_URL,
+# CONFLUENCE_USER and ATLASSIAN_TOKEN come from the environment or .env.
+confluence:
+  space: null              # space key, as in /wiki/spaces/<KEY>/
+  title: null              # null: the HTML <title>, else the filename
+  parent_id: null          # new pages go under this page ID
