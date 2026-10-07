@@ -14,6 +14,14 @@ pv run --fetch    # same, after topping up the archive from the Play Store
 pv painpoints --top 15 --detail
 ```
 
+## Demo
+
+[Product View: com.rbc.mobile.android](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/294942)
+is the hub page built by `pv report --publish --space MFS` on the demo
+Confluence site. The role pages (UI & design, Sign-in & security, Payments,
+Engineering / QA, Support / CX) sit under it. Viewing it requires access to
+that site.
+
 ## Setup
 
 Works on Linux, macOS, and Windows with Python 3.10+.
