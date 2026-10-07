@@ -137,8 +137,10 @@ artboards: Briefing, Issue deep dive, Priority map.
 - **Area chart:** a bar per area for this period with a black tick at usual.
 - **Trend (hub):** negative and positive reviews per period as two small
   multiples on their own scales, dashed usual, this period's dot in its tone.
-- **Heatmap (hub):** issues by the last 12 periods on one sequential blue
-  scale, this period's column outlined.
+- **Heatmap (hub):** issues by the last 12 periods on one scale from green
+  (1 review) through pale yellow to orange-red, topping out at the 95th
+  percentile of the grid's counts so one spike doesn't wash the rest green;
+  grey for none, counts printed in every cell; this period's column outlined.
 - **Dots (role pages):** one dot per reviewer this period under each issue,
   coloured by stars, orange (1★) through grey (3★) to green (5★).
 - **Versions (roles with `charts: [versions]`):** each issue's reviews this

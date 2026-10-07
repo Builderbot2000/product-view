@@ -138,9 +138,12 @@ def trend_panels(panels: list[dict], periods: list[str], title: str, subtitle: s
     return _svg(w, h, "".join(out))
 
 
-# Sequential blue, light to dark (the dataviz reference ramp, steps 100-700).
-SEQ = ["#CDE2FB", "#9EC5F4", "#6DA7EC", "#3987E5", "#256ABF", "#184F95", "#0D366B"]
-EMPTY = "#F2F2EF"
+# Complaint counts, few to many: green (the "better" tone) through pale yellow
+# to orange-red (the "worse" tone). Every cell prints its count, so the
+# scale never relies on telling red from green.
+SEQ = ["#3E8E55", "#7DB98A", "#BFDDB5", "#F1E6B8", "#F2B48C", "#DB7B4F", "#B43C0A"]
+SEQ_LIGHT = {2, 3, 4}   # steps pale enough for ink text; white on the rest
+EMPTY = "#F2F2EF"       # no reviews at all
 
 
 HEAT_LABEL, HEAT_CELL = 270, 40
@@ -151,7 +154,7 @@ def heatmap_width(n: int) -> int:
 
 
 def heatmap(rows: list[dict], periods: list[str], title: str, subtitle: str) -> str:
-    """Issues by period: one cell per count, darker for more reviews.
+    """Issues by period: one cell per count, green for few reviews to red for many.
 
     rows: [{"name", "values" (oldest first)}]. One colour scale for the
     whole grid, so rows compare; the outlined last column is this period.
@@ -159,7 +162,10 @@ def heatmap(rows: list[dict], periods: list[str], title: str, subtitle: str) -> 
     label_w, cw, ch, top = HEAT_LABEL, HEAT_CELL, 22, 66
     n = len(periods)
     w, h = heatmap_width(n), top + len(rows) * ch + 34
-    peak = max([v for r in rows for v in r["values"]] + [1])
+    # The scale tops out at the 95th percentile, so one spike doesn't turn
+    # every other cell green; anything above it is full red.
+    counts = sorted(v for r in rows for v in r["values"] if v) or [1]
+    peak = counts[int(0.95 * (len(counts) - 1))]
     out = [_text(0, 18, title, 15, INK, weight="600"), _text(0, 38, subtitle, 12)]
     for i, lab in enumerate(periods):
         if i % 3 == 2 or i == n - 1:
@@ -170,22 +176,23 @@ def heatmap(rows: list[dict], periods: list[str], title: str, subtitle: str) -> 
         y = top + k * ch
         out.append(_text(label_w - 10, y + 15, _clip(r["name"]), 11, INK, "end"))
         for i, v in enumerate(r["values"]):
-            step = min(len(SEQ) - 1, round((len(SEQ) - 1) * v / peak)) if v else -1
+            # 1 review is the first step, the peak the last; 0 stays grey.
+            step = min(len(SEQ) - 1, round((len(SEQ) - 1) * (v - 1) / max(peak - 1, 1))) if v else -1
             x = label_w + i * cw
             out.append(f'<rect x="{x + 1}" y="{y + 1}" width="{cw - 2}" height="{ch - 2}" '
                        f'rx="2" fill="{SEQ[step] if v else EMPTY}"/>')
             if v:
                 out.append(_text(x + cw / 2, y + 15, v, 10,
-                                 "#FFFFFF" if step >= 3 else INK, "middle"))
+                                 INK if step in SEQ_LIGHT else "#FFFFFF", "middle"))
     x = label_w + (n - 1) * cw
     out.append(f'<rect x="{x}" y="{top - 1}" width="{cw}" height="{len(rows) * ch + 2}" '
                f'fill="none" stroke="{INK}" stroke-width="1.5" rx="3"/>')
     ly = h - 10
-    out.append(_text(label_w, ly, "fewer", 11))
+    out.append(_text(label_w + 30, ly, "1", 11, anchor="end"))
     for i, c in enumerate(SEQ):
         out.append(f'<rect x="{label_w + 40 + i * 16}" y="{ly - 9}" width="14" height="10" '
                    f'rx="2" fill="{c}"/>')
-    out.append(_text(label_w + 46 + len(SEQ) * 16, ly, "more reviews per period", 11))
+    out.append(_text(label_w + 46 + len(SEQ) * 16, ly, f"{peak}+ reviews per period", 11))
     return _svg(w, h, "".join(out))
 
 
