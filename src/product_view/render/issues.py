@@ -44,6 +44,7 @@ class Role:
     id: str
     name: str
     areas: tuple[str, ...]
+    charts: tuple[str, ...] = ()   # extra charts on the role's page: versions
 
 
 @dataclass
@@ -70,7 +71,7 @@ def load_taxonomy(path: Path) -> Taxonomy:
     data = data or {}
     areas = {k: Area(k, v["name"], tuple(w.lower() for w in v.get("keywords", [])))
              for k, v in (data.get("areas") or {}).items()}
-    roles = {k: Role(k, v["name"], tuple(v.get("areas", [])))
+    roles = {k: Role(k, v["name"], tuple(v.get("areas", [])), tuple(v.get("charts", [])))
              for k, v in (data.get("roles") or {}).items()}
     labels = data.get("issues") or {}
     for role in roles.values():

@@ -4,7 +4,8 @@
 #         nobody has curated yet: its keywords and title are matched against
 #         them, and the area with the most hits wins (none: "other").
 # roles:  who reads which areas. Each role gets its own page holding only the
-#         issues in its areas; the hub shows every area.
+#         issues in its areas; the hub shows every area. `charts: [versions]`
+#         adds a chart of this period's issues by app version.
 # issues: per stream, keyed by the label shown. Each lists `anchors`, the
 #         review ids that identify it. On every run, a cluster belongs to the
 #         label whose anchor reviews it contains (most anchors wins), so the
@@ -26,10 +27,10 @@ areas:
   support:   {name: "Customer support", keywords: [service, customer, agent, branch, called, support]}
 
 roles:
-  design:   {name: "UI & design team", areas: [design]}
-  identity: {name: "Sign-in & security team", areas: [sign-in]}
-  payments: {name: "Payments team", areas: [payments, investing, budgeting]}
-  platform: {name: "Engineering / QA: stability & devices", areas: [stability, devices]}
+  design:   {name: "UI & design", areas: [design]}
+  identity: {name: "Sign-in & security", areas: [sign-in]}
+  payments: {name: "Payments", areas: [payments, investing, budgeting]}
+  platform: {name: "Engineering / QA", areas: [stability, devices], charts: [versions]}
   support:  {name: "Support / CX", areas: [support, sign-in, payments]}
 
 issues:

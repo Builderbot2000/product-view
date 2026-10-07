@@ -124,14 +124,26 @@ https://claude.ai/artifact/2pguJCqs8HS6TfqhkW9azc (private). It has three
 artboards: Briefing, Issue deep dive, Priority map.
 
 - **Colours:** ink `#16191D`, muted `#596069`, grid lines `#E3E4E1`, neutral bars
-  `#A3A8AE`, "rising" orange `#B43C0A` (tint `#FBEAE2`), positive blue
-  `#2B5FB8`. Blue/orange rather than red/green, so colour-blind readers can
-  tell them apart.
+  `#A3A8AE`. A change is coloured by what it means for the app (`blocks.tone`),
+  so the same direction differs by stream: complaints up / new are *worse*
+  (orange `#B43C0A`), complaints down and praise up are *better* (green
+  `#1F7A3A`), praise down is *fading* (blue `#2B5FB8`). Green against orange
+  is hard for red-green colour-blind readers, so every change also carries an
+  arrow and a word (`↑ UP`, `↓ DOWN`), never colour alone.
 - **Sparklines:** one bar per period (12 periods), each on its own scale, this
-  period on the right in ink, or orange when up / new, blue when down.
-- **Change lozenges:** `NEW` and `↑ UP` red with an orange cell tint, `↓ DOWN`
-  blue with a blue tint, `steady` / `quiet` grey.
+  period on the right in ink, or in its tone's colour when it changed.
+- **Change lozenges:** red, green or blue by tone with a matching cell tint;
+  `steady` / `quiet` grey.
 - **Area chart:** a bar per area for this period with a black tick at usual.
+- **Trend (hub):** negative and positive reviews per period as two small
+  multiples on their own scales, dashed usual, this period's dot in its tone.
+- **Heatmap (hub):** issues by the last 12 periods on one sequential blue
+  scale, this period's column outlined.
+- **Dots (role pages):** one dot per reviewer this period under each issue,
+  coloured by stars, orange (1★) through grey (3★) to green (5★).
+- **Versions (roles with `charts: [versions]`):** each issue's reviews this
+  period stacked by app version; the three busiest known versions get blue,
+  aqua and violet (checked with the dataviz palette validator), the rest grey.
 - **SVG text** uses system fonts (`Segoe UI, Helvetica, Arial`), because web
   fonts don't load inside an attachment. Right-align end labels with
   `text-anchor="end"` (the probe clipped one).
@@ -223,13 +235,15 @@ kevintangcyberium.atlassian.net, space `MFS` (no dedicated space yet;
 `pv publish` can't create one):
 - "TITLE-TAG probe title" (98532): probe 1 (HTML route).
 - "PV probe 2: native macros" (294964): probe 2 (storage route).
-- "Product View: com.rbc.mobile.android" (294942): **the hub page**, built by
+- "Product View @ RBC Mobile" (294942): **the hub page**, built by
   `pv report --publish --space MFS`. Its attachments list still holds charts
   from earlier versions (priority map, monthly sparklines); they are
   unreferenced and harmless.
-- Under it, the role pages: "Product View · UI & design team" (295149),
-  "· Sign-in & security team" (295174), "· Payments team" (131429),
-  "· Engineering / QA: stability & devices" (65919), "· Support / CX" (65956).
+- Under it, the role pages, titled by role name alone: "UI & design"
+  (295149), "Sign-in & security" (295174), "Payments" (131429),
+  "Engineering / QA" (65919), "Support / CX" (65956).
+  Pages are matched by title, so renaming one means renaming the live page
+  first, or the next publish creates a new page beside it.
 
 Per-row SVG sparklines in table cells render well, given an explicit
 `ac:width` (without one Confluence stretches them to the cell).

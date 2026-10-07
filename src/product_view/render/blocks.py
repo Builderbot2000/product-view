@@ -9,16 +9,31 @@ from __future__ import annotations
 
 from html import escape
 
-# Visual language, report-design.md §4. Blue/orange, not red/green.
+# Visual language, report-design.md §4. A change is coloured by what it means
+# for the app (`tone`): worse is orange, better is green, and praise thinning
+# out is blue, milder than a complaint rising.
 INK = "#16191D"
 MUTED = "#596069"
 GRID = "#E3E4E1"
 NEUTRAL = "#A3A8AE"
-RISING = "#B43C0A"
-RISING_TINT = "#FBEAE2"
-POSITIVE = "#2B5FB8"
-POSITIVE_TINT = "#E9EFF9"
+WORSE, WORSE_TINT, WORSE_BORDER = "#B43C0A", "#FBEAE2", "#F2C6B0"
+BETTER, BETTER_TINT, BETTER_BORDER = "#1F7A3A", "#E4F2E7", "#BCDCC4"
+FADING, FADING_TINT, FADING_BORDER = "#2B5FB8", "#E9EFF9", "#C9D6EE"
 PANEL_BG = "#F7F7F5"
+
+TONE = {"worse": (WORSE, WORSE_TINT, WORSE_BORDER, "Red"),
+        "better": (BETTER, BETTER_TINT, BETTER_BORDER, "Green"),
+        "fading": (FADING, FADING_TINT, FADING_BORDER, "Blue")}
+
+
+def tone(change: str, polarity: str = "negative") -> str | None:
+    """worse | better | fading, or None for no change. More complaints is
+    worse and fewer is better; more praise is better and less is fading."""
+    if change in ("up", "new"):
+        return "worse" if polarity == "negative" else "better"
+    if change == "down":
+        return "better" if polarity == "negative" else "fading"
+    return None
 
 
 def esc(text: object) -> str:

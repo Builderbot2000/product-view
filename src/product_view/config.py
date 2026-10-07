@@ -68,6 +68,7 @@ DEFAULTS: dict[str, Any] = {
         "period_days": 28,
         "baseline_periods": 6,
         "curation": "curation.yaml",
+        "app_name": None,    # in page titles; None: the app id
     },
     # Where `pv publish` puts the page. Credentials are not here: they come
     # from the environment (see publish/confluence.py).
@@ -102,6 +103,7 @@ FLAG_KEYS: dict[str, str] = {
     "period_days": "report.period_days",
     "baseline_periods": "report.baseline_periods",
     "curation": "report.curation",
+    "app_name": "report.app_name",
     "space": "confluence.space",
     "title": "confluence.title",
     "parent_id": "confluence.parent_id",

@@ -44,6 +44,7 @@ report:
   period_days: 28          # the reporting period, ending on the newest review's day
   baseline_periods: 6      # "usual" = mean of this many equal periods before it
   curation: curation.yaml  # areas, roles, labels and merges
+  app_name: RBC Mobile     # hub title: "Product View @ <app_name>"; null: the app id
 
 # `pv publish` target. Credentials are NOT here: CONFLUENCE_BASE_URL,
 # CONFLUENCE_USER and ATLASSIAN_TOKEN come from the environment or .env.

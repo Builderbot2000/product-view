@@ -197,10 +197,12 @@ class Client:
     def sync_attachments(self, page_id: str, atts: list[Attachment]) -> tuple[int, int]:
         """Upload new or changed attachments; returns (uploaded, unchanged).
 
-        v1's PUT "create or update" returns HTTP 500 on Cloud when the filename
-        already exists, so an existing file is updated through its own /data
-        endpoint instead, and skipped outright when its bytes are unchanged
-        (no pointless new attachment version on every run).
+        An unchanged file is skipped (no pointless new attachment version on
+        every run). A changed one is updated through v1's PUT "create or
+        update", falling back to the attachment's own /data endpoint: Cloud
+        has rejected each of them at different times (PUT with HTTP 500 when
+        the filename existed, when this was first built; /data with an empty
+        HTTP 400 on 2026-10-07).
         """
         existing = self.attachments(page_id)
         uploaded = unchanged = 0
@@ -212,12 +214,15 @@ class Client:
                 unchanged += 1
                 continue
             else:
-                self._upload(
-                    f"/rest/api/content/{page_id}/child/attachment/{current['id']}/data", att)
+                try:
+                    self._upload(f"/rest/api/content/{page_id}/child/attachment", att, "PUT")
+                except ConfluenceError:
+                    self._upload(
+                        f"/rest/api/content/{page_id}/child/attachment/{current['id']}/data", att)
             uploaded += 1
         return uploaded, unchanged
 
-    def _upload(self, path: str, att: Attachment) -> None:
+    def _upload(self, path: str, att: Attachment, method: str = "POST") -> None:
         boundary = uuid.uuid4().hex
         body = b"".join([
             f"--{boundary}\r\n".encode(),
@@ -233,7 +238,7 @@ class Client:
         for attempt in range(3):
             try:
                 self._request(
-                    "POST", path, data=body,
+                    method, path, data=body,
                     headers={"Content-Type": f"multipart/form-data; boundary={boundary}",
                              "X-Atlassian-Token": "no-check"})
                 return

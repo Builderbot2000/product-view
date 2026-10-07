@@ -16,7 +16,7 @@ pv painpoints --top 15 --detail
 
 ## Demo
 
-[Product View: com.rbc.mobile.android](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/294942)
+[Product View @ RBC Mobile](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/294942)
 is the hub page built by `pv report --publish --space MFS` on the demo
 Confluence site. The role pages (UI & design, Sign-in & security, Payments,
 Engineering / QA, Support / CX) sit under it. Viewing it requires access to

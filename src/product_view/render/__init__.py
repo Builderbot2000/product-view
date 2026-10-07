@@ -34,7 +34,7 @@ def cmd_report(args: argparse.Namespace) -> int:
             print("report: no negative run yet; run `pv cluster` first", file=sys.stderr)
             return 1
         built = pages.build_all(store, streams["negative"], streams["positive"],
-                                taxonomy, args.app_id, args.title)
+                                taxonomy, args.app_id, args.title, args.app_name)
 
     out = Path(args.out)
     for spec in built:
@@ -77,6 +77,7 @@ def add_parser(sub, common) -> None:
     p.add_argument("--out", default="out/report", help="output folder (default: out/report)")
     p.add_argument("--publish", action="store_true", help="also publish to Confluence")
     p.add_argument("--space", help="Confluence space key")
-    p.add_argument("--title", help="hub page title (default: 'Product View: <app id>')")
+    p.add_argument("--title", help="hub page title (default: 'Product View @ <app name>')")
+    p.add_argument("--app-name", help="app name for the hub title (default: the app id)")
     p.add_argument("--parent-id", help="create the hub under this page ID")
     p.set_defaults(func=cmd_report)
