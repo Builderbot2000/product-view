@@ -251,6 +251,7 @@ class Stream:
     total: Series                       # every review in the stream
     unmatched_now: list[Quote]          # this period's reviews in no cluster
     versions_now: Counter
+    min_chars: int = 0                  # shorter reviews were left out
 
     def of_kind(self, kind: str) -> list[Issue]:
         return [i for i in self.issues if i.kind == kind]
@@ -402,7 +403,8 @@ def load_stream(store: Store, polarity: str, taxonomy: Taxonomy, days: int,
                                        row["score"], row["thumbs_up"] or 0, created,
                                        row["app_version"]))
     unmatched.sort(key=lambda q: (-q.thumbs, -q.created.timestamp()))
-    return Stream(polarity, run, period, list(groups.values()), total, unmatched, versions)
+    return Stream(polarity, run, period, list(groups.values()), total, unmatched, versions,
+                  min_chars)
 
 
 # --- orderings (D12) --------------------------------------------------------
