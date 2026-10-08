@@ -176,7 +176,7 @@ issues:
     "Balance preview without signing in":
       {kind: issue, areas: [sign-in, design],
        anchors: [02921349-87fd-4b80-8d6d-25123db4c631]}
-    "General praise":
+    "General praise (nothing specific)":
       {kind: mood,
        anchors: [9c4ab0f6-1026-4e24-8911-10c3193c5794, 0f12eb6d-7d1e-403b-97fc-bbbb3d5f3c70, 05e693e5-531a-4466-910c-edce27248754, 8cccbcbb-ab72-49f9-8ee4-3f2b6d5377d1, 679cc06b-3b0d-47a3-85cc-6189c21756ae, 9ba654d3-8db2-4300-a0e1-9ecd60426656, 0384f65d-fc52-46d7-b5d8-3b80da52ec0a, 34f31082-7e60-42f8-b8c2-069051a5a69e, 3e19d8ac-1a82-4295-a81d-eb1674611773, 0e68373b-5aa1-42ff-bebe-7d32aabf08a4, 6188ada8-5f6c-41da-9615-c80f13a04227, 21f02510-7e61-4fff-8259-e44b750b64a5, 8b11cc8a-c9f2-464d-937c-5ae9dd4b255e, 2570f395-a35c-485b-ba89-24d51ae6c8c2, 4f3d3fb7-a6ec-4975-a22d-3306e94f115b, faac6f5f-e6e4-4f63-b418-25b2826b8d84, d6dd4d3c-de4e-458e-b15f-dcb194df2328, fd28746d-19e4-479f-83e5-65e7870630bc, 4c0cb511-cce6-49b6-b4f1-706564f18a7c]}
     "(complaints in positive reviews)":
