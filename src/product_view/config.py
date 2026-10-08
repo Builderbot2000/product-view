@@ -55,6 +55,9 @@ DEFAULTS: dict[str, Any] = {
         # Cosine at which adjacent segments of one review join into a single
         # complaint unit. Lower merges more (fewer, longer units).
         "merge_threshold": 0.45,
+        # Units that only express sentiment ("it is frustrating") are kept out
+        # of the clustering and reported as one bucket; see cluster/vague.py.
+        "set_aside_vague": True,
         "knn_k": 15,
         "seed": 42,
         "tau_days": 365.0,
@@ -95,6 +98,7 @@ FLAG_KEYS: dict[str, str] = {
     "granularity": "cluster.granularity",
     "cohesion_floor": "cluster.cohesion_floor",
     "merge_threshold": "cluster.merge_threshold",
+    "set_aside_vague": "cluster.set_aside_vague",
     "knn_k": "cluster.knn_k",
     "seed": "cluster.seed",
     "tau_days": "cluster.tau_days",

@@ -147,10 +147,16 @@ def _shown(issues: list[Issue]) -> tuple[list[Issue], int]:
     return by_volume(shown), len(issues) - len(shown)
 
 
-def _kpi(big: str, caption: str, note: str, change: str = "steady") -> str:
-    """A tile for a complaint count: tinted by what its change means."""
+def _kpi(big: str, caption: str, note: str, change: str = "steady",
+         compact: bool = False) -> str:
+    """A tile for a complaint count: tinted by what its change means.
+    Compact tiles are for stacking in a column: a smaller number, and the
+    caption and note share a paragraph."""
     t = b.tone(change)
     accent, bg, border = b.TONE[t][:3] if t else (b.INK, b.PANEL_BG, b.GRID)
+    if compact:
+        return b.panel(f"<h2>{b.colour(b.esc(big), accent)}</h2>"
+                       f"<p><strong>{b.esc(caption)}</strong><br />{b.muted(note)}</p>", bg, border)
     return b.panel(f"<h1>{b.colour(b.esc(big), accent)}</h1>"
                    f"<p><strong>{b.esc(caption)}</strong></p><p>{b.muted(note)}</p>", bg, border)
 
@@ -399,26 +405,34 @@ def _hub(store: Store, neg: Stream, pos: Stream | None, tx: Taxonomy, app_id: st
     intro = (_hub_summary(neg, pos, tx, area_rows)
              + "<p>Each team has its own page with only its areas:</p>"
              f"<ul>{roles}</ul>")
-    header = b.section("two_equal", intro + b.details(_period_pairs(neg, pos, store, app_id)),
-                       chart + "<p />" + trend)
+    # issues over time (sits under the trend, filling the right column)
+    heat_rows = by_volume([i for i in issues if sum(i.series.spark())])[:20]
+    heat_html = (c.add("heatmap.svg", svg.heatmap(
+        [{"name": i.label, "values": i.series.spark()} for i in heat_rows], ends,
+        f"Negative reviews per issue, last {SPARK_PERIODS} periods",
+        "Busiest this period first · outlined column = this period"),
+        620)) if heat_rows else ""
 
     # KPI tiles
     tiles = [_kpi(str(neg.total.now), f"negative reviews in {p.days} days",
-                  _vs_usual(neg.total), neg.total.change)]
+                  _vs_usual(neg.total), neg.total.change, compact=True)]
     moved = by_change(issues)
     if moved:
         top = moved[0]
         tiles.append(_kpi(f"{top.now}", f"{LOZENGE[top.change]}: {top.label}",
                           f"usual {_usual(top.usual)} per period · "
                           f"{len(moved)} issue{'s' if len(moved) != 1 else ''} changed",
-                          top.change))
+                          top.change, compact=True))
     else:
-        tiles.append(_kpi("0", "issues changed", "every issue is within normal variation"))
+        tiles.append(_kpi("0", "issues changed", "every issue is within normal variation", compact=True))
     switching = next((o for o in neg.of_kind("outcome") if "switching" in o.label.lower()), None)
     if switching:
         tiles.append(_kpi(str(switching.now), "say they're switching banks",
-                          _vs_usual(switching.series), switching.change))
-    kpis = b.section("three_equal", *tiles[:3])
+                          _vs_usual(switching.series), switching.change, compact=True))
+
+    header = b.section("two_equal",
+                       intro + "".join(tiles[:3]) + b.details(_period_pairs(neg, pos, store, app_id)),
+                       (heat_html + "<p />" if heat_html else "") + chart + "<p />" + trend)
 
     # what changed
     changed = by_change(issues + neg.of_kind("outcome"))
@@ -426,14 +440,6 @@ def _hub(store: Store, neg: Stream, pos: Stream | None, tx: Taxonomy, app_id: st
         f"<p>{b.muted('Issues whose count is significantly above or below usual (see Method). Everything else moved within normal variation.')}</p>"
         + _issue_table(changed, c, tx)
         if changed else b.info("<p>No issue moved beyond normal variation this period.</p>"))
-
-    # issues over time
-    heat_rows = by_volume([i for i in issues if sum(i.series.spark())])[:20]
-    heat_html = ("<h2>Issues over time</h2>" + c.add("heatmap.svg", svg.heatmap(
-        [{"name": i.label, "values": i.series.spark()} for i in heat_rows], ends,
-        f"Negative reviews per issue, last {SPARK_PERIODS} periods",
-        "Busiest this period first · outlined column = this period"),
-        svg.heatmap_width(SPARK_PERIODS))) if heat_rows else ""
 
     # by area
     area_html = "<h2>By area</h2>"
@@ -457,8 +463,8 @@ def _hub(store: Store, neg: Stream, pos: Stream | None, tx: Taxonomy, app_id: st
         f"<p>{b.muted('Reviews voicing frustration without a specific cause, or saying what the problems led them to do. Kept apart from the actionable issues above.')}</p>"
         + _issue_table(general, c, first="Sentiment")) if general else ""
 
-    body = b.layout(header, kpis,
-                    b.section("single", changed_html + heat_html + area_html + _likes(pos, c) + general_html
+    body = b.layout(header,
+                    b.section("single", changed_html + area_html + _likes(pos, c) + general_html
                               + _method(neg) + _footer(neg, pos)))
     return c.done(body)
 

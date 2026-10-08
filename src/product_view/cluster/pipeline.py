@@ -23,7 +23,7 @@ import numpy as np
 from ..embed import encoder
 from ..store import Store
 from ..embed import segment
-from . import scoring, synthesize, units as units_mod
+from . import scoring, synthesize, units as units_mod, vague
 from .granularity import SearchResult, filter_clusters, resolve_band, search
 from .graph import build_knn, centroid, cohesion
 from .strategies import available_strategies, get_strategy
@@ -42,12 +42,17 @@ class ClusterConfig:
     seed: int = 42
     min_chars: int = 20
     merge_threshold: float = units_mod.DEFAULT_MERGE_THRESHOLD
+    set_aside_vague: bool = True
     tau_days: float = scoring.DEFAULT_TAU_DAYS
     momentum_window_days: float = scoring.DEFAULT_MOMENTUM_WINDOW_DAYS
     lexrank_max_members: int = synthesize.LEXRANK_MAX_MEMBERS
     native_override: float | None = None
     top_keywords: int = 8
     supporting_quotes: int = 5
+
+
+# Cluster label of the vague bucket; real labels are small non-negative ints.
+VAGUE_LABEL = -2
 
 
 def _pain_point_id(medoid_review_id: str, medoid_text: str) -> str:
@@ -117,7 +122,11 @@ def synthesize_clusters(
         medoid_row = rows[int(units.review_idx[medoid_unit])]
         keywords = keywords_by_cluster.get(label, [])
 
-        title = synthesize.sentence_title(member_texts, similarities, keywords, taken)
+        if label == VAGUE_LABEL:
+            title = vague.BUCKET_TITLES[cfg.polarity]
+        else:
+            title = synthesize.sentence_title(
+                member_texts, similarities, keywords, taken)
         taken.add(title.lower())
 
         # LexRank over the most typical members only -- the whole cluster
@@ -200,6 +209,22 @@ def run(store: Store, cfg: ClusterConfig, app_id: str | None = None) -> dict:
         cfg.polarity, len(rows), len(units), cfg.merge_threshold,
     )
 
+    # Sentiment-only units are held out of the graph (they are the hubs that
+    # pull specific complaints toward "this app is terrible") and re-attached
+    # below as a single bucket, so no review loses its coverage.
+    keep = np.arange(len(units))
+    vague_units = np.zeros(0, dtype=np.int64)
+    if cfg.set_aside_vague:
+        mask = vague.vague_mask(
+            units.texts, units.vectors,
+            lambda s: encoder.encode(s, show_progress=False),
+        )
+        keep = np.flatnonzero(~mask)
+        vague_units = np.flatnonzero(mask)
+        log.info("%d of %d units are sentiment-only; set aside as one bucket",
+                 len(vague_units), len(units))
+        vectors = vectors[keep]
+
     log.info("building exact cosine kNN (k=%d)", cfg.knn_k)
     knn = build_knn(vectors, k=cfg.knn_k)
 
@@ -223,6 +248,11 @@ def run(store: Store, cfg: ClusterConfig, app_id: str | None = None) -> dict:
             strategy.knob.name, band[0], band[1],
         )
         result = search(strategy, vectors, knn, band, min_size, cfg.cohesion_floor)
+
+    # Back to full-corpus unit indices, then add the bucket.
+    result.clusters = {l: keep[m] for l, m in result.clusters.items()}
+    if len(vague_units):
+        result.clusters[VAGUE_LABEL] = vague_units
 
     # Units are what cluster, but the reader's question is "how many reviews
     # does this analysis say nothing about" -- a review is only uncovered when
@@ -277,6 +307,8 @@ def run(store: Store, cfg: ClusterConfig, app_id: str | None = None) -> dict:
                 "momentum_window_days": cfg.momentum_window_days,
                 "min_chars": cfg.min_chars,
                 "merge_threshold": cfg.merge_threshold,
+                "set_aside_vague": cfg.set_aside_vague,
+                "vague_units": int(len(vague_units)),
                 "splitter": segment.SPLITTER_VERSION,
                 "embed_model": encoder.MODEL_NAME,
                 "search_trace": result.trace,

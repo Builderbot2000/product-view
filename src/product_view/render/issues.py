@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from ..cluster.vague import BUCKET_TITLES
 from ..models import PainPoint
 from ..store import Store
 
@@ -306,8 +307,15 @@ def _match_labels(store: Store, run_id: str, labels: dict[str, dict]) -> dict[st
                 f"SELECT pain_point_id, canonical_review_id FROM pain_points "
                 f"WHERE run_id = ? AND canonical_review_id IN ({q})", (run_id, *anchor_label)):
             home[rid] = (math.inf, pp_id)
+    # The set-aside bucket is its own thing; an anchor that fell into it must
+    # not hand it a curated label (it would then be filed as that issue).
+    bucket = {r[0] for r in store.conn.execute(
+        "SELECT pain_point_id FROM pain_points WHERE run_id = ? AND title IN (?, ?)",
+        (run_id, *BUCKET_TITLES.values()))}
     votes: dict[str, Counter] = {}
     for rid, (_, pp_id) in home.items():
+        if pp_id in bucket:
+            continue
         votes.setdefault(pp_id, Counter())[anchor_label[rid]] += 1
     return {pp_id: min(c, key=lambda lb: (-c[lb], order[lb])) for pp_id, c in votes.items()}
 
@@ -329,11 +337,14 @@ def load_stream(store: Store, polarity: str, taxonomy: Taxonomy, days: int,
         label = matched.get(pp.pain_point_id)
         entry = labels.get(label, {}) if label else {}
         kind = entry.get("kind", "issue")
+        if label is None and pp.title in BUCKET_TITLES.values():
+            kind = "mood"
         if kind == "hide":
             hidden.add(pp.pain_point_id)
             continue
         if label is None:
-            label, areas = pp.title, taxonomy.classify(pp)
+            label = pp.title
+            areas = [] if kind == "mood" else taxonomy.classify(pp)
         else:
             areas = list(entry.get("areas") or ([] if kind != "issue" else [OTHER]))
         issue = groups.get(label)

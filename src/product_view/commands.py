@@ -204,6 +204,7 @@ def _config_from(args: argparse.Namespace):
         seed=args.seed,
         min_chars=args.min_chars,
         merge_threshold=args.merge_threshold,
+        set_aside_vague=args.set_aside_vague,
         tau_days=args.tau_days,
         momentum_window_days=args.momentum_window,
         native_override=args.native_override,
@@ -459,6 +460,9 @@ def add_cluster_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--min-chars", type=int)
     p.add_argument("--merge-threshold", type=float,
                    help="cosine at which adjacent segments of a review join one complaint")
+    p.add_argument("--set-aside-vague", action=argparse.BooleanOptionalAction,
+                   help="keep sentiment-only units out of the clustering and "
+                        "report them as one bucket")
     p.add_argument("--tau-days", type=float,
                    help="recency decay constant: weight = exp(-age_days / tau)")
     p.add_argument("--momentum-window", type=float)
