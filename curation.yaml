@@ -16,6 +16,12 @@
 #          consequence, e.g. switching banks) | hide (left out)
 #   areas: area ids; the first is where the hub files it.
 
+# fold_focus_below: an uncurated cluster whose units share few common words
+#         (focus under this, 0-1; see cluster/vague.py) points at nothing in
+#         particular, so it joins the general-sentiment bucket. Curated issues
+#         and outcomes are never folded. 0 turns this off.
+fold_focus_below: 0.2
+
 areas:
   sign-in:   {name: "Sign-in & security", keywords: [login, log, sign, password, 2fa, verification, trusted, fingerprint, biometric, biometrics, locked, access, remember, card, security, permissions]}
   stability: {name: "Stability & performance", keywords: [crash, crashes, crashing, open, error, technical, difficulties, slow, load, update, updates, reinstall, uninstall, working]}

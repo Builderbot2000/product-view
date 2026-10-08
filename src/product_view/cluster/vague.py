@@ -17,6 +17,7 @@ to an anchor *and* has at most `MAX_CONTENT_WORDS` of them.
 from __future__ import annotations
 
 import re
+from collections import Counter
 
 import numpy as np
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
@@ -102,3 +103,22 @@ def vague_mask(texts: list[str], vectors: np.ndarray, encode_fn) -> np.ndarray:
     near = (vectors @ anchors.T).max(axis=1) >= ANCHOR_SIMILARITY
     n_content = np.array([len(_content_words(t)) for t in texts])
     return (n_content == 0) | (near & (n_content <= MAX_CONTENT_WORDS))
+
+
+TOP_WORDS = 3
+
+
+def focus(texts: list[str]) -> float:
+    """How tightly a cluster's units point at one thing, in [0, 1].
+
+    The share of units that contain at least one of the cluster's `TOP_WORDS`
+    most common content words. A cluster about cheque deposits keeps saying
+    "cheque" or "deposit" (0.9); one about nothing in particular ("waste of
+    time", "way to go", "please fix") scatters across many words (0.1-0.2).
+    """
+    sets = [set(_content_words(t)) for t in texts]
+    df = Counter(w for s in sets for w in s)
+    if not df:
+        return 0.0
+    top = {w for w, _ in df.most_common(TOP_WORDS)}
+    return sum(bool(s & top) for s in sets) / len(sets)

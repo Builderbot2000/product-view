@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from ..cluster.vague import BUCKET_TITLES
+from ..cluster.vague import BUCKET_TITLES, focus
 from ..models import PainPoint
 from ..store import Store
 
@@ -53,6 +53,7 @@ class Taxonomy:
     areas: dict[str, Area]
     roles: dict[str, Role]
     labels: dict[str, dict[str, dict]]   # polarity -> label -> {kind, areas, anchors}
+    fold_focus_below: float = 0.2        # uncurated clusters less focused than this -> mood bucket
 
     def area_name(self, area_id: str) -> str:
         return self.areas[area_id].name if area_id in self.areas else "Other"
@@ -86,7 +87,7 @@ def load_taxonomy(path: Path) -> Taxonomy:
             for a in e.get("areas", []):
                 if a not in areas:
                     raise ValueError(f"{path}: {polarity} {label!r}: unknown area {a!r}")
-    return Taxonomy(areas, roles, labels)
+    return Taxonomy(areas, roles, labels, float(data.get("fold_focus_below", 0.2)))
 
 
 # --- periods and change -----------------------------------------------------
@@ -330,6 +331,13 @@ def load_stream(store: Store, polarity: str, taxonomy: Taxonomy, days: int,
     labels = taxonomy.labels.get(polarity, {})
     matched = _match_labels(store, run["run_id"], labels)
 
+    # How tightly each cluster's units point at one thing (vague.focus).
+    unit_texts: dict[str, list[str]] = {}
+    for row in store.conn.execute(
+            "SELECT pain_point_id, unit_text FROM pain_point_members WHERE run_id = ?",
+            (run["run_id"],)):
+        unit_texts.setdefault(row[0], []).append(row[1] or "")
+
     groups: dict[str, Issue] = {}
     hidden: set[str] = set()
     for row in store.pain_points(run["run_id"], sort="size", limit=10_000):
@@ -339,6 +347,12 @@ def load_stream(store: Store, polarity: str, taxonomy: Taxonomy, days: int,
         kind = entry.get("kind", "issue")
         if label is None and pp.title in BUCKET_TITLES.values():
             kind = "mood"
+        elif (label is None and taxonomy.fold_focus_below > 0
+              and focus(unit_texts.get(pp.pain_point_id, [])) < taxonomy.fold_focus_below):
+            # An uncurated cluster that points at nothing in particular joins
+            # the bucket; curated issues and outcomes are never folded.
+            label, kind = BUCKET_TITLES[polarity], "mood"
+            entry = {}
         if kind == "hide":
             hidden.add(pp.pain_point_id)
             continue

@@ -345,26 +345,54 @@ def _footer(neg: Stream, pos: Stream | None) -> str:
 
 def _method(neg: Stream) -> str:
     p = neg.period
-    return b.expand("Method: how these numbers are made", (
+    # Written for readers of the pages, who know the app but nothing about how
+    # the report is made: no tool names, file names or statistics terms.
+    months = round(p.days * p.baseline / 30.4)
+    return b.expand("How these numbers are made", (
         "<ul>"
-        f"<li><strong>Periods.</strong> This report covers {p.days} days ending on the day "
-        "of the newest review fetched. <em>Usual</em> is the mean count over the "
-        f"{p.baseline} periods of the same length before it. Sparklines show the last "
-        f"{SPARK_PERIODS} periods, this one on the right, each on its own scale.</li>"
-        "<li><strong>Change.</strong> Counts per period are small, so a ratio would call "
-        "1 → 3 a tripling. Instead a count is <em>up</em> when it would be that high by "
-        f"chance less than {SIGNIFICANCE:.0%} of the time at the usual rate (a Poisson "
-        f"test), and <em>down</em> likewise; under {MIN_CHANGE} reviews is never a "
-        "change. <em>New</em> means none in the earlier periods.</li>"
-        "<li><strong>Issues</strong> come from clustering every review's sentences over "
-        "the app's whole history, which keeps their definitions stable from period to "
-        "period; the report only counts the period's share. Clusters describing the same "
-        "problem are merged and each review counted once per issue, but one review can "
-        "raise several issues, so issue counts add up to more than the review total.</li>"
-        "<li><strong>Labels and areas</strong> are curated in <code>curation.yaml</code>; "
-        "an issue no one has labelled yet keeps its extracted title (marked "
-        "auto-labelled) and is filed by keyword. Quotes are verbatim; French reviews are "
-        "machine-translated.</li>"
+        "<li><strong>Where the reviews come from.</strong> Everything on these pages comes "
+        "from reviews people post about the app on the Google Play Store. A review "
+        "with 1 to 3 stars counts as <em>negative</em>, and one with 4 or 5 stars as "
+        "<em>positive</em>. Reviews written in French are translated into English "
+        "automatically.</li>"
+        f"<li><strong>“This period” and “usual”.</strong> Each report covers {p.days} days, "
+        "ending on the date of the most recent review available when the report was "
+        "made. To show whether a number is high or low, it is compared with "
+        f"<em>usual</em>: the average for the {p.baseline} periods of {p.days} days just "
+        f"before this one (about {months} months in all). The small bar charts next to "
+        f"each issue show its last {SPARK_PERIODS} periods, oldest on the left and the "
+        "current one on the right. Each chart is scaled to its own tallest bar, so use "
+        "it to see whether an issue is growing or fading, not to compare one issue with "
+        "another.</li>"
+        "<li><strong>What UP, DOWN, NEW and STEADY mean.</strong> Most issues come up "
+        "in only a few reviews each period, so their counts go up and down a little "
+        "from one period to the next even when nothing in the app has changed. Going "
+        "from 1 review to 3, for example, is usually just chance. An issue is marked "
+        "<em>UP</em> only when its count is so far above usual that chance alone would "
+        f"produce it less than 1 time in {round(1 / SIGNIFICANCE)}. <em>DOWN</em> is the "
+        f"same for counts far below usual. An issue with fewer than {MIN_CHANGE} reviews "
+        "is never marked UP or DOWN. <em>NEW</em> means nobody mentioned the issue in "
+        "any earlier period, and <em>STEADY</em> means its count is in the normal "
+        "range.</li>"
+        "<li><strong>How reviews are sorted into issues.</strong> Software reads each "
+        "review sentence by sentence and puts together the sentences that describe the "
+        "same problem: for example, every sentence saying the app won’t let someone "
+        "sign in. Each of those sets of sentences is one issue on these pages. The "
+        "sorting covers every review collected so far, not only this period’s, so an "
+        "issue means the same thing in every report and can be followed over time. One "
+        "review can mention several problems and then counts toward each of them, which "
+        "is why issue counts add up to more than the number of reviews.</li>"
+        "<li><strong>Issue names and areas.</strong> A person reads the reviews behind "
+        "each issue, gives it a short name and assigns it to a product area such as "
+        "Payments or Sign-in &amp; security. Each team’s page shows the areas that team "
+        "looks after. An issue that has appeared recently and has not been checked by a "
+        "person yet is marked <em>(auto-labelled)</em>: its name is taken from the "
+        "reviews themselves and its area is guessed from the words they use, so both "
+        "may be rough.</li>"
+        "<li><strong>Quotes</strong> are copied word for word from reviews, with very "
+        "long ones shortened. After each quote you’ll see its star rating, the date it "
+        "was posted, the app version it was written about (when the store reports it) "
+        "and how many people marked it helpful (👍).</li>"
         "</ul>"))
 
 
@@ -455,13 +483,13 @@ def _hub(store: Store, neg: Stream, pos: Stream | None, tx: Taxonomy, app_id: st
             + (f"<p>{b.muted(f'{quiet} more issue(s) had no reviews this period or before it.')}</p>"
                if quiet else ""))
 
-    # general sentiment
+    # uncategorized opinions: moods and outcomes, no single thing to fix
     general = by_volume([i for i in neg.of_kind("outcome") + neg.of_kind("mood")
                          if i.now or i.usual >= 1])
     general_html = b.expand(
-        f"General sentiment and outcomes this period ({len(general)} kinds)",
-        f"<p>{b.muted('Reviews voicing frustration without a specific cause, or saying what the problems led them to do. Kept apart from the actionable issues above.')}</p>"
-        + _issue_table(general, c, first="Sentiment")) if general else ""
+        f"Uncategorized user opinions this period ({len(general)} groups)",
+        f"<p>{b.muted('Reviews that voice frustration without naming a specific problem, or say what users did about it, such as switching banks. Kept apart from the issues above because there is no single thing to fix.')}</p>"
+        + _issue_table(general, c, first="Opinion")) if general else ""
 
     body = b.layout(header,
                     b.section("single", changed_html + area_html + _likes(pos, c) + general_html
@@ -525,17 +553,45 @@ def _role(neg: Stream, pos: Stream | None, tx: Taxonomy, role: Role, hub_title: 
     if quiet:
         details += f"<p>{b.muted(f'{quiet} more issue(s) in these areas had no reviews recently.')}</p>"
 
-    likes_html = ""
-    if pos:
-        liked = by_volume([i for i in pos.issues if i.kind == "issue" and i.now
-                           and set(i.areas) & set(role.areas)])
-        if liked:
-            likes_html = ("<h2>What users praised</h2>"
-                          f"<p>{b.muted(f'From the {pos.total.now} positive (4–5★) reviews this period.')}</p>"
-                          + "".join(_said(i, c) for i in liked))
+    likes_html = _role_praise(pos, role, c, hub_title) if pos else ""
     body = b.layout(header, kpis, b.section("single", summary + details + likes_html
                                             + _method(neg) + _footer(neg, pos)))
     return c.done(body)
+
+
+PRAISE_ELSEWHERE = 3   # app-wide praise themes named under a role's own
+
+
+def _role_praise(pos: Stream, role: Role, c: Canvas, hub_title: str) -> str:
+    """Praise in the role's areas in full, then the app's other praise in a line.
+
+    Most praise is general ("easy", "fast") and filed under no role's areas,
+    so the section is always shown: an empty one would read as praise not
+    being covered at all.
+    """
+    out = "<h2>What users praised</h2>"
+    if not pos.total.now:
+        return out + f"<p>{b.muted('No positive (4–5★) reviews this period.')}</p>"
+    out += f"<p>{b.muted(f'From the {pos.total.now} positive (4–5★) reviews this period.')}</p>"
+    themes = [i for i in pos.of_kind("issue") if i.now]
+    mine = by_volume([i for i in themes if set(i.areas) & set(role.areas)])
+    elsewhere = by_volume([i for i in themes if all(i is not m for m in mine)])
+    hub = b.page_link(hub_title, hub_title)
+    if mine:
+        out += "".join(_said(i, c) for i in mine)
+    else:
+        out += "<p>No praise specific to your areas this period.</p>"
+    if elsewhere:
+        top = elsewhere[:PRAISE_ELSEWHERE]
+        text = (f"{'Elsewhere in the app' if mine else 'Across the app'}, users most praised "
+                f"{_and([f'{_name(i)} ({i.now})' for i in top])}.")
+        recent = top[0].recent_quotes(1)
+        if recent:
+            text += f" One reviewer put it this way: {_quote(recent[0], 180)}"
+        out += f"<p>{text}</p><p>{b.muted('All praise themes are on ')}{hub}.</p>"
+    elif not mine:
+        out += f"<p>{b.muted('For the app as a whole, see ')}{hub}.</p>"
+    return out
 
 
 def _said(i: Issue, c: Canvas) -> str:
