@@ -42,7 +42,9 @@ Two decisions shape this plan:
 1. **No LLM.** Synthesis must be algorithmic — the techniques vector databases and
    retrieval systems use (kNN graphs, medoids, MMR, graph centrality), not a
    generated paraphrase. Every word in a pain point's message must be traceable to
-   a real review.
+   a real review. *Superseded 2026-10-08: a local LLM is being trialled for
+   grouping and naming, because these clusters form around tone. See
+   [llm-trials.md](llm-trials.md).*
 2. **Positive and negative clustered separately**, so praise and complaints never
    contaminate each other's clusters.
 

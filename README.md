@@ -190,6 +190,10 @@ canonical quote is the medoid (a real review), and the message is 2–3 real
 sentences picked by LexRank centrality under MMR. Every word traces to a real
 review, nothing leaves the machine, and output is deterministic for a fixed seed.
 
+A replacement is being trialled: a local LLM (Qwen3.5 9B through Ollama) lists
+each review's problems and groups them by area and issue. Review text still
+never leaves the machine. Status and results: [llm-trials.md](llm-trials.md).
+
 ### Always fetch all locales (the default)
 
 **Play partitions reviews by `lang`, and each partition holds different reviews.**

@@ -37,7 +37,10 @@ and the next steps, written so a fresh session can start building.
   - Role views: all four (analysts, PMs, Engineering/QA, Support/CX).
   - Delivery: both @mentions and Slack.
   - Cadence: weekly plus each release.
-  - LLM: only a company-approved internal model.
+  - LLM: only a company-approved internal model. *Revised 2026-10-08: a
+    small model run locally (Qwen3.5 9B through Ollama) for compliance,
+    pending approval. It groups issues as well as naming them
+    ([llm-trials.md](llm-trials.md)).*
   - Then: **demo first, delivery infrastructure later.**
 - **Design canvas tried, then set aside.** A claude.ai Design canvas
   (link in §4) was mocked up with real data. It was first built as a manager

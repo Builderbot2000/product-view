@@ -32,6 +32,7 @@ not by reasoning about them. A fresh session should not need to re-derive any of
 | (C) Embed | **Done.** `pv embed` — splits every review into fine segments, 45,839 cached vectors |
 | (D) Cluster | **Done.** `pv cluster` — re-joins segments into complaint units, then leiden / agglomerative / hdbscan, `--compare` |
 | (E) Label | **Done.** sentence titles (extractive, keyword-anchored), c-TF-IDF keywords, medoid, LexRank, MMR — no LLM |
+| (D/E) LLM grouping | **Spike, 2026-10-08/09.** A local model (Qwen3.5 9B via Ollama) cuts each review into problems and checks them against quality rules; embeddings and Leiden then group the problems, to replace (D) and (E). Cut, rules and Leiden-on-statements work on one 200-review sample (grab-bags remain, nothing scored). Scripts `spike/llm_extract.py`, `llm_refine.py`, `llm_cluster.py`, not wired into `pv run`. Trial log, current design and open problems: [llm-trials.md](llm-trials.md) |
 | End to end | **Done.** `pv run [--fetch]` — rebuilds `reviews.db` clean, then translate → embed → cluster every stream in config |
 | Config | **Done.** [config.yaml](config.yaml); flag > config > built-in default; unknown keys are an error |
 | Container | **Built and verified 2026-09-29** on Docker Desktop 4.30 (Windows). Image 1.46 GB, torch `2.14.0+cpu`. `pv run` in the container took 1m49s on warm caches: 43 negative / 51 positive pain points. The resulting `reviews.db` passes `integrity_check`, and host and container `pv painpoints` output match. [Dockerfile](Dockerfile) + [compose.yaml](compose.yaml) |
@@ -63,6 +64,9 @@ packages. Report curation (labels, areas, roles) is in [curation.yaml](curation.
   ~2.5 GB CUDA build** — use `--index-url https://download.pytorch.org/whl/cpu`.
 - Models cached under `platformdirs.user_cache_dir()`: `all-MiniLM-L6-v2` (~90 MB),
   `opus-mt-fr-en` (~301 MB). One-off; a cold first run is downloading, not hung.
+- **LLM spike only:** Ollama 0.40.1 (installed with winget, serves on
+  `127.0.0.1:11434`) with `qwen3.5:9b` pulled (6.6 GB). Dev laptop GPU: RTX 4060
+  Laptop, 8 GB. Not in the Docker image.
 - Data on disk, all gitignored:
   - **Source, never deleted by the pipeline:** `data/raw/` (18 locale JSONL files
     + per-locale `.state.json`), `data/meta/` (listing snapshots), `data/export/` (CSV).
@@ -184,14 +188,26 @@ These cost real time to discover:
 - **HuggingFace reports inflated model sizes.** Its blob listing sums duplicate formats
   (safetensors + pytorch bin + OpenVINO). `paraphrase-multilingual-MiniLM-L12-v2` lists
   1,530 MB but downloads 471 MB. Take the max single weight file, not the sum.
+- **`Path.read_text()` without an encoding reads GBK on this machine** and fails
+  on any UTF-8 file holding `…` or similar. Ad-hoc scripts need
+  `encoding="utf-8"` or `python -X utf8`.
+- **Prompt examples get copied.** With banking examples in the extraction
+  prompt, Qwen3.5 9B reused one example phrase word for word in 33 of 44
+  reviews, which faked clean grouping. Prompt examples come from an unrelated
+  domain (food delivery). See [llm-trials.md](llm-trials.md) trials 1–2.
+- **Qwen3.5 thinks by default.** Send `"think": false` to Ollama, or reasoning
+  text costs time and can leak into the output.
 - **Check `abi3` when auditing wheels.** `igraph` and `leidenalg` ship `cp38-abi3` /
   `cp39-abi3` wheels covering Windows, macOS x86_64/arm64, and Linux. A naive grep for
   `cp312` reports zero and wrongly suggests a source build.
 
 ### Decisions already settled (do not relitigate)
 
-1. **No LLM anywhere.** Synthesis is algorithmic — c-TF-IDF, medoid, LexRank, MMR.
-   Fully local, no credentials, deterministic.
+1. ~~**No LLM anywhere.**~~ **Superseded 2026-10-08:** embedding clusters group
+   by tone, not topic, so grouping moves to a **local** LLM (Qwen3.5 9B through
+   Ollama). It stays fully local and needs no credentials; review text still never
+   leaves the machine. Determinism now rests on temperature 0 plus a per-review
+   cache. Pending compliance approval of the model. See [llm-trials.md](llm-trials.md).
 2. **Positive and negative clustered separately.**
 3. **Cluster all history; report one period.** Old issues form clusters, which keeps
    issue definitions stable, but the report counts only the reporting period (default
@@ -308,7 +324,9 @@ for the report items is in [report-design.md](report-design.md) §6.
    Sign-in & security, Payments, Engineering / QA, Support / CX) and eight
    areas in `curation.yaml` are a first guess at the org.
 3. **Labels from the company-approved internal model** (D6), replacing hand
-   labels. Which model, and how to call it, is still unknown.
+   labels. Overtaken by the LLM grouping spike (2026-10-08): a local Qwen3.5 9B
+   names issues as part of grouping them ([llm-trials.md](llm-trials.md)).
+   Whether compliance approves that model is still open.
 4. **Curating new clusters.** Uncurated clusters show "auto-labelled" and are
    filed by keyword. Add a helper that prints a `curation.yaml` stub (label,
    kind, areas, anchor), and decide who maintains the file.
@@ -326,17 +344,21 @@ for the report items is in [report-design.md](report-design.md) §6.
 11. Set `confluence.space` in config.yaml (still `null`; the demo uses
     `--space MFS`).
 
+**LLM grouping (spike)**: build tier 2 (issues within an area) and a
+hand-labelled set of ~100 reviews to score it; then decide whether it
+replaces (D) and (E). Open problems are listed in
+[llm-trials.md](llm-trials.md).
+
 **Clustering (D)**, now lower priority because the report no longer ranks
-by impact: impact weights and `sole_share`; merge threshold 0.45 untuned;
+by impact, and possibly replaced by LLM grouping: impact weights and `sole_share`; merge threshold 0.45 untuned;
 drop the leftover `embeddings` table in `cache.db` (~27 MB).
 
 **After the demo (delivery)**: a proper service account or OAuth app instead
 of an employee's token; @mentions and Slack links; write access to the
 team's space.
 
-**Housekeeping**: everything since `ff32053` is uncommitted (render/,
-curation.yaml, report-design.md, publish and config changes, probe 2).
-Milestone 1 checks 1–17 and 20 are still unrecorded.
+**Housekeeping**: the report work after `ff32053` is now committed. Milestone 1
+checks 1–17 and 20 are still unrecorded.
 
 ---
 
@@ -576,6 +598,10 @@ Turn a numbered cluster into something a PM can read.
 which also means no API key, no cost, no review text leaving the machine, and
 deterministic output that does not drift between runs.
 
+*Since 2026-10-08 a local-LLM replacement for (D) and (E) is being trialled,
+because these extractive titles name tone clusters, not issues. See
+[llm-trials.md](llm-trials.md). This section describes what `pv run` does today.*
+
 - **Title** — a real user sentence: the most central 3–10-word complaint unit
   containing one of the top 3 c-TF-IDF keywords. Leading connectives and
   keyboard stutter are stripped, and fragments that start mid-sentence are
@@ -784,7 +810,9 @@ rolling update; `pv report --publish` is not yet part of `pv run`.
 | Scraping a named bank's app draws attention internally | Low | Public data, read-only, low request rate, manually triggered; worth a heads-up to whoever owns the RBC Play listing before this becomes a recurring job |
 | Cluster quality poor at low volume | Medium | Tune `min_cluster_size`; fall back to a flat ranked list below a volume threshold |
 | Scraping raises ToS concerns | Medium | Low-volume, manually triggered, public data; the internal-feed swap is the real answer |
-| ~~Review text sent to a third-party LLM~~ | Retired | Pipeline is fully local: local embeddings, algorithmic labeling. No review text leaves the machine at any stage |
+| ~~Review text sent to a third-party LLM~~ | Retired | Pipeline is fully local: local embeddings, and the LLM grouping spike runs its model locally through Ollama. No review text leaves the machine at any stage |
+| Compliance rejects the local model | Medium | Qwen3.5 9B is Chinese-origin (Alibaba), which some banks restrict even offline. Gemma 4 12B (Google, Apache 2.0) is the fallback, untested here |
+| LLM grouping drifts between runs | Medium | Temperature 0 and seed 0, but not bit-exact across GPUs or Ollama versions. Results are cached per review and prompt version, so a review is only judged once |
 
 ## 9. Open questions
 
@@ -794,8 +822,10 @@ rolling update; `pv report --publish` is not yet part of `pv run`.
 2. ~~**Which app(s)?**~~ Settled: `com.rbc.mobile.android`, all `ca` locales.
    The corpus is 91.9% English, 7.4% French, 0.2% non-Latin scripts — handled by
    translating French to English in stage (B2).
-3. ~~**LLM access?**~~ Moot — labeling is algorithmic, so the demo needs no
-   credentials of any kind.
+3. **LLM access?** Reopened 2026-10-08. Answered for the spike: a local model
+   through Ollama, so still no credentials. Open: whether compliance approves
+   Qwen3.5 9B, and where Ollama runs once this leaves the laptop (the Docker
+   image has none).
 4. ~~**Page ownership?**~~ Settled 2026-09-30: overwrite in place. `pv publish`
    updates the same-titled page, and Confluence's version history does the
    archiving.
