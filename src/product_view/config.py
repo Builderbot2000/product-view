@@ -40,29 +40,35 @@ DEFAULTS: dict[str, Any] = {
         "sleep_seconds": 1.0,
     },
     "corpus": {
-        # Shared by translate, embed and cluster: a review shorter than this
-        # is never translated, so it must never enter a stream either.
+        # Shared by translate, the issue stage and the report: a review
+        # shorter than this is never translated, so it must never be grouped either.
         "min_chars": 20,
     },
-    "cluster": {
-        "polarities": ["negative", "positive"],   # what `pv run` clusters
-        "algorithm": "leiden",
-        "granularity": "balanced",   # broad | balanced | fine | "MIN-MAX"
-        # Per stream: the positive corpus is about a third the size of the
-        # negative one, so the same floor would demand a rarer theme.
-        "min_cluster_size": {"negative": 25, "positive": 15},
-        "cohesion_floor": 0.35,
-        # Cosine at which adjacent segments of one review join into a single
-        # complaint unit. Lower merges more (fewer, longer units).
-        "merge_threshold": 0.45,
-        # Units that only express sentiment ("it is frustrating") are kept out
-        # of the clustering and reported as one bucket; see cluster/vague.py.
-        "set_aside_vague": True,
-        "knn_k": 15,
-        "seed": 42,
-        "tau_days": 365.0,
-        "momentum_window_days": 365.0,
-        "native_override": None,
+    # The issue stage (issues/pipeline.py; llm-trials.md "Viability test").
+    "issues": {
+        "window_months": 12,     # reviews this recent are distilled and grouped
+        "sides": ["complaint", "praise"],
+        "min_cluster_size": 4,   # HDBSCAN on the uncovered points
+        "threshold": 0.75,       # a score at or above this is a match
+        "loops": 1,              # rounds of minting from leftovers per run
+        "batch": 15,             # points per scoring call
+        "nearest": 0,            # score a point only against its N nearest concepts; 0: all
+        "join": 0.7,             # definition similarity at which a join with a live issue is checked
+        "overlap_cost": 1.0,     # selection: cost of each repeated match
+        "concept_cost": 2.0,     # selection: cost of each concept kept
+    },
+    # The language model behind the issue stage (issues/llm.py). Keys for an
+    # API provider come from the environment (OPENAI_API_KEY), never from here.
+    "llm": {
+        "provider": "ollama",    # ollama (local) | openai
+        "models": {"fast": "qwen3.5:9b", "strong": "qwen3.5:9b"},
+        "base_url": None,        # None: the provider's default
+        "max_workers": 1,        # parallel calls; 1 for a local GPU
+        "temperature": 0.0,      # None: leave it out of the request
+        "seed": 0,
+        "timeout": 600,
+        "retries": 5,
+        "options": {},           # extra request fields, passed through as given
     },
     # `pv report`: a periodic overview, not all of history (report-design.md
     # D15). The period ends on the newest review's day; the baseline is the
@@ -82,8 +88,7 @@ DEFAULTS: dict[str, Any] = {
     },
 }
 
-# argparse dest -> dotted config key. `min_cluster_size` is absent on purpose:
-# it is per-polarity, so it is resolved when the polarity is known.
+# argparse dest -> dotted config key.
 FLAG_KEYS: dict[str, str] = {
     "app_id": "app.id",
     "country": "app.country",
@@ -94,16 +99,7 @@ FLAG_KEYS: dict[str, str] = {
     "page_size": "fetch.page_size",
     "sleep": "fetch.sleep_seconds",
     "min_chars": "corpus.min_chars",
-    "algorithm": "cluster.algorithm",
-    "granularity": "cluster.granularity",
-    "cohesion_floor": "cluster.cohesion_floor",
-    "merge_threshold": "cluster.merge_threshold",
-    "set_aside_vague": "cluster.set_aside_vague",
-    "knn_k": "cluster.knn_k",
-    "seed": "cluster.seed",
-    "tau_days": "cluster.tau_days",
-    "momentum_window": "cluster.momentum_window_days",
-    "native_override": "cluster.native_override",
+    "window_months": "issues.window_months",
     "period_days": "report.period_days",
     "baseline_periods": "report.baseline_periods",
     "curation": "report.curation",
@@ -148,8 +144,8 @@ def _merge(base: dict, user: dict, prefix: str, source: Path) -> None:
         if key not in base:
             known = ", ".join(f"{prefix}{k}" for k in base)
             raise ConfigError(f"{source}: unknown key {dotted!r} (expected one of: {known})")
-        # min_cluster_size is the one mapping whose keys are data, not schema.
-        if isinstance(base[key], dict) and dotted != "cluster.min_cluster_size":
+        # Mappings whose keys are data, not schema.
+        if isinstance(base[key], dict) and dotted not in ("llm.models", "llm.options"):
             if not isinstance(value, dict):
                 raise ConfigError(f"{source}: {dotted!r} must be a mapping")
             _merge(base[key], value, prefix=f"{dotted}.", source=source)
@@ -178,14 +174,3 @@ def apply(args: argparse.Namespace, cfg: dict[str, Any]) -> None:
             setattr(args, dest, value)
     args.config = cfg
 
-
-def min_cluster_size(cfg: dict[str, Any], polarity: str) -> int:
-    sizes = get(cfg, "cluster.min_cluster_size")
-    if isinstance(sizes, int):
-        return sizes
-    try:
-        return int(sizes[polarity])
-    except KeyError:
-        raise ConfigError(
-            f"cluster.min_cluster_size has no entry for {polarity!r}"
-        ) from None

@@ -29,34 +29,32 @@ not by reasoning about them. A fresh session should not need to re-derive any of
 | (A) Fetch | **Done.** `pv fetch --all-langs`, `pv langs`, `pv export`, `pv info` |
 | (B) Store | **Done.** `pv db build` → SQLite, 21,506 rows |
 | (B2) Translate | **Done.** `pv translate` — detect + fr→en, cached |
-| (C) Embed | **Done.** `pv embed` — splits every review into fine segments, 45,839 cached vectors |
-| (D) Cluster | **Done.** `pv cluster` — re-joins segments into complaint units, then leiden / agglomerative / hdbscan, `--compare` |
-| (E) Label | **Done.** sentence titles (extractive, keyword-anchored), c-TF-IDF keywords, medoid, LexRank, MMR — no LLM |
-| (D/E) LLM grouping | **Spike, 2026-10-08/09.** A local model (Qwen3.5 9B via Ollama) cuts each review into problems and checks them against quality rules; embeddings and Leiden then group the problems, to replace (D) and (E). Cut, rules and Leiden-on-statements work on one 200-review sample (grab-bags remain, nothing scored). Scripts `spike/llm_extract.py`, `llm_refine.py`, `llm_cluster.py`, not wired into `pv run`. Trial log, current design and open problems: [llm-trials.md](llm-trials.md) |
-| End to end | **Done.** `pv run [--fetch]` — rebuilds `reviews.db` clean, then translate → embed → cluster every stream in config |
+| (C–E) Issues | **Built 2026-10-13, not yet run on the full window.** `pv issues` (package [issues/](src/product_view/issues/)) replaces embedding, clustering and labelling: a language model distills each review's complaint and praise points, scores them against a persistent codebook (`data/issues.db`), and forms new issues from what's left (cluster, name, breadth check, join, ILP selection, area). Validated on 3 × 100-review slices: structurally sound on held-out months, two marginal gates ([llm-trials.md](llm-trials.md), "Viability test"). Model is a setting: `ollama` (local Qwen3.5 9B) or `openai` (key in `.env`; connector checked offline, not yet live). Smoke-tested end to end with a stand-in model |
+| End to end | **Rewired 2026-10-13, not yet run.** `pv run [--fetch]` — rebuilds `reviews.db` clean, then translate → issues (complaint and praise sides) over the last 12 months |
 | Config | **Done.** [config.yaml](config.yaml); flag > config > built-in default; unknown keys are an error |
-| Container | **Built and verified 2026-09-29** on Docker Desktop 4.30 (Windows). Image 1.46 GB, torch `2.14.0+cpu`. `pv run` in the container took 1m49s on warm caches: 43 negative / 51 positive pain points. The resulting `reviews.db` passes `integrity_check`, and host and container `pv painpoints` output match. [Dockerfile](Dockerfile) + [compose.yaml](compose.yaml) |
-| (F) Render | **Demo version built 2026-10-03 (uncommitted).** `pv report [--publish]` builds a **periodic** page tree in Confluence storage format: a hub (every area) and one page per role (only that role's areas), with SVG charts. Live on the demo site. Decisions, page plans and progress: [report-design.md](report-design.md); remaining work: "Remaining work" below |
+| Container | **Built and verified 2026-09-29** on Docker Desktop 4.30 (Windows). Image 1.46 GB, torch `2.14.0+cpu`. `pv run` in the container took 1m49s on warm caches: 43 negative / 51 positive pain points. The resulting `reviews.db` passes `integrity_check`, and host and container `pv painpoints` output match. Not re-verified since the issue stage replaced clustering; the image has no local model, so a container run needs `llm.provider: openai`. [Dockerfile](Dockerfile) + [compose.yaml](compose.yaml) |
+| (F) Render | **Demo version built 2026-10-03; reads the issue codebook since 2026-10-13.** `pv report [--publish]` builds a **periodic** page tree in Confluence storage format: a hub (every area) and one page per role (only that role's areas), with SVG charts. Live on the demo site. Decisions, page plans and progress: [report-design.md](report-design.md); remaining work: "Remaining work" below |
 | (G) Publish | **Built 2026-09-30 (`ff32053`); extended 2026-10-03 (uncommitted).** `pv publish FILE` takes HTML (converted) or a storage-format `.xhtml` (passed through, full width, attachments read from its folder). `publish_tree` publishes a parent page then its children. Transient 5xx on attachment writes are retried. No tests yet. See §2 (G) |
 
 Code lives in [src/product_view/](src/product_view/): [cli.py](src/product_view/cli.py)
-(parsing + ingest), [commands.py](src/product_view/commands.py) (clustering stage + `run`),
+(parsing + ingest), [commands.py](src/product_view/commands.py) (pipeline stages + `run`),
 [config.py](src/product_view/config.py) (YAML loading),
 [models.py](src/product_view/models.py), [archive.py](src/product_view/archive.py),
 [store.py](src/product_view/store.py), and the
 [ingest/](src/product_view/ingest/), [lang/](src/product_view/lang/),
-[embed/](src/product_view/embed/), [cluster/](src/product_view/cluster/),
+[embed/](src/product_view/embed/), [issues/](src/product_view/issues/),
 [render/](src/product_view/render/) and [publish/](src/product_view/publish/)
-packages. Report curation (labels, areas, roles) is in [curation.yaml](curation.yaml).
+packages. Areas (app-agnostic) and roles are in [curation.yaml](curation.yaml).
 
 ### Environment
 
 - Python 3.12.10, venv at `.venv/`, package installed editable (`pip install -e .`).
 - Entry point: `.venv/Scripts/pv.exe` on Windows, `.venv/bin/pv` elsewhere.
-- Runtime deps: `google-play-scraper` 1.2.7 plus the clustering stack — `numpy`,
-  `scipy`, `scikit-learn`, `sentence-transformers`, `transformers`,
-  `sentencepiece`, `py3langid`, `python-igraph`, `leidenalg`, `platformdirs`,
-  `pyyaml`. Optional extra `[umap]`, not required and not built.
+- Runtime deps: `google-play-scraper` 1.2.7 plus `numpy`, `scipy` (the
+  selection step's ILP), `scikit-learn` (HDBSCAN), `umap-learn`,
+  `sentence-transformers`, `transformers`, `sentencepiece`, `py3langid`,
+  `platformdirs`, `pyyaml`. `python-igraph` and `leidenalg` were dropped with
+  the embedding clustering on 2026-10-13.
 - **Git, branch `main`.** `5bec9b9` (2026-09-30) covers stages A–E; `ff32053`
   adds `pv publish` and the first Confluence probe.
 - **`torch` dominates the install and is easy to get wrong.** Windows and macOS
@@ -73,10 +71,15 @@ packages. Report curation (labels, areas, roles) is in [curation.yaml](curation.
   - `data/reviews.db`: reviews, runs, pain points. **Deleted and rebuilt on every
     `pv db build` / `pv run`**, so it only ever holds the current result. `pv cluster`
     also replaces the previous run for its stream instead of piling up beside it.
-  - `data/cache.db`: translations (by `review_id`) + segment vectors (by
-    `review_id`, position). Survives the
-    rebuild, because recomputing it costs ~20 min of translation plus a few minutes
-    of encoding. Delete it only to force re-translation or re-embedding.
+  - `data/cache.db`: translations (by `review_id`) and every language-model
+    answer (`llm_calls`, keyed by the full request). Survives the rebuild.
+    Delete it only to force a redo. It still holds the old `segments` table
+    (~100 MB of vectors from the replaced clustering); nothing reads it, and
+    it can be dropped.
+  - `data/issues.db`: **the issue codebook**: issues (frozen once live), the
+    points each review made, their raw scores, and runs. Kept across runs,
+    because an issue's identity is the point. Not yet created: the first
+    `pv issues` run builds it.
 
 ### Verified facts about the data
 
@@ -208,6 +211,11 @@ These cost real time to discover:
    Ollama). It stays fully local and needs no credentials; review text still never
    leaves the machine. Determinism now rests on temperature 0 plus a per-review
    cache. Pending compliance approval of the model. See [llm-trials.md](llm-trials.md).
+   **Revised 2026-10-09:** the model moves to OpenAI's small models through the
+   API (GPT-5.4 nano + mini), which conflicts with the local-only rule above and
+   needs sign-off before a full run. Hand curation (`curation.yaml` labels and
+   anchors) is limited to categories that apply to any app; issue names come
+   from the data. See llm-trials.md, decisions 4–7.
 2. **Positive and negative clustered separately.**
 3. **Cluster all history; report one period.** Old issues form clusters, which keeps
    issue definitions stable, but the report counts only the reporting period (default
@@ -327,9 +335,9 @@ for the report items is in [report-design.md](report-design.md) §6.
    labels. Overtaken by the LLM grouping spike (2026-10-08): a local Qwen3.5 9B
    names issues as part of grouping them ([llm-trials.md](llm-trials.md)).
    Whether compliance approves that model is still open.
-4. **Curating new clusters.** Uncurated clusters show "auto-labelled" and are
-   filed by keyword. Add a helper that prints a `curation.yaml` stub (label,
-   kind, areas, anchor), and decide who maintains the file.
+4. ~~**Curating new clusters.**~~ **Dropped 2026-10-09:** no app-specific hand
+   labels (llm-trials.md decision 4). Issue names and areas come from the LLM
+   design's Synthesize and Loop steps.
 5. **Release periods** ("since 4.67") as an alternative to fixed 28 days.
 6. **Developer-reply rate** per issue for the Support / CX page.
 7. **Stale attachments.** Republishing leaves unreferenced charts from older
@@ -344,14 +352,16 @@ for the report items is in [report-design.md](report-design.md) §6.
 11. Set `confluence.space` in config.yaml (still `null`; the demo uses
     `--space MFS`).
 
-**LLM grouping (spike)**: build tier 2 (issues within an area) and a
-hand-labelled set of ~100 reviews to score it; then decide whether it
-replaces (D) and (E). Open problems are listed in
-[llm-trials.md](llm-trials.md).
+**Issues (built 2026-10-13)**: the first full build, planned on OpenAI's
+small models once `OPENAI_API_KEY` is set (provider sign-off still open,
+llm-trials.md decision 7); then `pv report --publish` to replace the live
+pages, which still come from the old clustering. Open: the marginal gates
+(quote fidelity, one vague issue name), scorer precision on some issues,
+selection dropping real issues that overlap a kept one, praise prompts not
+validated, and `min_cluster_size` 4 tuned at 100 reviews, not 1,200.
 
-**Clustering (D)**, now lower priority because the report no longer ranks
-by impact, and possibly replaced by LLM grouping: impact weights and `sole_share`; merge threshold 0.45 untuned;
-drop the leftover `embeddings` table in `cache.db` (~27 MB).
+**Clustering (D)**: replaced by the issue stage on 2026-10-13; its open
+items (impact weights, `sole_share`, merge threshold) are moot.
 
 **After the demo (delivery)**: a proper service account or OAuth app instead
 of an employee's token; @mentions and Slack links; write access to the
@@ -393,9 +403,14 @@ each one is trending" — with enough example reviews to trust the label.
 ## 2. Pipeline
 
 ```
-fetch ─▶ store ─▶ translate ─▶ embed ─▶ cluster ─▶ label ─▶ render ─▶ publish
- (A)      (B)        (B2)        (C)       (D)        (E)       (F)       (G)
+fetch ─▶ store ─▶ translate ─▶ issues ─▶ render ─▶ publish
+ (A)      (B)        (B2)       (C–E)      (F)       (G)
 ```
+
+Until 2026-10-13 (C), (D) and (E) were embed, cluster and label, described
+below as they were built. They are replaced by the issue stage: see
+[README.md](README.md) ("Grouping reviews into issues") and
+[llm-trials.md](llm-trials.md) for the method and its validation.
 
 Each stage is a CLI subcommand and reads/writes through the store, so any stage
 can be re-run in isolation. That matters for iteration: re-clustering should not
@@ -540,7 +555,7 @@ and MT errors land on exactly the domain vocabulary that defines a pain point
 keep the French original available, or the "every word traces to a real review"
 guarantee quietly stops being true.
 
-### (C) Embed — `pv embed`
+### (C) Embed — `pv embed` *(replaced 2026-10-13)*
 
 - `sentence-transformers` with **`all-MiniLM-L6-v2`** (~90 MB, 384-dim) — runs
   locally on CPU, no API key, no data leaving the machine.
@@ -559,7 +574,7 @@ Local-first is the right default here: the demo must run on a laptop with no
 company credentials, and review text is user data we would rather not ship to a
 third party without a conversation first.
 
-### (D) Cluster — `pv cluster`
+### (D) Cluster — `pv cluster` *(replaced 2026-10-13)*
 
 - Negative-signal focus: filter to reviews scoring ≤ 3 by default (configurable —
   positive clustering is useful too, just not the point of this tool).
@@ -590,7 +605,7 @@ third party without a conversation first.
 - Outputs cluster assignments plus per-review distance to centroid, used to pick
   the most representative example reviews for the dashboard.
 
-### (E) Label — `pv label`
+### (E) Label — `pv label` *(replaced 2026-10-13)*
 
 Turn a numbered cluster into something a PM can read.
 

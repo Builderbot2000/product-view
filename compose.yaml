@@ -2,7 +2,7 @@ services:
   pv:
     build: .
     image: product-view
-    # Confluence credentials for `pv publish`. Passed at run time, never baked
+    # Confluence credentials and OPENAI_API_KEY. Passed at run time, never baked
     # into the image (.dockerignore excludes .env).
     env_file:
       - path: .env

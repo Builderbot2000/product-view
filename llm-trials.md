@@ -1,10 +1,23 @@
 # LLM grouping trials
 
 Started 2026-10-08. The clustering stage (D) groups reviews by how they
-*sound*, not what they are about. This document records the trials of a
-local LLM as the grouping step: what was tried, what each run showed, the
-design they point to, and what is still open. It is a spike: nothing here is
-wired into `pv run` yet.
+*sound*, not what they are about. This document records the trials of an
+LLM as the grouping step: what was tried, what each run showed, the design
+they point to, and what is still open. It is a spike: nothing here is wired
+into `pv run` yet.
+
+**State on 2026-10-09.** Trials 1–11 ran on a local Qwen3.5 9B. A review of
+the production report the same day ([below](#production-report-review-2026-10-09))
+found its hand curation unsound, and a literature check found an established
+method, LLooM, close to our design. The next design is LLooM's, run on
+OpenAI's small models ([Design as it stands](#design-as-it-stands-aligned-with-lloom-not-built)).
+It was built as a spike ([lloom.py](spike/lloom.py), trials 12–13). On
+2026-10-13 it first **failed the [viability test](#viability-test-criteria-set-2026-10-13-before-any-run)**
+(39% precision; merges and the loop made catch-alls), then **passed its
+structural gates** once merging was replaced by a breadth check, a frozen
+codebook and selection, with two marginal results. The same day it replaced
+embedding clustering in the pipeline as `pv issues`
+([issues/](src/product_view/issues/)), with the model as a setting.
 
 ## Why
 
@@ -45,6 +58,28 @@ faults that tuning cannot fix, because they come from the embedding itself:
 3. **Every call:** temperature 0, seed 0, `think: false`, and a JSON schema
    in Ollama's `format` field, so the output always parses.
 
+Decided 2026-10-09:
+
+4. **No app-specific curation.** Hand labels may only be categories that
+   apply to any app (general sentiment, stability, sign-in, ...). The
+   `issues:` labels and anchor reviews in `curation.yaml` go, and so do the
+   app-specific areas (Payments, Investing, Budgeting) and keywords
+   (`interac`, `nomi`, `grapheneos`). Issue names come from the data.
+5. **This is a proof of concept for the method, not an operation.** Stale
+   data (last fetch 2026-09-23), the missing Spanish translation and the
+   lack of tests are accepted. Work goes to structural faults in the design;
+   operational and validation work comes after.
+6. **Align the design with the published method** (LLooM, with TopicGPT and
+   BERTopic for the category list and persistence) rather than invent one.
+7. **Model: OpenAI's small models through the API**, not the local model and
+   not top-tier models. Planned split, as in LLooM: GPT-5.4 nano for the
+   high-volume extract and score calls, GPT-5.4 mini for writing concepts.
+   This supersedes 1–2 above. **Open:** sending review text to OpenAI
+   conflicts with the local-only rule (1) and with report-design's
+   "company-approved internal model only"; needs sign-off before a full run.
+   Every step calls the model through one function, so the provider is a
+   setting.
+
 ## Scripts
 
 All in [spike/](spike/), run with `.venv/Scripts/python.exe -X utf8`. Output
@@ -54,6 +89,7 @@ goes to `out/llm-spike/` (gitignored, local only).
 |---|---|
 | [llm_extract.py](spike/llm_extract.py) | Call 1, cut only. Per review: the list of `{problem, area}` it contains, or none, with no filtering. Cached as JSONL by review id and `PROMPT_VERSION`. `--n`, `--recent` (newest N instead of a random sample weighted to Oct 2024) |
 | [llm_refine.py](spike/llm_refine.py) | Call 2, rules only. One call per statement returns its `feature` and `failure`; code drops the statement if either is empty. Writes `-refined-v<RULES_VERSION>.jsonl` with `issues` (kept) and `dropped` |
+| [lloom.py](spike/lloom.py) | The LLooM design end to end (trial 12): distill, cluster (UMAP + HDBSCAN, needs the `[umap]` extra), synthesize, review, score, loop. Every model call cached by request in `lloom-calls-<model>.jsonl`. `--n`, `--negative-only`, `--min-size`, `--threshold`, `--nearest`, `--loops`. Writes concepts, scores and a report to `out/llm-spike/lloom-<settings>/` |
 | [llm_cluster.py](spike/llm_cluster.py) | Embeds the kept statements and runs the production kNN graph and Leiden code on them, with a range cap (`--reach`, `--pull`) that sends outliers to Miscellaneous. Prints groups at several resolutions |
 
 Trials 3–8 used `llm_catalog.py`, `llm_features.py` and an agglomerative
@@ -232,6 +268,119 @@ login and direct investing; "web browser" mixed with technical-difficulties
 and vision-accessibility statements; cheque deposit failures filed under
 "mobile data connection fails".
 
+### 12. LLooM steps end to end (newest 100 reviews, all stars)
+
+First run of the aligned design ([lloom.py](spike/lloom.py)), still on the
+local Qwen3.5 9B: quotes → bullets → UMAP + HDBSCAN → name and criterion →
+tidy (merge, mark general) → score every bullet against every concept → one
+loop over the leftovers. 100 reviews gave 268 complaint and 43 praise
+bullets; all 311 quotes were exact. Only 2 complaints came from 4–5★
+reviews.
+
+**Speed rules out full scoring locally.** Scoring calls took 6–9 s on the
+laptop GPU, which ran at 87 °C. A 200-review run made 76 concepts at
+`min_cluster_size` 3, which is about 3,000 scoring calls (4–5 hours), and was
+stopped. At 100 reviews and size 4 the run took about 45 minutes.
+
+**Settings tried:**
+
+- **Threshold has no effect.** The model answers A 528 times, B 31, C 1,672,
+  D 1,587 and E 1,006, so "A or B" is in practice "A only". In 30 A matches
+  read by hand, about 23 fit the criterion. In 30 C matches, 3–5 fit at
+  best, so counting C as a match would add about 500 matches at around 15%
+  precision. The threshold stays at 0.75.
+- **Cluster size.** At 200 reviews, sizes 3 / 5 / 8 / 10 gave 76 / 32 / 22 / 16
+  clusters. At 100 reviews, size 4 gave 19, near trial 9's 21.
+- **Loop on or off.** With the loop, 41% of bullets match an issue concept,
+  but the loop turned 199 leftovers into catch-alls: "App crashes, errors, or
+  fails to function" was built from 165 bullets with 22% self-fit, and a
+  general concept took 146. Without the loop, 26% match an issue concept and
+  114 of 268 match nothing.
+
+**The concepts:**
+
+- **Real issues:** trusted device (8 reviews, clean), ID-photo capture
+  (7), sign-in loops, e-transfer limits.
+- **Lost:** device compatibility (older phones, tablets, foldables,
+  GrapheneOS, "unavailable for this device", about 12 bullets), the
+  "technical difficulties" message (about 6), connectivity
+  (Wi-Fi, data, DNS), SMS as the only 2FA, and readability. All of these end
+  up unmatched.
+
+**Faults, none of them fixable by settings:**
+
+1. **The tidy step merges too much.** "App fails on specific devices"
+   (20 bullets) was merged into a crash concept, and the merged concept's
+   criterion no longer matches compatibility complaints. Of 22 concepts, 14
+   were merged away, including round-0 concepts merged into round-1
+   catch-alls.
+2. **Broad criteria.** Names written from large or mixed clusters describe
+   the whole app ("fails to function"), so scoring has nothing to separate.
+3. **Scoring is loose across neighbours.** 49 bullets match two or more issue
+   concepts. Sign-in loops match both the crash and the login concepts.
+4. **Seven of 14 concepts are general opinion** (support, regret, "worthless
+   or scam"). Marking them works; together they take 85 bullets.
+
+Self-fit (the share of a concept's own cluster that scores as a match)
+exposes grab-bags directly: the merged concepts sit at 22–44%.
+
+### 13. LLooM steps, revised prompts (same 100 reviews)
+
+Prompt changes in [lloom.py](spike/lloom.py), checked with `--dry` (stop
+before scoring):
+
+- **Synthesize** returns one concept per specific problem in a cluster, with
+  the point numbers it covers, at the level one product team would own. Its
+  examples split a mixed group and join device variants. Concepts with fewer
+  than 2 points are dropped. Asking for "the most common problem" had failed:
+  the model does not count, and named a device cluster after its 3
+  card-reader points.
+- **Review** merges only true duplicates: the same feature and the same
+  failure, which it has to name. A shared symptom does not count, and a
+  specific concept is never merged into a broad one.
+- **A new confirm call** checks each proposed merge with one yes/no. On its
+  own, Review still merged e-transfer into trusted device despite a rule
+  against it. With the confirm call, all merges are rejected, real
+  duplicates included. That is the chosen failure, because under-merging can
+  be repaired and over-merging lost device compatibility.
+- **Score** answers are defined by meaning: A same feature and failure, B a
+  clear case of it, C a near miss (same symptom, other feature), D
+  unrelated, E general opinion.
+
+| | Trial 12 prompts | Revised |
+|---|---|---|
+| Issue coverage, no loop / loop | 26% / 41% | **47% / 60%** |
+| Self-fit, round 0 | 22–44% | **67–100%** |
+| Bullets on 2+ issues, no loop / loop | 26 / 49 | 72 / 112 |
+| Hand audit, 30 random matches | ~23 fit | ~20 fit |
+| Device compatibility | lost | **"App not supported on some devices", 16 reviews** |
+| Run time | ~45 min | ~100 min (longer scoring prompt, 2 more concepts) |
+
+Specific concepts now exist for e-transfer, card reader, Wi-Fi/data,
+balance access, trusted device, ID photos and web sign-in.
+
+**Still wrong:**
+
+1. **Duplicates.** 2+-issue matches nearly all fall inside two families that
+   are not merged: sign-in (C013–C018, top pair shares 24 bullets) and
+   install/device (C016/C019, 13). Score overlap identifies them directly,
+   so the next fix is to merge concepts whose matches mostly coincide,
+   using the scores rather than another model call.
+2. **Some criteria are too broad.** "Web browser login fails" takes app
+   sign-in failures (32 matches); "App cannot be downloaded or installed"
+   takes "removed the app" and "reinstall didn't help".
+3. **Feeling concepts are marked as issues.** "Login process causes
+   frustration or embarrassment" is an issue concept and pulls in real
+   sign-in faults.
+4. **The loop still makes catch-alls.** Round 1 named "App performance is
+   poor and buggy" (84 matches) and "App does not function or lacks
+   buttons" (53) from 143 leftovers. Without the loop, 122 of 268 bullets
+   stay unmatched, mostly one-offs and vague complaints.
+
+Precision did not improve on the hand audit (one reader, 30 matches, within
+noise). The gain is in what is matched: specific concepts instead of broad
+ones that anything fits.
+
 ### What the trials showed about the model
 
 | Reliable | Unreliable |
@@ -245,92 +394,388 @@ Grouping done by embedding and Leiden on the statements (trial 9) did better
 than any grouping done by the model (trials 3–8), so the model's job is now
 only to prepare the statements.
 
-## Design as it stands
+## Viability test (criteria set 2026-10-13, before any run)
 
-1. **Fetch, translate**: unchanged.
-2. **Cut** (built, `llm_extract.py` prompt v4): per review, `{problem, area}`
-   entries; each complaint kept whole, no filtering. Cached per review, so a
-   review is cut once and the level of detail cannot drift between runs. A
-   prompt change forces a full re-extract.
-3. **Rules** (built, `llm_refine.py` v2): one call per statement; dropped
-   when it names no feature or no failure. Cached per statement.
-4. **Cluster** (built as a spike, `llm_cluster.py`): embed the kept
-   statements, kNN graph, Leiden, then the range cap. Statements isolated
-   from every neighbour, or far from their cluster's centre, go to
-   Miscellaneous. Resolution is set by the production granularity search for
-   the corpus size of the report period; it is not a fixed number. The
-   period is a choice (a window, not the whole archive), and the
-   resolution follows it.
-5. **Counting**: a review counts once per pain point it reaches and may reach
-   several, as today. Area is carried per statement, so a statement that fits
-   two areas can show on two role pages.
-6. **Report and publish**: unchanged downstream: counts against the usual
-   rate, quotes from real reviews, role pages by area.
+Can the LLooM design, at 100 reviews a slice on the local model, produce
+issues a product team could trust, and keep them across months? Three
+slices, run in a chain so concepts persist:
 
-Per-area LLM grouping (tier 2 of the earlier design) is parked. Build it only
-if trials 9–11 repeated on more samples still show too many mixed groups.
+| Slice | Reviews | Role |
+|---|---|---|
+| **V1** | Newest 100 (2026-08-20 → 09-22), all stars | Builds the concepts. The trial 13 prompts were tuned on it, so it is in-sample and does not gate |
+| **V2** | 100 random from February 2026, all stars | Held out. Scored against V1's concepts first; only leftovers loop and mint |
+| **V3** | 100 random from October 2024, all stars | Held out, the 35× incident month. Scored against V1 + V2's concepts |
 
-### Set by hand
+Method as run: trial 13 prompts, `min_size` 4, threshold 0.75, one loop,
+plus the fix trial 13 named: after scoring, two issue concepts whose
+matches mostly coincide (overlap ≥ 50% of the smaller) are re-named
+together and re-scored. Concepts from earlier slices keep their ids;
+Review may merge a new concept into an old one, never the reverse.
 
-- **Areas** in `curation.yaml`. They are now tier 1, not a filing aid: adding
-  or splitting one changes the area filed on each statement. The area
-  `keywords` are no longer needed. Roles map to areas as before.
-- **Range cap**: `--reach` and `--pull`, 0.4 each so far.
-- **Prompt wording.** The biggest hidden setting: "drop tone", "a problem
-  names a feature", "one fix resolves the issue" set the level of detail. A
-  prompt change re-extracts (cache key `PROMPT_VERSION`).
-- Model, temperature, seed; star split (≤3 negative) and 20-character floor
-  as before.
+**Gold labels.** Every complaint point in every slice is labelled with the
+concept(s) its criterion truly covers, or *general* (opinion, no feature)
+or *uncovered* (specific, but no concept fits). The labels are written
+**before** looking at the model's matches. The labeller is Claude (a larger
+model than the one under test), not a person: a stand-in until the team
+labels a set.
 
-### Cost
+Each issue concept is also judged **specific** (names one feature and one
+failure a team could own; "the app won't open or run at all" counts) or
+**broad** ("app is buggy", "app does not function"). A broad concept's
+matches count as misses in G2 and G7, since a vague point fits a vague
+criterion and would otherwise score as precise.
 
-Measured: cut 1.9 s/review (prompt v4); rules 1.1 s/statement, about 1.5
-statements per review, so ~3.5 s/review for both calls; embedding and
-clustering the statements takes seconds. A full backfill (~18k reviews) is
-roughly 17 hours on the laptop GPU, once. A month (~80 negative reviews) is
-about five minutes. Both calls are cached, so only new reviews cost anything.
+**Pass: every gate on both V2 and V3.**
+
+| # | Gate | Bar | Why this bar |
+|---|---|---|---|
+| G1 | Quotes exact | ≥ 98% | The link back to the review is the traceability promise |
+| G2 | Precision: of points the model files under an issue, share the label agrees with | ≥ 75% | A reader sees at most one off-topic quote in four. Production runs about 68–73% (27–32% of units below 0.5 cosine) |
+| G3 | Recall: of points the label files under an issue, share the model files under one of the same | ≥ 60% | Most of an issue's evidence reaches its page |
+| G4 | Grab-bags: issue concepts with ≥ 5 matches and precision < 50% | ≤ 1 | Trial 12–13's catch-alls are the fault this design exists to fix |
+| G5 | Duplicates: issue concepts that repeat another live one | ≤ 10% | One issue, one page |
+| G6 | Persistence: new concepts that duplicate one carried from an earlier slice | ≤ 1 | Stable issue ids |
+| G7 | Better than production on V1: share of a page's quotes that sit under a specific named issue and fit it | ≥ 15 points above production | Worth replacing what is live |
+
+G7 is the only gate on V1, because production has no V2/V3 run to
+compare. Uncovered points are reported, not gated: they measure what the
+loop failed to name, which at 100 reviews includes real one-offs.
+
+### Result: failed (2026-10-13). V3 not run
+
+V2 failed G2 and G4 outright, and passing needed every gate on both
+held-out slices, so V3 was stopped before it ran. Scripts:
+[lloom.py](spike/lloom.py) (`--month`, `--prior`, `--overlap`) and
+[viability.py](spike/viability.py) (label sheets, gate scoring, the
+production baseline).
+
+| Gate | V1 (in-sample) | V2 (held out) | Bar |
+|---|---|---|---|
+| G1 quotes exact | 100% | 97.8% (first reported as 100%, unchecked) | ≥ 98% |
+| G2 precision | 55% blind, 63% after correction | **39%** (34 of 88) | ≥ 75% |
+| G3 recall | 75–76% | not labelled | ≥ 60% |
+| G4 grab-bags | **4** | **2** | ≤ 1 |
+| G5 duplicates | 0 | 0 | ≤ 10% |
+| G6 new duplicates of old | — | 0, but see below | ≤ 1 |
+| G7 vs production | 55 vs 43 (+12) blind, 63 vs 43 (+20) after correction | — | +15 |
+| Issue coverage (points matching an issue) | 42% | 35% | reported |
+
+How the labels were made. V1's 268 points were labelled blind. 11 labels
+were then corrected in the model's favour after reading its matches, where
+the blind label had been stricter than the literal criterion; both figures
+are shown. V2's precision comes from judging each of the 88 matches
+directly, counting a match as correct wherever the criterion plausibly
+covered the point. Production's 43% is from 116 quotes the live report
+shows for the same reviews, with outcome and support headings left out on
+both sides.
+
+**What failed:**
+
+1. **The overlap merge widens concepts by chaining.** In V1, eight merges
+   joined sign-in, web sign-in, setup errors and trusted device into
+   "Login crashes or fails" (C038): 33 matches, 11 correct. Each merge
+   is reasonable on its own; together they move the name away from what
+   the concept holds. Coverage fell from trial 13's 60% to 42%.
+2. **Carried concepts absorb what they should not.** V2's loop minted "App
+   stops working or crashes" (36 matches) and "Charts unavailable in
+   direct investing". The merge folded both into the carried C038, which
+   kept its id and name and took 46 of V2's 88 matches, 7 correct: charts,
+   cheque deposit, payees, CRA, settings resets, all under "Login crashes
+   or fails". A stable id is worse than none when its meaning drifts
+   silently. G6 counts new duplicates and did not catch this.
+3. **The loop still makes catch-alls** (trial 12–13 fault 4), on held-out
+   data as well.
+4. **Specific concepts carry over well.** Device support was 12 of 13 on
+   V2, 2FA 5 of 6, e-transfer 6 of 9. Narrow criteria transfer to a new
+   month; the broad ones and the merge step fail.
+
+At 100 reviews a slice on the local 9B model, the design as built is not
+viable. What fails is the merge and loop machinery around Score, not
+Distill or Score: the specific concepts were precise and carried over.
+Before any 1,000-review or OpenAI trial, these would need changing: no
+chained merges (merge only round-0 siblings, once); a carried concept never
+absorbs a new one, so a near-match becomes a new concept instead; and a
+breadth check that rejects any concept whose criterion joins features with
+"or". The stronger model (decision 7) may also write narrower criteria;
+that is untested.
+
+### Re-run with selection instead of merging (set 2026-10-13, before running)
+
+The same slices, gates and labelling rules. What changes is `lloom.py
+--select`, which replaces Review, the confirm call and the overlap merge
+with three steps from the literature:
+
+1. **Breadth check** (LLooM Review's "too general"): one call per new
+   concept, answering specific, broad or general. Broad ones are dropped
+   before scoring; general ones go to general sentiment.
+2. **Frozen codebook** (BERTopic `merge_models`; deductive coding): earlier
+   concepts never change. A new one joins an earlier one only when their
+   definitions are close (embedding cosine ≥ 0.7) and the same/different
+   call agrees. Shared points never merge anything.
+3. **Selection** (GoalEx, Wang et al. 2023): an integer program chooses
+   which new concepts to keep. It maximises covered points minus 1 per
+   repeated match minus 2 per concept, with earlier concepts fixed in. A
+   concept that mostly repeats another loses to it.
+
+Parent links are recorded where one concept's matches contain ≥ 80% of
+another's (Sanderson & Croft 1999); they are reported, never merged. The
+URR area seed is not part of this run. The settings above were fixed
+before any run.
+
+The breadth prompt was then tuned on V1 (in-sample, allowed): its first
+version called every concept with "or" broad, e-transfer included. After
+two example changes it agreed with a hand judgment on 37 of 38 V1
+concepts.
+
+**Gates revised 2026-10-13, after V1 and before V2 was labelled.** The
+focus is structural soundness; the local 9B scorer's precision is a model
+limit (on V1 its matches to specific concepts were right 68% of the time,
+whatever the selection did). So:
+
+- **G2 precision: ≥ 60%** (was 75%). Production's 43% plus about the G7
+  margin, so the bar stays anchored to what is live, not to the model's
+  own numbers.
+- **G4: ≤ 1 live issue concept judged broad** (was: precision below 50%).
+  Specific concepts with low precision are scorer errors; they are
+  reported, not gated.
+- **G6 also requires** that no carried concept's name or criterion
+  changes on a later slice.
+- G1, G3, G5 and G7 are unchanged.
+
+### Result of the re-run: structurally sound; two marginal gates (2026-10-13)
+
+| Gate | V1 (in-sample) | V2 Feb 2026 | V3 Oct 2024 | Bar |
+|---|---|---|---|---|
+| G1 quotes exact | 100% | 97.8% (5 of 231) | 99.3% (2 of 281) | ≥ 98% |
+| G2 precision | 63% | 69% (50 of 72) | 79% (114 of 144) | ≥ 60% |
+| G3 recall | 77% | 75% | not labelled | ≥ 60% |
+| G4 live issues judged broad | 1 | 1, or 2 if "User cannot locate requested items" counts | same as V2 (both carried) | ≤ 1 |
+| G5 duplicate issues | 0 | 0 | 0 | ≤ 10% |
+| G6 new duplicates of carried / carried changed | — | 0 / none | 0 / none | ≤ 1 / none |
+| G7 vs production | 63 vs 43 (+20) | — | — | +15 |
+
+V1 was labelled by mapping the blind V1 labels onto the new concept ids,
+plus labels for the concepts new to this run. V2 was labelled in full
+before its matches were read. V3's precision comes from judging each of
+its 144 matches, as the failed run's V2 was; its recall was not measured.
+
+**What held, on both held-out months:**
+
+- **Persistence.** Every carried concept kept its id, name and criterion.
+  New months were counted against them first: in V2, 29 correct matches
+  landed on V1 concepts (device support 12 of 14, two-factor 5 of 6,
+  e-transfer 6 of 9). In V3, the 2024 device-support wave landed on V1's
+  "App not supported on some devices" (50 of 58).
+- **New issues only for what is new.** V2 minted investing charts (9 of 11)
+  and ID checks on every transfer (7 of 7); V3 minted the forced-update
+  loop, "No updates available or false prompts" (40 of 42).
+- **No catch-alls.** The breadth check rejected "App stops working or
+  crashes" in V2 (the concept that broke the first run) and two more in V3.
+  No duplicates on either month.
+
+**What is marginal or wrong:**
+
+1. **G1 on V2, 97.8%.** None of the 5 misses changes meaning: quote marks
+   swapped (`"` → `'`) and `...` joining two parts of a sentence. Every
+   quote keeps its review id. The first run's V2 table above claimed 100%
+   here; that was not checked, and the same distill output measures 97.8%.
+2. **"User cannot locate requested items"** (minted in V2, carried): a real
+   findability issue (statements, documents, reservations) under a name
+   that says nothing. Judged specific, G4 passes; judged broad, it fails.
+3. **Scorer errors, not structure:** "Savings funds inaccessible" took
+   generic "can't access my account" points (0 of 8 in V3); "Web browser
+   login fails" is named for the browser but its criterion covers any
+   sign-in.
+4. **The selection drops some real issues.** In V3 it kept "No updates
+   available or false prompts" and dropped "App fails to launch" (35) and
+   "App unusable after update" (62), because the scorer matched most of
+   their points to the kept one as well.
+
+**Verdict.** The structural design works on held-out data: concepts persist
+unchanged, new months mint only what is new, and catch-alls and duplicates
+are kept out. What remains is model quality: scoring precision, quote
+fidelity and naming. On 2026-10-13 the method replaced embedding clustering
+in the pipeline (`pv issues`), with the model as a setting so that the
+OpenAI models can be tried next.
+
+## Production report review (2026-10-09)
+
+The latest production runs (2026-10-08) and the report built from them
+(period Aug 26 – Sep 22) were checked by loading the issues the way
+`pv report` does and tracing every curated anchor review to its cluster.
+
+- **Curated labels sit on the wrong clusters.** The anchors were picked
+  against an earlier run and have moved. "App won't open; reinstalling
+  doesn't help" held "Old app was perfect. This new app is horrid" (1,496
+  reviews, a grab-bag); "Credit card payment-due info missing" held the
+  sarcasm cluster "Way to go RBC"; "'Technical difficulties' error" took the
+  fingerprint cluster on a tie. Ten labels matched no cluster. Nothing warns.
+- **Praise was hidden.** The `hide` label's 14 anchors caught 8 positive
+  clusters, about 860 reviews (18% of the stream), among them "Great app,
+  easy to use" (406). An uncurated cluster titled "Easy to use" merged into
+  the curated label of the same name and took the keyword-guessed area.
+- **Quotes off topic.** Leiden places every unit, and 27–32% of units sit
+  below 0.5 cosine to their cluster's centre. Quotes are picked by
+  thumbs-up with no relevance check: "The restaurant works" under "It
+  doesn't work half the time".
+- **Rising flags inflated** by those weak members: three of the six reviews
+  behind "It doesn't work half the time" (6, usually 2.0) match weakly.
+- **Confirmed from the trials:** tone clusters, and the identity-verification
+  story filed under cheque deposit.
+
+Decision 4 removes the curation layer rather than fixing it. The production
+clustering (D, E) is not being repaired; the design below replaces it.
+
+## Prior methods (literature, 2026-10-09)
+
+Read from abstracts and summaries, not the full papers.
+
+| Method | What it does | What we take |
+|---|---|---|
+| **LLooM** (Lam et al., CHI 2024) | **Distill**: an LLM extracts quotes, then 2–4 bullets of 5–8 words. **Cluster**: embed the bullets, HDBSCAN, outliers stay unassigned. **Synthesize**: GPT-4 with step-by-step reasoning writes each concept as a 2–4 word name, a one-sentence inclusion criterion and example ids. **Review**: merge redundant concepts, drop ones too general or too specific. **Score**: each item against each concept on a 5-point agree scale (0–1), with a threshold; an item can match several. **Loop**: unmatched items, and items matching only concepts that cover ≥50% of the data, go round again. 93% coverage against BERTopic's 77.7% | The whole pipeline; Score as the grab-bag fix |
+| **TopicGPT** (Pham et al., NAACL 2024) | An LLM generates topics from a sample, refines them (merge duplicates, drop rare ones), then assigns each document with a supporting quotation; two levels | Minting by batch, then refine; areas over concepts |
+| **TnT-LLM** (Microsoft) | Builds the category list over successive batches of a sample, then classifies everything against it | Categories from batches, never one item at a time |
+| **Clio** (Anthropic) | Extract one attribute per conversation, embed, k-means, LLM names each cluster, then a hierarchy | Extract → embed → name |
+| **FeClustRE** (Tiessler & Motger, 2025) | App reviews: hybrid feature extraction, hierarchical clustering with automatic tuning, LLM labels | The same pattern on app reviews |
+| **IDEA / MERIT** (Gao et al., ICSE 2018 on) | A topic model per app version that carries the previous version's topics forward and flags emerging ones | Persistent issues, an emerging flag |
+| **BERTopic** online mode, `merge_models` | Updates topics as data arrives; a new run's topics join the old ones when similar, otherwise are added | Persistent issues |
+| **AR-Miner** (Chen et al., ICSE 2014) | Filter non-informative reviews, group, rank, visualise | Ancestor of our filter step |
+| **Speciteller** (Li & Nenkova) | Sentence specificity from 0 (general) to 1 (specific) from light features | A specificity signal |
+| **Aspect-based sentiment**; Chhetri et al. 2025 | Sentiment per feature, not per review. 894k reviews of 292 AI apps: 15 negative and 18 positive themes recurring across apps | Praise/complaint per statement; universal areas exist |
+
+Trial 7 minted categories one statement at a time and got 8 catch-alls;
+these methods avoid that by minting from a batch.
+
+## Design as it stands (aligned with LLooM, not built)
+
+Replaces the trials 9–11 design (cut, rules, embed + Leiden + range cap).
+Carried over from the trials: cutting each review into separate points, one
+job per call, prompt examples from an unrelated domain, picking from a short
+closed list, naming a group the model can see whole (trials 3–8), and
+caching per review.
+
+| Step | LLooM | Ours |
+|---|---|---|
+| Seed | An optional term steers Distill and Synthesize | "Problems or praise about the app", with the universal area list as context |
+| Distill: filter | Exact quotes | Call 1, per review: the exact quote of each complaint or praise point, tagged `complaint` or `praise`. Every review regardless of stars, so a complaint in a 4★ review reaches the complaint side. The quote is the link back to the review |
+| Distill: summarize | 2–4 bullets of 5–8 words | Call 2: one short bullet per quote. The rules call (feature + failure) goes |
+| Cluster | Embed, HDBSCAN, outliers unassigned | The same, with UMAP reduction first as BERTopic does. HDBSCAN on raw 384-d review vectors called 98% noise; the paper doesn't say whether LLooM reduces |
+| Synthesize | Name, criterion, examples | The same, on the stronger model |
+| Review | Merge; drop too general or too specific | One call over all concepts (replaces trial 5's pairwise tidy) |
+| Score | Every item against every concept | Every bullet against every concept, or against its 10 nearest by embedding (cheaper; open) |
+| Loop | Unmatched and generic-only items go again | The same; this is where new concepts and areas are minted |
+| Persist | Concepts score new data | Concepts (id, name, criterion, area, members) are stored permanently. Each new period is scored against them and its leftovers loop. Merges and renames are logged. This is the stable issue id |
+| Hierarchy | Loop again for broader concepts | Areas are the upper level: seeded with the universal list, extended by Loop |
+
+**Universal area seed** (proposed, not approved): Sign-in & account access,
+Stability & performance, Install & updates, Devices & compatibility, UI &
+usability, Privacy & security, Customer support, Features (anything
+app-specific), General sentiment. Team pages map to areas as before.
+
+**Unchanged:** fetch; translate (French only); the 20-character floor; a
+review counts once per issue it reaches; concepts span the whole corpus and
+a report counts its period as a slice; every statement keeps its review id
+and its closeness to the concept, and pages list members closest first (no
+separate quote-selection step).
+
+### Model, speed and cost
+
+Locally (Qwen3.5 9B) calls run one at a time at 1–2 s each: about 3–4 hours
+for a 1,000-review trial and about 30 hours to score the full corpus.
+Through an API, tens of calls run in parallel: about 10 minutes and about an
+hour.
+
+Estimated for the full corpus: 17,948 reviews of 20+ characters, about 1.5
+bullets per review, about 100 concepts. Token counts are from character
+lengths (±30%); prices are from third-party trackers and need confirming on
+openai.com.
+
+| Setup | Score against every concept | Score against the 10 nearest |
+|---|---|---|
+| **GPT-5.4 nano (distill, score) + GPT-5.4 mini (synthesize, review)** | ~$80 | ~$31 |
+| All GPT-5.4 nano | ~$71 | ~$21 |
+| All GPT-5 nano | ~$20 | ~$6 |
+
+The Batch API halves each figure. Scoring is most of the cost, as in LLooM
+(80% there). On the nano + mini mix, the 1,000-review trial is about $3–4
+and each month of new reviews afterwards under $1.
 
 ## Open problems
 
-**Grouping**
-1. **Not scored.** Every judgement so far is a person reading groups on one
-   200-review sample. Sample A (older, incident-heavy) has not been run with
-   prompt v4 or rules v2.
-2. **Grab-bags remain.** Statements with neighbours but generic wording (the
-   "account info" group, "web browser" with technical difficulties) pass the
-   range cap. Candidate fixes: a stricter feature-and-failure rule, or
-   listing the feature in the embedded text.
-3. **Rules v2 drops a few keepers.** "App crashes after recent update" has a
-   failure but the model gave it no feature.
-4. **Resolution has only been tried at 200 reviews.** The granularity search
-   targets a cluster-count band, so it should carry over; untested.
-5. **The area list has gaps.** Identity verification, this period's main
-   theme, has no area of its own; notifications and accounts & statements
-   scatter across Other, Support and Payments.
-6. **The no-specific-problem flag is now the rules call's drop.** It still
-   misses some complaints ("According to the update, I need a new phone or a
-   new bank").
-7. **Monthly runs are small.** About 80 negative reviews a month may leave
-   too few statements per period for the size floor; they may need to wait
-   until similar ones accumulate.
+### Design faults, most severe first (2026-10-09)
 
-**Over time**
-7. **Stable issue ids.** Renames and merges must not break trend history. The
-   anchor-review matching of curated labels would be replaced, and the
-   existing labels do not carry over.
-8. **No measure of quality.** A hand-labelled set of ~100 reviews would score
-   versions (see Grouping 1).
+1. **Grab-bag groups.** Embedding similarity groups by shared topic words,
+   so generic statements ("account info", "web browser") have neighbours and
+   join the nearest group. *Plan:* LLooM's Score step decides membership
+   against each concept's criterion. A specificity signal (word rarity or
+   Speciteller, the per-group `focus()` check in `cluster/vague.py`, Loop's
+   generic-only rule) keeps generic statements from seeding groups.
+2. **The area list.** Areas are the top level of the output. Gaps: identity
+   verification (this period's main theme), notifications, accounts &
+   statements. Payments, Investing and Budgeting are app-specific. *Plan:*
+   the universal seed list; new areas minted by Loop from leftovers, batch
+   and refine as in TopicGPT and TnT-LLM.
+3. **Period size vs. minimum group size.** A month is about 80 negative
+   reviews. *Plan:* concepts form over the whole corpus and persist; a
+   period is scored against them, so it never has to form groups alone.
+4. **No stable issue identity.** Every run grouped from scratch and nothing
+   was kept (`pv run` rebuilds `reviews.db`; `llm_cluster.py` only prints).
+   *Plan:* persistent concepts (Design, Persist).
+5. **One yes/no call decided what is vague.** Rules v2 dropped "app crashes
+   after recent update" and "technical difficulties ... 10% of the time"
+   and kept "I need a new phone or a new bank". *Plan:* the rules call goes;
+   Review and Loop handle generic statements. If a filter stays, its prompt
+   needs fixing (e.g. "the app as a whole" counts as a feature for crashes
+   and errors).
+6. **No group names.** *Plan:* Synthesize.
+7. **The range cap is weak.** Raising `--pull` from 0.4 to 0.55 moved only
+   6–11 statements. Superseded by Score.
+8. **Complaints in 4–5★ reviews.** *Plan:* cut every review and tag each
+   statement complaint or praise.
 
-**Operational**
-9. **Backfill takes about a day**, and the Docker image has no Ollama.
-10. **Repeatability rests on the cache.** Temperature 0 is not bit-exact
-    across GPUs or Ollama versions.
-11. **Compliance has not approved the model.** Gemma 4 12B, the fallback, is
-    untested here.
-12. **The positive stream is untested.**
+### Decisions still needed before the trial
 
-Next, if picked up: run cut, rules and cluster on sample A, then label ~100
-reviews to score both samples, then wire the three steps into `pv run`.
+1. **Specificity:** which signal or signals; low scorers to Miscellaneous or
+   dropped.
+2. **Areas:** approve the seed list; minting automatic or proposed and
+   approved; where a new area shows until it has a team page.
+3. **Generic failures:** "app crashes", "won't open", "technical
+   difficulties error" as Stability issues, or as vague.
+4. **Persistent concepts:** the score threshold for joining; renames allowed
+   and logged; merges and splits automatic or approved.
+5. **Praise:** grouped and shown, or used only to rescue complaints from
+   4–5★ reviews.
+6. **Scoring:** against every concept (as LLooM) or the 10 nearest.
+7. **Trial slice:** 1,000 reviews over 12 months (exercises persistence and
+   Loop) or the 200-review samples.
+8. **Provider sign-off** for OpenAI (decision 7).
+
+### Set aside (validation and operations)
+
+- Nothing is scored against a hand-labelled set; one 200-review sample has
+  been judged by eye.
+- Group count only tried at 200 reviews.
+- Backfill time, no model in the Docker image, repeatability, compliance of
+  the local model (moot if decision 7 holds).
+
+Next: settle the decisions above, build the aligned steps as spike scripts
+with the model as a setting, and run the 1,000-review slice.
+
+## Sources (methods and pricing)
+
+- [LLooM: Concept Induction (arXiv 2404.12259)](https://arxiv.org/abs/2404.12259v1), [code](https://github.com/michelle123lam/lloom)
+- [TopicGPT (arXiv 2311.01449)](https://arxiv.org/html/2311.01449v2)
+- [TnT-LLM (summary)](https://hackernoon.com/tnt-llm-automating-text-taxonomy-generation-and-classification-with-large-language-models)
+- [Clio (arXiv 2412.13678)](https://arxiv.org/pdf/2412.13678)
+- [FeClustRE (arXiv 2510.18799)](https://arxiv.org/abs/2510.18799v1)
+- [What Users Value and Critique: AI-powered mobile apps (arXiv 2506.10785)](https://arxiv.org/abs/2506.10785)
+- [MERIT: emerging app issues via online sentiment-topic tracing](https://deepai.org/publication/emerging-app-issue-identification-via-online-joint-sentiment-topic-tracing); [IDEA, ICSE 2018](https://www.springerprofessional.de/doi/10.1145/3180155.3180218)
+- [BERTopic online topic modeling](https://huggingface.co/kisejin/TopicModelingRepo/blob/main/BERTopic/docs/getting_started/online/online.md)
+- [AR-Miner, ICSE 2014](https://ink.library.smu.edu.sg/sis_research/2323)
+- [Speciteller](https://www.cis.upenn.edu/~nlp/software/speciteller.html)
+- [Analysing app reviews for software engineering: a systematic literature review](https://link.springer.com/article/10.1007/s10664-021-10065-7)
+- [Aspect extraction and sentiment classification of app reviews (arXiv 1712.03430)](https://arxiv.org/pdf/1712.03430)
+- Pricing: [Morph](https://morphllm.com/openai-api-pricing), [Price Per Token: GPT-5.4 nano](https://pricepertoken.com/pricing-page/model/openai-gpt-5.4-nano), [Puter](https://developer.puter.com/tutorials/openai-api-pricing/)
 
 ## Sources (model choice)
 

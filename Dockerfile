@@ -2,7 +2,7 @@
 #
 #   docker compose build
 #   docker compose run --rm pv run            # full pipeline, clean database
-#   docker compose run --rm pv painpoints --top 15
+#   docker compose run --rm pv issues show
 #
 # Data (archive + databases) and models are volumes, never baked in: the image
 # stays code-only and a rebuild never touches the corpus.

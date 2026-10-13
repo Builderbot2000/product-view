@@ -1,17 +1,19 @@
 # Product View
 
-Aggregate Google Play Store reviews into clustered product pain points and
-publish them to Confluence. See [project.md](project.md) for the full plan.
+Group Google Play Store reviews into product issues with a language model,
+and publish them to Confluence. See [project.md](project.md) for the full plan.
 
-**Current stage: ingestion + clustering.** Reviews are scraped into a JSONL
-archive, loaded into SQLite, translated, embedded, and clustered into pain
-points; `pv run` does all of it in one command. Next is rendering one
-self-contained HTML page for import into Confluence; not built yet.
+Reviews are scraped into a JSONL archive, loaded into SQLite and translated;
+a language model then picks out what each review complains about or praises
+and groups those points into issues, kept in a codebook so each issue means
+the same thing from one run to the next. `pv report` turns the issues into
+periodic Confluence pages.
 
 ```bash
-pv run            # rebuild the database clean, translate, embed, cluster both streams
+pv run            # rebuild reviews.db, translate, bring the issues up to date
 pv run --fetch    # same, after topping up the archive from the Play Store
-pv painpoints --top 15 --detail
+pv issues show --detail
+pv report --publish --space MFS
 ```
 
 ## Demo
@@ -19,7 +21,9 @@ pv painpoints --top 15 --detail
 [Product View @ RBC Mobile](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/294942)
 is the hub page built by `pv report --publish --space MFS` on the demo
 Confluence site. The role pages (UI & design, Sign-in & security, Payments,
-Engineering / QA, Support / CX) sit under it. Viewing it requires access to
+Engineering / QA, Support / CX) sit under it. The live pages still come from
+the earlier clustering; the next `pv report --publish` after the first issue
+build replaces them (the Payments page becomes Product features). Viewing it requires access to
 that site.
 
 ## Setup
@@ -38,7 +42,7 @@ pip install -e .
 
 ### On Linux, install CPU-only torch first
 
-The clustering stage pulls `torch` (via `sentence-transformers` and
+Translation and the issue stage pull `torch` (via `sentence-transformers` and
 `transformers`). On Windows and macOS the default PyPI wheel is CPU-only at
 ~250 MB, but **on Linux plain `pip install` resolves to the CUDA build at
 ~2.5 GB.** Unless you actually want GPU:
@@ -50,7 +54,7 @@ pip install -e .
 
 ### The first run downloads models
 
-`all-MiniLM-L6-v2` (~90 MB) on the first `pv embed`, and `opus-mt-fr-en`
+`all-MiniLM-L6-v2` (~90 MB) on the first `pv issues`, and `opus-mt-fr-en`
 (~301 MB) on the first `pv translate`. Both are one-off, cached under the
 platform's user cache directory, and re-runs are no-ops. A cold first run
 pausing for a few minutes is the download, not a hang.
@@ -60,20 +64,20 @@ pausing for a few minutes is the download, not a hang.
 ```bash
 docker compose build
 docker compose run --rm pv run                 # full pipeline
-docker compose run --rm pv painpoints --top 15
+docker compose run --rm pv issues show
 ```
 
 CPU-only torch on Linux. `./data` and `./config.yaml` are mounted from the host,
 and the models go in a named volume (`models`), so rebuilding the image never
 touches the corpus or downloads models again. Verified on Docker Desktop for
-Windows: the image is 1.46 GB, and `pv run` takes about 2 minutes once the
-caches are warm.
+Windows (before the issue stage replaced clustering). The image has no local
+model, so in a container use `llm.provider: openai`, with the key in `.env`.
 
 ## Configuration
 
 Settings live in [config.yaml](config.yaml): app id and country, the data
-directory, fetch tuning, the minimum review length, and every clustering knob,
-including which streams `pv run` clusters. Precedence is **command-line flag >
+directory, fetch tuning, the minimum review length, the issue stage's
+settings and the language model (`llm:`). Precedence is **command-line flag >
 config.yaml > built-in default**. Use `pv --config other.yaml <command>` to point
 somewhere else. Unknown keys are an error, so a typo can't silently fall back
 to a default.
@@ -101,98 +105,80 @@ pv info
 pv export
 ```
 
-### Clustering into pain points
+### Grouping reviews into issues
 
-Each stage reads and writes through SQLite, so any one re-runs in isolation —
-re-clustering never re-embeds. `pv run` chains them all.
+Each stage reads and writes through SQLite, so any one re-runs in isolation.
+`pv run` chains them all.
 
 ```bash
 pv db build        # JSONL -> a fresh reviews.db (21,506 rows), plus listing snapshots
 pv translate       # detect language, French -> English, cached forever
-pv embed           # encode to cached vectors (~2-5 min CPU, once)
-
-pv cluster --polarity negative      # leiden, balanced granularity
-pv cluster --polarity positive      # "what users value"
-pv cluster --compare                # every strategy, same target, metrics table
-
-pv painpoints --top 15 --detail     # read the output
-pv painpoints --sort size           # re-rank by any stored column
+pv issues          # distill, score against the codebook, form new issues from what's left
+pv issues show --detail   # the codebook's live issues, criteria and example quotes
 ```
 
-`pv translate` and `pv embed` are cache-hit no-ops on re-run, so the expensive
-work happens once and clustering iterations are cheap.
+`pv issues` uses a language model (see "Choosing the model" below). Its
+method, and the test it passed, are in [llm-trials.md](llm-trials.md)
+("Viability test"):
 
-### The database is rebuilt clean every run
+1. **Distill.** The model reads each review in the window (default: the last
+   12 months, `issues.window_months`) and lists every complaint and every
+   piece of praise as an exact quote, each restated as a short neutral
+   point. Star rating doesn't decide the side: a complaint in a 4-star review
+   is a complaint.
+2. **Score against the codebook.** Every point is checked against every live
+   issue's one-sentence definition. Live issues never change, so a new month
+   is counted against the same issues as the last.
+3. **Form new issues from what's left.** Points no issue covers are
+   clustered; the model names each specific problem in a cluster with a
+   definition; a breadth check drops catch-alls ("app is buggy") and sends
+   opinions ("frustrating") to general sentiment; a candidate that means the
+   same as a live issue joins it instead; and a selection step keeps the new
+   issues that cover the most points with the least overlap. Each new issue
+   is filed under one area from [curation.yaml](curation.yaml), whose areas
+   apply to any app.
+4. **Parent links** are recorded where one issue's matches contain most of
+   another's. They are reported, never merged.
+
+Every model answer is cached, so an interrupted run resumes and a repeated
+run is free; a monthly run distills only new reviews and forms issues only
+from what the existing ones don't cover.
+
+### Choosing the model
+
+Set in the `llm:` section of config.yaml. The model is a setting, never code.
+
+| Provider | Setup | Speed |
+|---|---|---|
+| `ollama` (default) | Ollama running locally with `qwen3.5:9b` pulled. Review text stays on the machine | One call at a time; about an hour per 100 reviews on a laptop GPU |
+| `openai` | `OPENAI_API_KEY` in the environment or `.env` (never config.yaml) | Parallel (`max_workers`); minutes per 100 reviews |
+
+To switch to OpenAI's small models, as planned in llm-trials.md decision 7:
+
+```yaml
+llm:
+  provider: openai
+  models: {fast: gpt-5.4-nano, strong: gpt-5.4-mini}   # fast: most calls; strong: naming issues
+  max_workers: 16
+  temperature: null                  # some API models only accept the default
+  options: {reasoning_effort: low}   # any extra request fields, passed through as given
+```
+
+The OpenAI connector has been checked offline (request shape, structured
+output, key handling) but not yet against the live API. Sending review text
+to OpenAI still needs sign-off (llm-trials.md decision 7). The cache is keyed
+by model, so switching models re-runs every call instead of mixing answers;
+points are re-distilled too, and an existing codebook keeps its issues and
+re-scores the new points against them.
+
+### What is kept, and what is rebuilt
 
 | File | Lifetime |
 |---|---|
 | `data/raw/`, `data/meta/`, `data/export/` | **Source.** Never deleted by the pipeline |
-| `data/reviews.db` | Deleted and rebuilt from `data/raw/` on every `pv db build` / `pv run`. `pv cluster` replaces its stream's previous run, so only the current result is ever stored |
-| `data/cache.db` | Translations + segment vectors. Kept across rebuilds, since recomputing them costs ~20 min of translation plus a few minutes of encoding. Delete it only to force a redo |
-
-### `cluster` flags
-
-Defaults below are what config.yaml ships with. A flag overrides config for one run.
-
-| Flag | Default | Notes |
-|------|---------|-------|
-| `--polarity` | `negative` | Positive and negative cluster separately, so praise and complaints never contaminate each other. `pv run` clusters every stream in `cluster.polarities` |
-| `--algorithm` | `leiden` | `leiden` \| `agglomerative` \| `hdbscan` — identical output schema |
-| `--granularity` | `balanced` | `broad` 15–25, `balanced` 40–60, `fine` 80–120, or an explicit band like `30-40` |
-| `--min-cluster-size` | 25 / 15 | Per stream in config (`negative: 25`, `positive: 15`, since the positive stream is a third the size). The flag overrides both |
-| `--cohesion-floor` | 0.35 | Mean cosine to centroid; below this a cluster is a grab-bag |
-| `--tau-days` | 365 | Recency decay for the impact score: each review weighs `exp(-age_days / tau)` |
-| `--compare` | off | Run every strategy at the same target cluster count |
-| `--native-override` | — | Set the strategy's own knob directly, skipping the search |
-
-`--compare` is the slow one, because it runs a full granularity search per
-strategy — measured at **~45 minutes** on the 13k negative stream (agglomerative
-alone is ~61s per fit). Normal `pv cluster` uses leiden only: the fit takes
-seconds, and LexRank synthesis brings a run to ~2–3 minutes per stream.
-
-**What the comparison found**, on the negative stream at band 40–60:
-
-| Strategy | Clusters | Noise | Cohesion | Silhouette |
-|---|---|---|---|---|
-| **leiden** (default) | 47 | **0.1%** | 0.689 | 0.045 |
-| agglomerative | 43 | 15.7% | 0.706 | 0.089 |
-| hdbscan | 2 | **98.1%** | 0.827 | 0.499 |
-
-HDBSCAN fails at 384 dimensions — it never found more than 2 clusters and called
-98% of the stream noise. Its flattering cohesion and silhouette are artifacts of
-keeping two tiny dense blobs, which is exactly why noise share is reported beside
-every quality metric: on the metrics alone the worst strategy looks like the best.
-
-**One granularity knob across every strategy.** Each algorithm exposes
-granularity through a different native parameter (`resolution`,
-`distance_threshold`, `min_cluster_size`), which would make them incomparable.
-Instead granularity is a *target cluster count*, and the runner binary-searches
-each strategy's native knob to hit it — so strategies are held at the same
-count and can be compared, and nobody needs to know what a resolution
-parameter is. The search targets the **post-filter** count, so the band means
-what it says.
-
-### Reading the output
-
-`pv painpoints --sort <column>` re-ranks by any stored column: `impact`,
-`size`, `mean_score`, `pct_one_star`, `thumbs_up_total`, `cohesion`,
-`peak_count`, `count_365d`, `first_seen`, or any single impact component.
-Every statistic is a real SQL column, so the terminal view and the future
-dashboard sort identical data.
-
-`impact` is a 0–100 composite of four percentile-ranked components — recency-weighted
-volume (0.40), severity (0.25), momentum (0.20), endorsement (0.15). **All four
-are stored separately**, so "why is this ranked #1" has an answer rather than
-being a black box.
-
-Labels are **fully algorithmic — no LLM.** Titles are c-TF-IDF keyphrases, the
-canonical quote is the medoid (a real review), and the message is 2–3 real
-sentences picked by LexRank centrality under MMR. Every word traces to a real
-review, nothing leaves the machine, and output is deterministic for a fixed seed.
-
-A replacement is being trialled: a local LLM (Qwen3.5 9B through Ollama) lists
-each review's problems and groups them by area and issue. Review text still
-never leaves the machine. Status and results: [llm-trials.md](llm-trials.md).
+| `data/reviews.db` | Deleted and rebuilt from `data/raw/` on every `pv db build` / `pv run` |
+| `data/cache.db` | Translations and every model answer. Kept across rebuilds; delete it only to force a redo |
+| `data/issues.db` | **The issue codebook.** Issues, the points each review made, and their raw scores. Kept: an issue's identity across runs is the point. Delete it only to start the issues over |
 
 ### Always fetch all locales (the default)
 
@@ -250,15 +236,15 @@ for a weekly top-up, useless for reaching back through history. Backfill with
 ```
 
 One file per locale (`..._en_ca.jsonl`, `..._fr_ca.jsonl`, …); `pv info`, `pv export`,
-and the clustering stage read them merged and deduped. Alongside each, a
+and the pipeline read them merged and deduped. Alongside each, a
 `*.state.json` holds that locale's resume checkpoint.
 
 `data/meta/{app_id}_{country}.jsonl` accumulates store-listing snapshots (displayed
 score, total ratings, text-review count, rating histogram). The dashboard needs these
 as honest denominators — see the caveat below.
 
-Reviewer names and avatar URLs are **not** stored. Clustering never needs
-reviewer identity, and not collecting it beats justifying its retention later.
+Reviewer names and avatar URLs are **not** stored. Grouping reviews into
+issues never needs reviewer identity, and not collecting it beats justifying its retention later.
 
 Timestamps are UTC ISO-8601. Files are UTF-8 (CSV export uses UTF-8 BOM so
 Excel on Windows renders accents and emoji correctly).
@@ -290,9 +276,9 @@ listing and finds an unexplained gap will stop trusting the whole dashboard.
 ```
 src/product_view/
 ├── cli.py              # argument parsing; fetch / export / info / langs
-├── commands.py         # db build / translate / embed / cluster / painpoints / run
+├── commands.py         # db build / translate / issues / run
 ├── config.py           # config.yaml: defaults, validation, flag precedence
-├── models.py           # Review and PainPoint — the two schema contracts
+├── models.py           # Review — the contract between ingestion and the rest
 ├── archive.py          # JSONL archive + resume state
 ├── store.py            # SQLite: reviews.db (rebuilt each run) + attached cache.db
 ├── ingest/
@@ -302,35 +288,27 @@ src/product_view/
 │   ├── detect.py       # py3langid; Play's `lang` is NOT the review's language
 │   └── translate.py    # MarianMT fr→en, cached
 ├── embed/
-│   └── encoder.py      # all-MiniLM-L6-v2, L2-normalized, cached
-└── cluster/
-    ├── graph.py        # exact cosine kNN
-    ├── strategies.py   # ClusterStrategy protocol + leiden/agglomerative/hdbscan
-    ├── granularity.py  # target cluster count → each strategy's native knob
-    ├── synthesize.py   # c-TF-IDF, medoid, LexRank, MMR
-    ├── scoring.py      # impact components + time series
-    └── pipeline.py     # orchestration
+│   └── encoder.py      # all-MiniLM-L6-v2, L2-normalized (clusters points in the issue stage)
+├── issues/
+│   ├── llm.py          # model connectors: ollama, openai; cached, parallel
+│   ├── prompts.py      # the validated prompts
+│   ├── codebook.py     # issues.db: issues, points, raw scores, runs
+│   └── pipeline.py     # distill, score, cluster, name, screen, select, file
+├── render/             # pv report: Confluence storage format + SVG charts
+└── publish/            # pv publish: Confluence REST
 ```
 
 `models.Review` is the contract between ingestion and everything downstream.
 When reviews arrive from an internal feed instead of the Play Store, only
-`ingest/` changes. `models.PainPoint` is the contract on the other end: the
-pipeline writes it, `pv painpoints` and the future dashboard read it.
+`ingest/` changes.
 
 JSONL stays the raw landing zone. `data/reviews.db` is rebuilt from it every
-run, and `data/cache.db` only holds model output, so losing either database
-never loses data.
+run and `data/cache.db` only holds model output, so losing either never loses
+data. `data/issues.db` is the one file worth backing up besides the archive.
 
 ## Trends: always divide by the corpus
 
-Each pain point stores a raw monthly series, and each run stores the
-corpus-wide monthly totals beside it. **Use both.** October 2024 alone holds
-1,663 negative reviews — 35× the ~48/month baseline — so on raw counts *every*
-cluster spikes that month and the chart just redraws the release event.
-Dividing by the run's `corpus_monthly_json` is what separates the pain points
-that drove a spike (share climbs) from those merely carried along (share flat
-or falling).
-
-Because all 15 years are clustered in one pass, every pain point's full
-history comes from its own members' dates — trend lines are complete on the
-first run and do not depend on matching clusters across runs.
+October 2024 alone holds 1,663 negative reviews, 35× the ~48/month baseline,
+so on raw counts every issue spikes that month. The report counts each issue
+per period against its own usual level and tests the change, rather than
+comparing raw counts across months.

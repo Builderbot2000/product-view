@@ -1,7 +1,7 @@
 Metadata-Version: 2.4
 Name: product-view
 Version: 0.1.0
-Summary: Aggregate Google Play reviews into clustered product pain points
+Summary: Group Google Play reviews into product issues with a language model
 Requires-Python: >=3.10
 Requires-Dist: google-play-scraper>=1.2.7
 Requires-Dist: numpy>=1.24
@@ -11,8 +11,6 @@ Requires-Dist: sentence-transformers>=2.2
 Requires-Dist: transformers>=4.30
 Requires-Dist: sentencepiece>=0.1.99
 Requires-Dist: py3langid>=0.2
-Requires-Dist: python-igraph>=0.11
-Requires-Dist: leidenalg>=0.10
 Requires-Dist: platformdirs>=3.0
-Provides-Extra: umap
-Requires-Dist: umap-learn>=0.5; extra == "umap"
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: umap-learn>=0.5

@@ -9,8 +9,9 @@ app:
   country: ca
 
 # Holds raw/ and meta/ (the source archive, never deleted), export/ (CSV),
-# reviews.db (rebuilt clean on every `pv run` / `pv db build`) and cache.db
-# (translations + segment vectors, kept because they cost ~25 min to recompute).
+# reviews.db (rebuilt clean on every `pv run` / `pv db build`), cache.db
+# (translations and model answers, kept because they cost time to recompute)
+# and issues.db (the issue codebook, kept: issues keep their identity across runs).
 data_dir: data
 
 fetch:
@@ -21,29 +22,45 @@ fetch:
   sleep_seconds: 1.0       # between pages; be polite
 
 corpus:
-  min_chars: 20            # shorter reviews are never translated or clustered
+  min_chars: 20            # shorter reviews are never translated or grouped
 
-cluster:
-  polarities: [negative, positive]   # streams `pv run` clusters
-  algorithm: leiden        # leiden | agglomerative | hdbscan
-  granularity: balanced    # broad 15-25 | balanced 40-60 | fine 80-120 | "MIN-MAX"
-  min_cluster_size:
-    negative: 25
-    positive: 15           # positive stream is about a third the size
-  cohesion_floor: 0.35     # mean cosine to centroid; below this is a grab-bag
-  merge_threshold: 0.45    # adjacent segments this similar join one complaint unit
-  knn_k: 15
-  seed: 42
-  tau_days: 365            # recency decay: each review weighs exp(-age_days / tau)
-  momentum_window_days: 365
-  native_override: null    # set the strategy's own knob, skipping the search
+# `pv issues`: what reviews say, grouped into issues kept in data/issues.db.
+# Method and its validation: llm-trials.md ("Viability test").
+issues:
+  window_months: 12        # reviews this recent are distilled and grouped
+  sides: [complaint, praise]
+  min_cluster_size: 4      # HDBSCAN on the points no issue covers yet
+  threshold: 0.75          # a score at or above this counts as a match
+  loops: 1                 # rounds of forming new issues per run
+  batch: 15                # points per scoring call
+  nearest: 0               # score a point only against its N nearest issues; 0: all
+  join: 0.7                # definition similarity at which a join with an existing issue is checked
+  overlap_cost: 1.0        # selection: cost of each repeated match
+  concept_cost: 2.0        # selection: cost of each issue kept
+
+# The language model behind `pv issues`. API keys are NOT here: an openai
+# provider reads OPENAI_API_KEY from the environment or .env.
+llm:
+  provider: ollama         # ollama (local) | openai
+  models:
+    fast: qwen3.5:9b       # distill, score, breadth, area: most of the calls
+    strong: qwen3.5:9b     # naming issues
+  max_workers: 1           # parallel calls; keep 1 for a local GPU
+  temperature: 0.0         # null: leave it out (some API models only accept the default)
+  seed: 0
+  # For OpenAI, replace the block above with something like:
+  #   provider: openai
+  #   models: {fast: gpt-5.4-nano, strong: gpt-5.4-mini}
+  #   max_workers: 16
+  #   temperature: null
+  #   options: {reasoning_effort: low}   # passed through to the request as given
 
 # `pv report`: a periodic overview. Negative reviews run at ~55-80 a month,
 # so a period much shorter than 4 weeks leaves most issues at 0-3 reviews.
 report:
   period_days: 28          # the reporting period, ending on the newest review's day
   baseline_periods: 6      # "usual" = mean of this many equal periods before it
-  curation: curation.yaml  # areas, roles, labels and merges
+  curation: curation.yaml  # areas and roles
   app_name: RBC Mobile     # hub title: "Product View @ <app_name>"; null: the app id
 
 # `pv publish` target. Credentials are NOT here: CONFLUENCE_BASE_URL,

@@ -3,9 +3,12 @@
 Ingest: `fetch` pulls raw reviews into a JSONL archive, `export` converts that
 to CSV, `info` summarizes what's on disk, `langs` probes locale coverage.
 
-Clustering: `db build`, `translate`, `embed`, `cluster`, `painpoints` — each a
+Pipeline: `db build`, `translate`, `issues` (and `issues show`) -- each a
 stage reading and writing through SQLite, so any one re-runs in isolation.
-`run` chains them over a freshly rebuilt database. Those live in commands.py.
+`run` chains them over a freshly rebuilt reviews.db. Those live in commands.py.
+
+Report: `report` builds the periodic Confluence pages from the issues. It lives
+in render/.
 
 Publish: `publish` creates or updates a Confluence page from an HTML file over
 REST. It lives in publish/.
@@ -266,7 +269,7 @@ def build_parser() -> argparse.ArgumentParser:
     common(p_langs)
     p_langs.set_defaults(func=cmd_langs)
 
-    # Clustering stage lives in commands.py so this file stays parsing and
+    # The pipeline stages live in commands.py so this file stays parsing and
     # presentation for the ingest stage.
     commands.add_parsers(sub, common, add_fetch_options)
     render.add_parser(sub, common)
@@ -289,7 +292,7 @@ def add_fetch_options(p: argparse.ArgumentParser) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Review text is full of emoji and accents, and `painpoints --detail`
+    # Review text is full of emoji and accents, and `issues show --detail`
     # prints it. A default Windows console is cp1252 or gbk and raises
     # UnicodeEncodeError on the first French quote, so the command dies on
     # output rather than on anything real. Library code already writes files
@@ -305,6 +308,8 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(levelname)s %(name)s: %(message)s",
     )
+    # Loading the embedding model logs every HTTP request it makes to the model hub.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     try:
         config.apply(args, config.load(args.config))
     except config.ConfigError as exc:

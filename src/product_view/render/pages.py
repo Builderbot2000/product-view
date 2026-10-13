@@ -107,8 +107,6 @@ DETAIL_QUOTES = 8    # quotes per issue in a role page's "What users said"
 
 def _label(issue: Issue, quote: bool = True) -> str:
     out = f"<strong>{b.esc(issue.label)}</strong>"
-    if not issue.curated:
-        out += " " + b.muted("(auto-labelled)")
     if quote:
         for q in issue.recent_quotes(TABLE_QUOTES):
             out += "<br />" + _quote(q, 160)
@@ -351,18 +349,22 @@ def _method(neg: Stream) -> str:
     min_chars = neg.min_chars
     return b.expand("How these numbers are made", (
         "<p>These pages are built from the reviews people post about the app on the "
-        "Google Play Store: 1 to 3 stars count as negative, 4 or 5 stars as positive. "
-        f"Very short reviews (under {min_chars} characters, such as “Good”) are left out, "
-        "reviews in French are translated into English automatically, and reviews in "
-        "other alphabets, such as Arabic or Chinese, are not included. Software splits "
-        "each review into the separate points it makes and groups points that mean the "
-        "same thing, even when they’re worded differently; each group is one issue. "
-        "Because this covers every review collected so far, an issue means the same thing "
-        "from one report to the next and can be followed over time. Issues that have been "
-        "checked have a short name and a product area such as Payments, which is how each "
-        "team’s page shows only the areas it looks after. Issues not yet checked are "
-        "marked <em>(auto-labelled)</em>: their name is one reviewer’s own sentence and "
-        "their area is guessed from keywords, so both may be rough.</p>"
+        "Google Play Store. Review totals count 1 to 3 stars as negative and 4 or 5 stars "
+        f"as positive. Very short reviews (under {min_chars} characters, such as “Good”) "
+        "are left out, reviews in French are translated into English automatically, and "
+        "reviews in other alphabets, such as Arabic or Chinese, are not included.</p>"
+        "<p>An AI language model reads each review and picks out every separate complaint "
+        "and every piece of praise it makes, in the reviewer’s own words. Points that "
+        "describe the same problem are grouped into one issue, which has a short name and "
+        "a one-sentence definition, and a point counts toward an issue only when it fits "
+        "that definition. A complaint counts even when it comes from a 4- or 5-star review. "
+        "Points that only voice a feeling, such as frustration, without naming a problem "
+        "are kept apart as general opinions. Once an issue exists, its name and definition "
+        "stay fixed, so it means the same thing from one report to the next and can be "
+        "followed over time; new issues are added only for what the existing ones don’t "
+        "cover. Each issue is filed under one product area, which is how each team’s page "
+        "shows only the areas it looks after. The grouping is automatic and can misplace "
+        "a point, so the quotes under each issue are there to check it against.</p>"
         f"<p>Each report covers {p.days} days, ending on the date of the most recent "
         f"review, and every count is set against <em>usual</em>: the average for the "
         f"{p.baseline} periods of the same length before it, about {months} months in all. "

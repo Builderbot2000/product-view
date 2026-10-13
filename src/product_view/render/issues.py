@@ -1,15 +1,12 @@
-"""Issues for one reporting period, derived from a clustering run plus curation.
+"""Issues for one reporting period, read from the issue codebook.
 
 The report is a periodic overview (report-design.md D15): it counts what was
-said in the reporting period, against the periods before it. Clustering
-still spans all history, because that is what gives issues stable, well-fed
-definitions; this module only slices the run's members by date.
-
-An issue is one or more pain points under one label (D8, D14). Clusters are
-matched to curated labels through *anchor reviews*, not cluster ids, so the
-curation survives the re-clustering every scheduled run does. Each issue is
-filed under product areas, and areas map to roles (D16). Every number is
-recomputed here from `pain_point_members` as distinct reviews (D10).
+said in the reporting period, against the periods before it. Issues come
+from the codebook (issues.db), which spans the issue window and keeps each
+issue's identity from run to run; this module only slices its matches by
+date. Each issue is filed under one product area (chosen when the issue was
+formed, from the app-agnostic list in curation.yaml), and areas map to roles
+(D16). Every number is a count of distinct reviews (D10).
 """
 
 from __future__ import annotations
@@ -20,15 +17,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from ..cluster.vague import BUCKET_TITLES, focus
-from ..models import PainPoint
+from ..issues.codebook import Codebook
 from ..store import Store
 
-KINDS = ("issue", "mood", "outcome", "hide")
 OTHER = "other"
 SPARK_PERIODS = 12        # bars in every trend sparkline
 SIGNIFICANCE = 0.05       # Poisson tail probability that counts as a change
 MIN_CHANGE = 3            # fewer reviews than this never count as a change
+SIDE = {"negative": "complaint", "positive": "praise"}
 
 
 # --- taxonomy ---------------------------------------------------------------
@@ -37,7 +33,7 @@ MIN_CHANGE = 3            # fewer reviews than this never count as a change
 class Area:
     id: str
     name: str
-    keywords: tuple[str, ...]
+    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -52,18 +48,9 @@ class Role:
 class Taxonomy:
     areas: dict[str, Area]
     roles: dict[str, Role]
-    labels: dict[str, dict[str, dict]]   # polarity -> label -> {kind, areas, anchors}
-    fold_focus_below: float = 0.2        # uncurated clusters less focused than this -> mood bucket
 
     def area_name(self, area_id: str) -> str:
         return self.areas[area_id].name if area_id in self.areas else "Other"
-
-    def classify(self, pp: PainPoint) -> list[str]:
-        """File an uncurated cluster by keyword hits; best area first."""
-        words = {k.lower() for k in pp.keywords} | set(pp.title.lower().split())
-        hits = {a.id: sum(1 for k in a.keywords if k in words) for a in self.areas.values()}
-        best = max(hits.values(), default=0)
-        return [next(a for a, n in hits.items() if n == best)] if best else [OTHER]
 
 
 def load_taxonomy(path: Path) -> Taxonomy:
@@ -71,23 +58,15 @@ def load_taxonomy(path: Path) -> Taxonomy:
 
     data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
     data = data or {}
-    areas = {k: Area(k, v["name"], tuple(w.lower() for w in v.get("keywords", [])))
+    areas = {k: Area(k, v["name"], v.get("description", ""))
              for k, v in (data.get("areas") or {}).items()}
     roles = {k: Role(k, v["name"], tuple(v.get("areas", [])), tuple(v.get("charts", [])))
              for k, v in (data.get("roles") or {}).items()}
-    labels = data.get("issues") or {}
     for role in roles.values():
         for a in role.areas:
             if a not in areas:
                 raise ValueError(f"{path}: role {role.id!r} names unknown area {a!r}")
-    for polarity, entries in labels.items():
-        for label, e in (entries or {}).items():
-            if e.get("kind", "issue") not in KINDS:
-                raise ValueError(f"{path}: {polarity} {label!r}: kind must be one of {KINDS}")
-            for a in e.get("areas", []):
-                if a not in areas:
-                    raise ValueError(f"{path}: {polarity} {label!r}: unknown area {a!r}")
-    return Taxonomy(areas, roles, labels, float(data.get("fold_focus_below", 0.2)))
+    return Taxonomy(areas, roles)
 
 
 # --- periods and change -----------------------------------------------------
@@ -204,12 +183,11 @@ class Quote:
 @dataclass
 class Issue:
     label: str
-    kind: str
+    kind: str                     # issue | mood (general sentiment, no single thing to fix)
     polarity: str
     areas: list[str]
-    curated: bool
     series: Series
-    members: list[PainPoint] = field(default_factory=list)   # largest first
+    typical: str = ""             # the closest-matching point of all time
     all_time: set[str] = field(default_factory=set)
     quotes_now: dict[str, Quote] = field(default_factory=dict)
     versions_now: Counter = field(default_factory=Counter)
@@ -232,9 +210,8 @@ class Issue:
 
     @property
     def quote(self) -> str:
-        """The largest member's medoid unit: the standing "in users' words"."""
-        lead = self.members[0]
-        return " ".join((lead.canonical_text or lead.title).split())
+        """The standing "in users' words": the point that fits the issue best."""
+        return " ".join(self.typical.split())
 
     def recent_quotes(self, n: int = 3) -> list[Quote]:
         """This period's quotes, most thumbs-up first, then newest."""
@@ -248,8 +225,8 @@ class Stream:
     run: dict
     period: Period
     issues: list[Issue]
-    total: Series                       # every review in the stream
-    unmatched_now: list[Quote]          # this period's reviews in no cluster
+    total: Series                       # every review in the star-rating stream
+    unmatched_now: list[Quote]          # this period's stream reviews under no issue
     versions_now: Counter
     min_chars: int = 0                  # shorter reviews were left out
 
@@ -286,107 +263,48 @@ def report_period(store: Store, run: dict, days: int, baseline: int) -> Period:
     return Period(end, days, baseline)
 
 
-def _match_labels(store: Store, run_id: str, labels: dict[str, dict]) -> dict[str, str]:
-    """pain_point_id -> curated label, by the anchor reviews each cluster holds.
+def load_stream(store: Store, book: Codebook, polarity: str, days: int, baseline: int,
+                threshold: float, min_chars: int = 20) -> Stream | None:
+    """One stream's issues: the codebook's live concepts of that side, counted
+    from their matches (a point scoring at or above `threshold`).
 
-    Anchors are the medoid reviews of the clusters as curated. An anchor
-    belongs to the cluster it is still the medoid of; failing that (after a
-    re-cluster), to the cluster where its unit is most central, since a
-    review raising several problems sits in several clusters. A cluster
-    takes the label with most anchors; ties go to the label listed first.
+    Issue counts include every star rating, since a 4-star review can hold a
+    complaint; the stream's total is still its star-rating stream (1-3 or 4-5
+    stars), which is what the pages call negative and positive reviews.
     """
-    anchor_label = {rid: label for label, e in labels.items() for rid in e.get("anchors", [])}
-    order = {label: n for n, label in enumerate(labels)}
-    home: dict[str, tuple[float, str]] = {}
-    if anchor_label:
-        q = ",".join("?" * len(anchor_label))
-        for pp_id, rid, sim in store.conn.execute(
-                f"SELECT pain_point_id, review_id, similarity FROM pain_point_members "
-                f"WHERE run_id = ? AND review_id IN ({q})", (run_id, *anchor_label)):
-            if rid not in home or sim > home[rid][0]:
-                home[rid] = (sim, pp_id)
-        for pp_id, rid in store.conn.execute(
-                f"SELECT pain_point_id, canonical_review_id FROM pain_points "
-                f"WHERE run_id = ? AND canonical_review_id IN ({q})", (run_id, *anchor_label)):
-            home[rid] = (math.inf, pp_id)
-    # The set-aside bucket is its own thing; an anchor that fell into it must
-    # not hand it a curated label (it would then be filed as that issue).
-    bucket = {r[0] for r in store.conn.execute(
-        "SELECT pain_point_id FROM pain_points WHERE run_id = ? AND title IN (?, ?)",
-        (run_id, *BUCKET_TITLES.values()))}
-    votes: dict[str, Counter] = {}
-    for rid, (_, pp_id) in home.items():
-        if pp_id in bucket:
-            continue
-        votes.setdefault(pp_id, Counter())[anchor_label[rid]] += 1
-    return {pp_id: min(c, key=lambda lb: (-c[lb], order[lb])) for pp_id, c in votes.items()}
-
-
-def load_stream(store: Store, polarity: str, taxonomy: Taxonomy, days: int,
-                baseline: int, min_chars: int = 20) -> Stream | None:
-    run = store.latest_run(polarity)
+    side = SIDE[polarity]
+    run = book.latest_run(side)
     if run is None:
         return None
     run = dict(run)
     period = report_period(store, run, days, baseline)
-    labels = taxonomy.labels.get(polarity, {})
-    matched = _match_labels(store, run["run_id"], labels)
 
-    # How tightly each cluster's units point at one thing (vague.focus).
-    unit_texts: dict[str, list[str]] = {}
-    for row in store.conn.execute(
-            "SELECT pain_point_id, unit_text FROM pain_point_members WHERE run_id = ?",
-            (run["run_id"],)):
-        unit_texts.setdefault(row[0], []).append(row[1] or "")
+    issues: dict[str, Issue] = {}
+    for c in book.concepts(side):
+        kind = "issue" if c["kind"] == "issue" else "mood"
+        issues[c["concept_id"]] = Issue(c["name"], kind, polarity,
+                                        [c["area"] or OTHER] if kind == "issue" else [],
+                                        Series(period))
 
-    groups: dict[str, Issue] = {}
-    hidden: set[str] = set()
-    for row in store.pain_points(run["run_id"], sort="size", limit=10_000):
-        pp = PainPoint.from_row(row)
-        label = matched.get(pp.pain_point_id)
-        entry = labels.get(label, {}) if label else {}
-        kind = entry.get("kind", "issue")
-        if label is None and pp.title in BUCKET_TITLES.values():
-            kind = "mood"
-        elif (label is None and taxonomy.fold_focus_below > 0
-              and focus(unit_texts.get(pp.pain_point_id, [])) < taxonomy.fold_focus_below):
-            # An uncurated cluster that points at nothing in particular joins
-            # the bucket; curated issues and outcomes are never folded.
-            label, kind = BUCKET_TITLES[polarity], "mood"
-            entry = {}
-        if kind == "hide":
-            hidden.add(pp.pain_point_id)
+    members = book.members(side, threshold)
+    meta = {r["review_id"]: r for r in _review_meta(store, {m["review_id"] for m in members})}
+    on_issue: set[str] = set()
+    for m in members:                   # closest first, per concept
+        issue, r = issues.get(m["concept_id"]), meta.get(m["review_id"])
+        if issue is None or r is None or not r["created_at"]:
             continue
-        if label is None:
-            label = pp.title
-            areas = [] if kind == "mood" else taxonomy.classify(pp)
-        else:
-            areas = list(entry.get("areas") or ([] if kind != "issue" else [OTHER]))
-        issue = groups.get(label)
-        if issue is None:
-            issue = groups[label] = Issue(label, kind, polarity, areas, label in labels,
-                                          Series(period))
-        issue.members.append(pp)          # already largest first
-
-    owner = {pp.pain_point_id: i for i in groups.values() for pp in i.members}
-    clustered: set[str] = set()
-    for row in store.member_reviews(run["run_id"]):
-        clustered.add(row["review_id"])
-        issue = owner.get(row["pain_point_id"])
-        if issue is None:
-            continue
-        rid = row["review_id"]
+        rid = m["review_id"]
+        if not issue.typical:
+            issue.typical = m["quote"]
         issue.all_time.add(rid)
-        if not row["created_at"]:
-            continue
-        created = _dt(row["created_at"])
+        created = _dt(r["created_at"])
         issue.series.add(created, rid)
-        # Rows come most-central unit first, so a review's first unit wins.
+        if issue.kind == "issue":
+            on_issue.add(rid)
         if period.bucket(created) == 0 and rid not in issue.quotes_now:
-            issue.quotes_now[rid] = Quote(" ".join((row["unit_text"] or "").split()),
-                                          row["score"], row["thumbs_up"] or 0, created,
-                                          row["app_version"])
-            issue.versions_now[row["app_version"] or "unknown"] += 1
+            issue.quotes_now[rid] = Quote(" ".join(m["quote"].split()), r["score"],
+                                          r["thumbs_up"] or 0, created, r["app_version"])
+            issue.versions_now[r["app_version"] or "unknown"] += 1
 
     total = Series(period)
     unmatched: list[Quote] = []
@@ -398,13 +316,24 @@ def load_stream(store: Store, polarity: str, taxonomy: Taxonomy, days: int,
         total.add(created, row["review_id"])
         if period.bucket(created) == 0:
             versions[row["app_version"] or "unknown"] += 1
-            if row["review_id"] not in clustered:
+            if row["review_id"] not in on_issue:
                 unmatched.append(Quote(" ".join((row["content_en"] or "").split()),
                                        row["score"], row["thumbs_up"] or 0, created,
                                        row["app_version"]))
     unmatched.sort(key=lambda q: (-q.thumbs, -q.created.timestamp()))
-    return Stream(polarity, run, period, list(groups.values()), total, unmatched, versions,
+    return Stream(polarity, run, period, list(issues.values()), total, unmatched, versions,
                   min_chars)
+
+
+def _review_meta(store: Store, review_ids: set[str]) -> list:
+    ids = sorted(review_ids)
+    out = []
+    for i in range(0, len(ids), 900):     # SQLite's variable limit
+        chunk = ids[i:i + 900]
+        out += store.conn.execute(
+            f"SELECT review_id, score, thumbs_up, created_at, app_version FROM reviews "
+            f"WHERE review_id IN ({','.join('?' * len(chunk))})", chunk).fetchall()
+    return out
 
 
 # --- orderings (D12) --------------------------------------------------------

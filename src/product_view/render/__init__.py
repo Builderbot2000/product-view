@@ -1,4 +1,4 @@
-"""(F) Report -- `pv report`: periodic Confluence pages from the latest runs.
+"""(F) Report -- `pv report`: periodic Confluence pages from the issue codebook.
 
 One page tree per report (report-design.md D4): a hub with every area, and
 one child page per role holding only that role's areas (D16). Pages are
@@ -14,6 +14,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from .. import config
+from ..issues.codebook import Codebook
 from ..store import Store
 from .issues import load_stream, load_taxonomy
 
@@ -26,12 +28,17 @@ def cmd_report(args: argparse.Namespace) -> int:
     except (ValueError, KeyError) as exc:
         print(f"report: {exc}", file=sys.stderr)
         return 2
-    with Store(Path(args.data_dir) / "reviews.db") as store:
-        streams = {pol: load_stream(store, pol, taxonomy, args.period_days,
-                                    args.baseline_periods, args.min_chars)
+    book_path = Path(args.data_dir) / "issues.db"
+    if not book_path.exists():
+        print("report: no issues yet; run `pv issues` first", file=sys.stderr)
+        return 1
+    threshold = config.get(args.config, "issues.threshold")
+    with Store(Path(args.data_dir) / "reviews.db") as store, Codebook(book_path) as book:
+        streams = {pol: load_stream(store, book, pol, args.period_days, args.baseline_periods,
+                                    threshold, args.min_chars)
                    for pol in ("negative", "positive")}
         if streams["negative"] is None:
-            print("report: no negative run yet; run `pv cluster` first", file=sys.stderr)
+            print("report: no complaint issues yet; run `pv issues` first", file=sys.stderr)
             return 1
         built = pages.build_all(store, streams["negative"], streams["positive"],
                                 taxonomy, args.app_id, args.title, args.app_name)
@@ -72,7 +79,7 @@ def add_parser(sub, common) -> None:
                    help="length of the reporting period (default from config: 28)")
     p.add_argument("--baseline-periods", type=int,
                    help="'usual' = mean of this many periods before it (default: 6)")
-    p.add_argument("--curation", help="areas, roles, labels (default: curation.yaml)")
+    p.add_argument("--curation", help="areas and roles (default: curation.yaml)")
     p.add_argument("--min-chars", type=int)
     p.add_argument("--out", default="out/report", help="output folder (default: out/report)")
     p.add_argument("--publish", action="store_true", help="also publish to Confluence")
