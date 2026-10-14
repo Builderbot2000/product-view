@@ -1,10 +1,10 @@
 """Spike: cluster LLM-extracted problem statements with the production graph code.
 
-Reads the JSONL from spike/llm_refine.py (or llm_extract.py), embeds each extracted problem, builds
+Reads the JSONL from trials/extract/llm_refine.py (or llm_extract.py), embeds each extracted problem, builds
 the kNN graph and runs Leiden at several resolutions with a range cap that sets
 isolated statements aside as Miscellaneous. Prints groups by distinct reviews.
 
-    .venv/Scripts/python.exe -X utf8 spike/llm_cluster.py out/llm-spike/extract-qwen3.5_9b-v4-recent-refined-v2.jsonl --show 4
+    .venv/Scripts/python.exe -X utf8 trials/extract/llm_cluster.py trials/runs/extract-qwen3.5_9b-v4-recent-refined-v2.jsonl --show 4
 """
 from __future__ import annotations
 

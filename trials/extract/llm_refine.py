@@ -7,7 +7,7 @@ the statement is about and what goes wrong with it. A statement missing either
 is dropped to "no specific problem"; that decision is made here in code from
 the two fields, not by the model.
 
-    .venv/Scripts/python.exe -X utf8 spike/llm_refine.py out/llm-spike/extract-qwen3.5_9b-v4-recent.jsonl
+    .venv/Scripts/python.exe -X utf8 trials/extract/llm_refine.py trials/runs/extract-qwen3.5_9b-v4-recent.jsonl
 
 Writes <input>-refined-v<RULES_VERSION>.jsonl, same shape as the input, with
 `issues` holding only kept statements (plus `feature`/`failure`) and `dropped`

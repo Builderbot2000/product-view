@@ -3,9 +3,9 @@
 Confluence Cloud's HTML import accepts only a .zip holding one folder of .html
 files. The folder name becomes the space name, and a page's media sits in a
 folder named after the page. This script writes the probe image into that media
-folder and zips spike/confluence-probe/ into out/confluence-probe.zip.
+folder and zips trials/confluence/confluence-probe/ into out/confluence-probe.zip.
 
-    python spike/build_confluence_probe.py
+    python trials/confluence/build_confluence_probe.py
 """
 
 import struct
@@ -13,8 +13,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "spike" / "confluence-probe"
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = ROOT / "trials" / "confluence" / "confluence-probe"
 SPACE_DIR = SOURCE / "Product View Probe"
 OUT = ROOT / "out" / "confluence-probe.zip"
 

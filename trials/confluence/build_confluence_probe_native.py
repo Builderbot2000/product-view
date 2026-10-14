@@ -2,7 +2,7 @@
 styled SVG). Publishes raw storage XHTML, bypassing pv's HTML converter, sets
 the page to full width, and saves Confluence's rendered view HTML.
 
-    python spike/build_confluence_probe_native.py SPACE_KEY out/probe2.view.html
+    python trials/confluence/build_confluence_probe_native.py SPACE_KEY out/probe2.view.html
 
 Results are recorded in Project.md §0 "Still open"."""
 import sys

@@ -11,13 +11,13 @@ the production report the same day ([below](#production-report-review-2026-10-09
 found its hand curation unsound, and a literature check found an established
 method, LLooM, close to our design. The next design is LLooM's, run on
 OpenAI's small models ([Design as it stands](#design-as-it-stands-aligned-with-lloom-not-built)).
-It was built as a spike ([lloom.py](spike/lloom.py), trials 12–13). On
+It was built as a spike ([lloom.py](lloom/lloom.py), trials 12–13). On
 2026-10-13 it first **failed the [viability test](#viability-test-criteria-set-2026-10-13-before-any-run)**
 (39% precision; merges and the loop made catch-alls), then **passed its
 structural gates** once merging was replaced by a breadth check, a frozen
 codebook and selection, with two marginal results. The same day it replaced
 embedding clustering in the pipeline as `pv issues`
-([issues/](src/product_view/issues/)), with the model as a setting.
+([issues/](../src/product_view/issues/)), with the model as a setting.
 
 ## Why
 
@@ -79,18 +79,28 @@ Decided 2026-10-09:
    "company-approved internal model only"; needs sign-off before a full run.
    Every step calls the model through one function, so the provider is a
    setting.
+   **Reversed 2026-10-14: the local Qwen3.5 9B stays the model.** nano
+   failed the gates and tuning did not help; mini only nears Qwen at about
+   3.8 times nano's price ([tuning result](#result-of-the-tuning-no-variant-kept-2026-10-14)).
+   The openai provider stays in the code as a setting.
 
 ## Scripts
 
-All in [spike/](spike/), run with `.venv/Scripts/python.exe -X utf8`. Output
-goes to `out/llm-spike/` (gitignored, local only).
+In this folder, grouped by trial: [extract/](extract/) (trials 1–11),
+[lloom/](lloom/) (trials 12–13, the viability test, cost controls and the
+OpenAI checks) and [prellm/](prellm/) (the embedding-route upgrade trials).
+Run from the repo root with `.venv/Scripts/python.exe -X utf8`. Output goes
+to `trials/runs/` (gitignored, local only). Criteria and results are also
+tabulated in [requirements.xlsx](../docs/requirements.xlsx).
 
 | Script | Does |
 |---|---|
-| [llm_extract.py](spike/llm_extract.py) | Call 1, cut only. Per review: the list of `{problem, area}` it contains, or none, with no filtering. Cached as JSONL by review id and `PROMPT_VERSION`. `--n`, `--recent` (newest N instead of a random sample weighted to Oct 2024) |
-| [llm_refine.py](spike/llm_refine.py) | Call 2, rules only. One call per statement returns its `feature` and `failure`; code drops the statement if either is empty. Writes `-refined-v<RULES_VERSION>.jsonl` with `issues` (kept) and `dropped` |
-| [lloom.py](spike/lloom.py) | The LLooM design end to end (trial 12): distill, cluster (UMAP + HDBSCAN, needs the `[umap]` extra), synthesize, review, score, loop. Every model call cached by request in `lloom-calls-<model>.jsonl`. `--n`, `--negative-only`, `--min-size`, `--threshold`, `--nearest`, `--loops`. Writes concepts, scores and a report to `out/llm-spike/lloom-<settings>/` |
-| [llm_cluster.py](spike/llm_cluster.py) | Embeds the kept statements and runs the production kNN graph and Leiden code on them, with a range cap (`--reach`, `--pull`) that sends outliers to Miscellaneous. Prints groups at several resolutions |
+| [llm_extract.py](extract/llm_extract.py) | Call 1, cut only. Per review: the list of `{problem, area}` it contains, or none, with no filtering. Cached as JSONL by review id and `PROMPT_VERSION`. `--n`, `--recent` (newest N instead of a random sample weighted to Oct 2024) |
+| [llm_refine.py](extract/llm_refine.py) | Call 2, rules only. One call per statement returns its `feature` and `failure`; code drops the statement if either is empty. Writes `-refined-v<RULES_VERSION>.jsonl` with `issues` (kept) and `dropped` |
+| [lloom.py](lloom/lloom.py) | The LLooM design end to end (trial 12): distill, cluster (UMAP + HDBSCAN, needs the `[umap]` extra), synthesize, review, score, loop. Every model call cached by request in `lloom-calls-<model>.jsonl`. `--n`, `--negative-only`, `--min-size`, `--threshold`, `--nearest`, `--loops`. Writes concepts, scores and a report to `trials/runs/lloom-<settings>/` |
+| [ablate.py](lloom/ablate.py) | Cost controls: scores `sel-v1`'s round-0 candidates under one scoring variant (`--compact`, `--batch`, `--nearest`) and reports precision and recall against the gold labels |
+| [relabel.py](lloom/relabel.py), [mergelabels.py](lloom/mergelabels.py) | Carry a validated run's gold labels to a re-run of the same slice (concepts matched by name and criterion), then merge in blind labels for its new concepts |
+| [llm_cluster.py](extract/llm_cluster.py) | Embeds the kept statements and runs the production kNN graph and Leiden code on them, with a range cap (`--reach`, `--pull`) that sends outliers to Miscellaneous. Prints groups at several resolutions |
 
 Trials 3–8 used `llm_catalog.py`, `llm_features.py` and an agglomerative
 `llm_compare.py`. All three were removed on 2026-10-09 once trials 9–11
@@ -270,7 +280,7 @@ and vision-accessibility statements; cheque deposit failures filed under
 
 ### 12. LLooM steps end to end (newest 100 reviews, all stars)
 
-First run of the aligned design ([lloom.py](spike/lloom.py)), still on the
+First run of the aligned design ([lloom.py](lloom/lloom.py)), still on the
 local Qwen3.5 9B: quotes → bullets → UMAP + HDBSCAN → name and criterion →
 tidy (merge, mark general) → score every bullet against every concept → one
 loop over the leftovers. 100 reviews gave 268 complaint and 43 praise
@@ -326,7 +336,7 @@ exposes grab-bags directly: the merged concepts sit at 22–44%.
 
 ### 13. LLooM steps, revised prompts (same 100 reviews)
 
-Prompt changes in [lloom.py](spike/lloom.py), checked with `--dry` (stop
+Prompt changes in [lloom.py](lloom/lloom.py), checked with `--dry` (stop
 before scoring):
 
 - **Synthesize** returns one concept per specific problem in a cluster, with
@@ -445,8 +455,8 @@ loop failed to name, which at 100 reviews includes real one-offs.
 
 V2 failed G2 and G4 outright, and passing needed every gate on both
 held-out slices, so V3 was stopped before it ran. Scripts:
-[lloom.py](spike/lloom.py) (`--month`, `--prior`, `--overlap`) and
-[viability.py](spike/viability.py) (label sheets, gate scoring, the
+[lloom.py](lloom/lloom.py) (`--month`, `--prior`, `--overlap`) and
+[viability.py](lloom/viability.py) (label sheets, gate scoring, the
 production baseline).
 
 | Gate | V1 (in-sample) | V2 (held out) | Bar |
@@ -597,6 +607,375 @@ are kept out. What remains is model quality: scoring precision, quote
 fidelity and naming. On 2026-10-13 the method replaced embedding clustering
 in the pipeline (`pv issues`), with the model as a setting so that the
 OpenAI models can be tried next.
+
+## Cost controls (2026-10-13)
+
+The whole archive (17,948 reviews) through `pv issues` on GPT-5.4 nano + mini
+was estimated at about $3,500, nearly all of it scoring. Minting makes it
+grow with the square of the corpus: every candidate is scored against every
+point, and the candidates grow with the points. Seven controls were built
+into `pv issues` and the spike; the ones that change what the model is asked
+were re-validated on the local model.
+
+| Control | What it does | Status |
+|---|---|---|
+| `issues.mint_sample: 3000` | Form and select new issues on a random sample of the points; score only the kept ones on the rest (TopicGPT, TnT-LLM) | **On.** Inactive at slice size, so not exercised by the gates; it rests on the V1 → V2/V3 chain above, which validated assigning new points to a codebook built elsewhere |
+| `llm.batch` | Uncached requests of each step go through the OpenAI Batch API | **On for openai.** Same requests, half price. Checked live with a synthetic job (9 min) |
+| `llm.prices`, `llm.budget_usd` | Spend counted from each reply's token usage; a run stops before passing the budget | On. Checked live and with a mocked API |
+| `pv issues --estimate` | Calls, tokens and cost of a run, from the codebook's state and the trial rates | On |
+| `issues.min_cluster_share` | HDBSCAN minimum size grows with the points clustered | Off: with `mint_sample` the pool no longer grows |
+| `issues.compact_scores` | Scores as a bare list of letters instead of `{n, answer}` objects | **Failed** |
+| `issues.batch: 30` | 30 points per scoring call instead of 15 | **Failed** |
+| `issues.nearest: 10` | Score each point only against its 10 nearest concepts by embedding (production version fixed to compare candidates with each other, as the spike did) | **Not validated** |
+
+**Result.** With all three scoring controls on (`lloom.py --compact --batch
+30 --nearest 10`, run `cc-v1`), V1 precision fell from 63% to 35% (39 of 110
+matches; six concepts new to the run were labelled blind, one judged broad)
+and recall from 77% to 60%. The chain was stopped before V2 and V3. To
+separate the controls, [ablate.py](lloom/ablate.py) scored the 20 round-0
+candidates of `sel-v1` under each one alone, against the same gold labels
+(13 labelled concepts, 268 points), with no selection afterwards:
+
+| Scorer | Precision | Recall |
+|---|---|---|
+| Validated: 15 per call, `{n, answer}` | 60% (111/185) | 78% |
+| Compact letters | 50% (106/210) | 75% |
+| 30 per call | 52% (111/214) | 78% |
+| 10 nearest | 58% (103/177) | 73% |
+| All three | 48% (87/180) | 61% |
+
+Compact letters and longer lists both add false matches: the 9B model keeps
+its place in a list better when it writes each point's number. The nearest
+filter cannot add a false match by itself, so its 2-point precision change
+is the scorer answering differently in different company (each call's other
+points change), which puts run-to-run noise at a couple of points. Its
+recall loss (5 points; two-factor, sign-in loops, browser sign-in) is real:
+a point's right concept is not always among its 10 nearest by embedding.
+On a whole-archive codebook of hundreds of concepts, 10 nearest is a far
+tighter filter than at the 20 concepts tested here, so this test is a best
+case.
+
+The cheaper scoring settings were tested on Qwen3.5 9B only; GPT-5.4 nano
+may hold a longer or unnumbered list better. That is untested.
+
+**Cost with what passed** (estimate, ±2x, reasoning tokens not counted): 12
+months about $8 (was $15.50), whole archive about $80 (was $3,500). With
+all controls on it would be about $0.50 and $5.
+
+## OpenAI models, first check (2026-10-13): fails
+
+The first run with review text sent to OpenAI, on the user's go-ahead: the
+V1 points and some public reviews, about $2 in all.
+
+**Scorer.** [ablate.py](lloom/ablate.py) `--model`: `sel-v1`'s round-0
+candidates (written by the local model) scored by OpenAI models against the
+same gold labels, 15 points per call:
+
+| Scorer | Precision | Recall | Cost of 234 calls |
+|---|---|---|---|
+| Qwen3.5 9B, local (validated) | 60% | 78% | — |
+| GPT-5.4 nano, reasoning none | 32–36% | 80–84% | $0.06 |
+| nano, low | 38% | 89% | $0.13 |
+| nano, medium | 44% | 87% | $0.17 |
+| GPT-5.4 mini, none | 50% | 73% | $0.21 |
+| mini, low | 53% | 73% | $0.44 |
+
+The OpenAI models match too much. Most extra matches are real errors
+(camera crashes in ID checks under "Login requires repeated verification
+loops", sign-in failures under "App cannot be downloaded or installed",
+device trust under device support); a few follow loose criteria literally
+("fails suddenly", "unable to … access"). Answers vary between identical
+runs (nano at none: 36%, then 32%): no temperature or seed is sent, since
+these models take neither. Counting only A answers as matches does not
+close the gap.
+
+**End to end.** `pv issues` on the newest month (92 reviews, 307 complaint
+points), nano for the fast tier and mini for naming, reasoning low: runs in
+2.5 minutes for $0.47, three times the estimate, because reasoning tokens
+were most of the output. The codebook it built fails G4 outright: "Bank
+connection is difficult" (criterion: "the bank connection is difficult or
+the app asks for unnecessary bank access") passed nano's breadth check,
+took 104 points (two-factor, trusted devices, ID photos, missing savings),
+and selection then dropped the specific issues it overlapped (trusted
+device, sign-in, e-transfer). "App not compatible on devices" also joins
+"does not work" to compatibility. Five issues kept, two of them broad.
+
+Stopped there: G2 and G4 fail clearly. The local model stays the default.
+A lenient scorer breaks selection, since a vague concept that matches
+everything covers most points. What might change this, untested: mini (or a
+larger model) for scoring and the breadth check, prompts tuned for these
+models, and a coverage cap in selection.
+
+Also fixed: the model cache ignored request options, so changing
+`reasoning_effort` returned answers cached under the old setting. Options
+are now part of the key (left out when empty, so existing keys still match).
+
+### Tuning for both models (set 2026-10-14, before running)
+
+Reading nano's false matches on V1: most follow a loose criterion literally.
+"Cannot view account balance or access funds" took 37 sign-in, e-transfer
+and device-trust points because its criterion ends "or finds their funds
+missing/inaccessible"; "App cannot be downloaded or installed" took "cannot
+access" points. Qwen anchors on the concept's name and ignores the loose
+clause. Two scorer changes, each a general rule rather than a fix for these
+concepts:
+
+- **S1 anchor:** the SCORE prompt adds that the name sets the feature, and
+  that words in the criterion that fit any feature ("cannot access",
+  "fails") never make a point about another feature a match. The example
+  stays in food delivery.
+- **S2 feature first:** each answer carries a yes/no "is the point about the
+  concept's feature" written before the letter; a match needs yes and A or
+  B. A decomposed judgment, as in checklist evaluation.
+
+Rules against fitting either model:
+
+1. Tune on V1 only (`ablate.py`, 13 labelled concepts, 268 points). At most
+   these two variants and their combination; no rewording after seeing
+   per-concept results.
+2. The same prompt for both models. A variant is kept only if it raises
+   GPT precision and does not cost Qwen more than 3 points of precision or
+   recall on V1 (run-to-run noise is about 2).
+3. The kept variant is then run once on held-out V2 (`sel-v2`'s concepts and
+   labels) for both models. Gates unchanged: precision ≥ 60%, recall ≥ 60%.
+4. Then one end-to-end `pv issues` run on GPT if the scorer passes on V2,
+   judged for G4 as before.
+5. OpenAI spend capped at $3 for the whole round; nano first, mini only for
+   the final variant.
+
+### Result of the tuning: no variant kept (2026-10-14)
+
+V1, reasoning low, 234 calls each:
+
+| Scorer | Precision | Recall | Cost |
+|---|---|---|---|
+| nano, no change (earlier run) | 38% | 89% | $0.13 |
+| nano, S1 anchor | 43% | 88% | $0.13 |
+| nano, S2 feature first | 37% | 90% | $0.18 |
+| nano, S1 + S2 | 40% | 87% | $0.18 |
+| mini, no change (earlier run) | 53% | 73% | $0.44 |
+| mini, S1 anchor | 53% | 74% | $0.49 |
+
+Neither variant moves GPT beyond run-to-run noise, so by rule 2 neither is
+kept, the held-out and end-to-end steps were not run, and the Qwen runs of
+the variants were stopped unfinished (they could no longer change the
+decision). Spent: $0.98.
+
+**Where the gap is (read after the results, so a lead, not a finding).**
+Most of mini's extra matches fall on two of the three overlapping sign-in
+concepts, C013 "Two-factor authentication is broken or excessive" (38–41
+matched, 15–18 right) and C014 "Login requires repeated verification loops"
+(36–39 matched, 8 right). The labels give a sign-in point to one of them;
+mini gives it to several. Leaving those two out, on the other 11 concepts:
+
+| Scorer | Precision | Recall |
+|---|---|---|
+| Qwen3.5 9B | 63% (89/142) | 81% |
+| mini, low | 65% (81/124) | 74% |
+| mini, low, S1 | 68% (79/117) | 72% |
+| nano, low, S1 | 49% (99/201) | 90% |
+
+So mini is about Qwen's level on concepts that do not overlap, and nano is
+well below it everywhere. The ablation scores every candidate with no
+selection, which is where overlapping concepts cost a lenient scorer most;
+in the pipeline, selection keeps one of an overlapping set. Untested next
+steps, in order: mini for scoring and the breadth check end to end (about
+3.8 times nano's price: $0.49 against $0.13 for these 234 calls); then, if
+overlapping concepts still pass, a stricter join between candidates of the
+same round.
+
+## Port check: `pv issues` on V1 (2026-10-14): fails, and shows the pass was one draw
+
+Before the demo run (report-design D17), `pv issues` ran on Qwen over V1's
+100 reviews, complaints only, in a scratch data folder: 81 minutes in the
+model, 661 calls, scoring at 10.2 s a call (not the 7.6 s assumed in the
+demo estimate).
+
+Distill matched the spike exactly: the same 268 complaint points, all 268
+quotes exact. From clustering on, the result differs:
+
+| | Spike `sel-v1` (validated) | `pv issues` |
+|---|---|---|
+| Live issues | 11 | 7 |
+| Coverage | 44% | 42% |
+| Precision (live issues, V1 labels) | 63% | **45%** (63 of 140); 59% without C011 |
+| Sign-in issues kept | "Web browser login fails", two-factor | two-factor only |
+
+The fault is one catch-all. "App displays technical difficulties or lost
+connection" (criterion: "a technical difficulties message, an error message,
+or a lost connection message") passed the breadth check, took 43 points of
+which about 6 are that message (the rest are sign-in failures, crashes,
+downloads), and selection then dropped "Login access fails" (32), "Web
+login fails" (25) and "Sign in fails with repeated verification loops"
+(22). G2 and G4 fail; G7 (+2 on production's 43%) fails.
+
+**Why it differs from the spike.** Prompts are identical, requests carry the
+same options (temperature 0, seed 0, no thinking). The input order is not:
+the spike clusters points newest review first, the pipeline by review id.
+UMAP with a fixed seed still depends on input order. Clustering the same 268
+points in five random orders gave 20–24 clusters against the spike's 19,
+with adjusted Rand index 0.42–0.56 against the spike's clusters. So each
+validated slice (V1, V2, V3) was one draw from that spread, and this is a
+different draw that fails. The gates measured one outcome per slice, not
+how often the method passes.
+
+**What this means.** Not a port bug: a structural fault the gates could not
+see. The method is not stable under an arbitrary choice (input order), and
+the catch-all failure seen with GPT also happens with Qwen when the clusters
+fall differently. The 4-month demo run is not started. Fixes to consider
+before any more runs, structural first:
+
+1. Measure the spread: the same slice under several orders, gates reported
+   as a pass rate, not one number.
+2. Make the breadth check catch criteria that end in a generic clause ("an
+   error message", "does not work"), or check breadth by behaviour: a
+   candidate whose matches mostly lie outside its own cluster is broad.
+3. Make selection robust to one lenient concept, so a catch-all cannot
+   displace several specific issues it overlaps.
+
+**Literature check (2026-10-14, LLooM read in full this time).** The table
+under "Prior methods" was built from abstracts. The full LLooM paper
+foresees this failure and protects against it in ways we left out:
+
+- It states that "there is variability in the results upon re-run", that
+  its defaults "have not been robustly tested", and that nothing checks the
+  scores. Its technical evaluation ran **10 trials per method, each on
+  shuffled documents**; we ran one per slice.
+- It is **mixed-initiative**: analysts add, edit, merge and split concepts in
+  a workbench. Our pipeline has no person reviewing concepts.
+- It used GPT-4 to write concepts and GPT-3.5 to score; we use a 9B model
+  for both.
+- UMAP is our addition (from BERTopic), and BERTopic's FAQ warns that UMAP
+  makes results differ between runs. Agrawal, Fu & Menzies (2018) showed the
+  same "order effects" in LDA topic models (shuffling the input changes the
+  topics) and asked that studies test and mitigate topic instability.
+
+Sources: [LLooM, full text](https://arxiv.org/html/2404.12259v1);
+[BERTopic FAQ (mirror)](https://huggingface.co/kisejin/TopicModelingRepo/blob/main/BERTopic/docs/faq.md);
+[Agrawal et al., What is wrong with topic modeling?](https://arxiv.org/abs/1608.08176v2).
+
+## Embedding route: upgrade trials (set 2026-10-14, before running)
+
+An alternative to `pv issues`: the production embedding pipeline as it was
+before commit 25d794f (sentences, MiniLM, kNN graph, Leiden, c-TF-IDF
+titles), with each known fault fixed in code, and the model used only for
+calls over the whole issue list, **at most 20 per run**. It runs in minutes
+rather than hours. The code fixes are tried together as one stack against
+the same baseline, with drop-one ablations to show what each contributes;
+the model calls and persistence are then tried on the stack's output, and
+the result is run once on held-out data.
+
+**Data.** The demo window (report-design D17): the negative stream (★ ≤ 3,
+20+ characters) over 4 months. Dev: the window ending 2026-09-22, which
+holds V1. Held out: the window ending 2026-02-28, which holds V2. Segment
+vectors come from the cache (`segments` in `data/cache.db`).
+
+**Gold labels.** The V1 and V2 labels from the selection run
+(`sel-v1/labels.txt`, `sel-v2/labels.txt`) give each complaint point its
+issue, or G (general), U (specific, no issue) or N (not a complaint). A
+sentence takes the labels of every point whose quote it overlaps; a
+sentence that overlaps no point is X (not a complaint point). Each cluster
+is credited with the issue most of its labelled sentences carry, which is
+the best name it could have; naming is tested on its own (L1).
+
+**Measures** (V1 sentences only; each run in 5 shuffled input orders,
+reported as median and range):
+
+| Measure | Definition |
+|---|---|
+| P, precision | Of labelled sentences in issue clusters (not the general bucket or Miscellaneous), the share whose labels include the cluster's issue. G and X count as misses |
+| R, recall | Of points with an issue label, the share with a sentence in a cluster credited with that issue. Points in 4–5★ reviews count as missed |
+| Tone | Clusters with ≥ 3 labelled sentences, most of them G or X |
+| Grab-bags | Clusters with ≥ 5 labelled sentences and P below 50% |
+| Split | Issues credited to two or more clusters |
+| Stability | Adjusted Rand index between the 5 orders' clusterings of the whole window |
+
+Clusters whose labelled sentences are mostly U may be real issues the
+labels lack. They are listed and judged by hand, not scored.
+
+**Baseline (B0).** The old code (`cluster/`, `embed/segment.py`) restored
+in a spike, with the settings scaled to a window of about a thousand
+sentences: Leiden on a kNN graph (k 10), a target of 20–30 clusters,
+minimum size 5, cohesion floor 0.35, the general bucket (`vague.py`) on.
+The 2026-10-08 production run was the same code at corpus scale (G7: 43%).
+
+**The fixes**, in three groups. **S** (the code stack): U1–U4 and U6 all on
+at once, plus five drop-one runs (S without each fix), all on the dev
+window. **P**: U5 on the stack's clustering. **M**: L1 and L2 on the stack's
+clusters.
+
+| # | Fix | Main measure |
+|---|---|---|
+| U1 | Specificity score (word rarity, or Speciteller-style features): low scorers go to the general bucket before clustering | Tone, P |
+| U2 | Range cap (reach before clustering, pull after) and holding back clusters below the cohesion floor; quotes ranked by closeness to the centre instead of thumbs-up | P, grab-bags; precision of the top 5 quotes |
+| U3 | Duplicate clusters joined when their centres are close; parent links reported, never chained | Split, without P falling |
+| U4 | Sentiment per sentence over all stars, instead of the star stream | R, without P falling |
+| U5 | Persistence: issues frozen and matched by centre from month to month, Feb → Sep 2026; only unmatched clusters become new issues | V1 points of issues carried from V2 that land on the issue id born in Feb; no carried issue drifts |
+| U6 | Consensus clustering: co-association over many orders, then one clustering | Stability, without P or R falling |
+| L1 | Model names clusters in batches (≤ 12 calls) | Names judged to fit, against c-TF-IDF titles |
+| L2 | One call reviews the full issue list (duplicates, too broad); one call files issues into areas | Agreement of its flags with the measured duplicates and grab-bags; areas judged correct |
+
+**Rules, against fitting:**
+
+1. Tune on V1 only, at most 3 variants of the stack, every variant
+   reported.
+2. The stack is kept if it beats B0 by more than B0's spread across orders
+   on P or tone, without R falling more than 3 points (medians). A fix
+   stays in the stack only if dropping it worsens its main measure by more
+   than that spread, or costs P or R more than 3 points; otherwise it is
+   removed as dead weight. U5, L1 and L2 are judged on their own main
+   measures.
+3. The final stack, with whatever of U5, L1 and L2 passed, is run once on
+   the held-out window (V2).
+   Pass: P ≥ 60% and R ≥ 60% (the `pv issues` bars), at most one tone
+   cluster and one grab-bag, stability reported.
+4. A trial stops once its main measure clearly fails.
+5. Hand judgments (U clusters, L1 names, L2 areas) are made by Claude, a
+   larger model than the one under test, as in the viability test.
+
+### Result: the stack fails (2026-10-14). P and M not run
+
+Scripts in [trials/prellm/](prellm/) (`harness.py`, `stack.py`,
+`run_s.py`); write-up in `trials/runs/prellm/result-S.md`. Dev window:
+765 sentences from 294 reviews; 259 of V1's 268 points mapped exactly, 2
+fall in 4★ reviews, 7 are 2-word quotes the sentence splitter drops.
+
+| Run | P | R | Tone | Grab-bags | Split | Stability (ARI) |
+|---|---|---|---|---|---|---|
+| B0 | 31% (30–32) | 68% (66–71) | 8 | 15 | 5 | 0.84 |
+| Stack, all five | 42% | 59% | 5 | 6 | 5 | 0.94 |
+| **Final: U2 + U4 + U6** | **41% (39–41)** | **59% (57–60)** | **4** | 6 | 5 | 0.93 |
+
+Medians over 5 orders, ranges in brackets. Drop-one verdicts: U2 (range
+cap) stays, 7 points of P; quotes by closeness beat thumbs-up in every run,
+by 3–10 points. U4 (sentiment per sentence) stays on P (+4) but adds no
+recall, its main measure: neutral facts ("double authentication
+mandatory") are filtered out. U6 (consensus) stays on stability (0.86 →
+0.94). U1 (word rarity) is dropped: noisy, and tone was better without it.
+U3 (joining duplicates) is dropped: it made about one join per run and
+split did not move. Two of the three variants were used; the first broke
+because the range cap thinned the graph and the old resolution search then
+picked a setting that left most sentences in fragments.
+
+The stack beats B0 on P and tone, but loses 9 points of recall (rule 2
+allows 3), and P is 20 points below the 60% bar. Counting only sentences
+that are complaint points (X and N left out, closer to how `pv issues`
+precision was counted), P is 40% for B0 and 46% for the final stack. That
+is the port check's 45% for `pv issues`, at seconds instead of 81 minutes,
+but nowhere near the spike's 63% or the bar. Persistence (U5) and the model
+calls (L1, L2) cannot close that gap: neither changes which sentences sit
+in which cluster. So both were stopped (rule 4).
+
+**Why it fails.** A sentence of a raw review carries its topic words but
+not its problem, so the embedding still groups by topic: six of the final
+20 clusters are mostly general opinion ("RBC seems to be incompetent in
+every way"), and a "money" cluster mixes e-transfers, deposits and fees.
+This is the job distill did in trials 9–11 and `pv issues`, and no fix in
+code replaced it.
+
+Caveats: about 5 labelled sentences per cluster, so tone and grab-bag flags
+can turn on one sentence; one issue point is about 1 point of recall; all
+in-sample on V1.
 
 ## Production report review (2026-10-09)
 

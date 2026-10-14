@@ -9,9 +9,9 @@ again). Concepts are written to concepts.json with stable ids.
 
 Every model call goes through chat() and is cached by its full request, so a
 stopped run resumes and a repeated run is free. Output goes to
-out/llm-spike/lloom-<tag>/: concepts.json, bullets.jsonl and report.md.
+trials/runs/lloom-<tag>/: concepts.json, bullets.jsonl and report.md.
 
-    .venv/Scripts/python.exe -X utf8 spike/lloom.py --n 200
+    .venv/Scripts/python.exe -X utf8 trials/lloom/lloom.py --n 200
 """
 from __future__ import annotations
 
@@ -30,8 +30,8 @@ import numpy as np
 
 from product_view.embed.encoder import encode
 
-ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "out" / "llm-spike"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "trials" / "runs"
 OLLAMA = "http://127.0.0.1:11434/api/chat"
 SCALE = {"A": 1.0, "B": 0.75, "C": 0.5, "D": 0.25, "E": 0.0}
 
@@ -128,6 +128,50 @@ C: a near miss: the same feature with a different failure, or the same failure (
 D: about something else.
 E: a general opinion or feeling that names no specific feature or fault.
 Judge only what the point says. Sharing a word or a symptom is not enough: a crash while scanning an ID is C for a concept about crashes on older phones."""
+
+
+def strict(schema: dict) -> dict:
+    """The spike's schemas in the form OpenAI's strict structured outputs require: every
+    object closed, every property required (as issues/llm.py `obj` writes them)."""
+    if not isinstance(schema, dict):
+        return schema
+    out = {k: (strict(v) if isinstance(v, dict) else v) for k, v in schema.items()}
+    if "properties" in out:
+        out["properties"] = {k: strict(v) for k, v in out["properties"].items()}
+        out["required"] = list(out["properties"])
+        out["additionalProperties"] = False
+    return out
+
+
+class OpenAIModel:
+    """The same door onto an OpenAI model, through the pipeline's client (issues/llm.py):
+    cached in trials/runs/openai-cache.db, thread-safe. Reads OPENAI_API_KEY."""
+
+    def __init__(self, model: str, effort: str = "none", budget: float = 5.0):
+        from product_view.issues.llm import LLM, LLMConfig
+
+        self.model = model
+        self.llm = LLM(LLMConfig(provider="openai", fast=model, strong=model, temperature=None, seed=None,
+                                 options={"reasoning_effort": effort},
+                                 prices={"gpt-5.4-nano": (0.20, 1.25), "gpt-5.4-mini": (0.75, 4.50)},
+                                 budget_usd=budget),
+                       OUT / "openai-cache.db")
+        self.llm.check()
+
+    def chat(self, system: str, user: str, schema: dict) -> dict:
+        return self.llm.chat(system, user, strict(schema))
+
+    @property
+    def calls(self):
+        return self.llm.calls
+
+    @property
+    def hits(self):
+        return self.llm.hits
+
+    @property
+    def seconds(self):
+        return self.llm.seconds
 
 
 class Model:
@@ -334,15 +378,37 @@ def review(m: Model, concepts: Concepts, bullets, vecs, rnd: int) -> None:
 
 # ---- Score ---------------------------------------------------------------
 
-def score(m: Model, c: dict, bullets: list[dict], which: list[int], batch: int) -> dict[int, float]:
-    fmt = obj({"scores": arr(obj({"n": {"type": "integer"},
-                                  "answer": {"type": "string", "enum": list(SCALE)}}))})
-    system = SCORE.format(name=c["name"], criterion=c["criterion"])
+COMPACT = "\nAnswer with one letter per point, in the order of the points."
+
+
+# Tuning for both models (llm-trials.md, "Tuning for both models"); off by default.
+ANCHOR = """
+The name says which feature the concept is about. A point is A or B only if it is about that feature. Words in the criterion that fit any feature ("cannot access", "fails", "does not work") never make a point about another feature a match: a payment failure is D for "Driver map freezes", even though both stop working."""
+FEATURE = """
+For each point, first answer feature: "yes" if the point is about the feature the concept names (or a clear case of it), "no" otherwise. Then give the letter. A point with feature "no" can only be C, D or E."""
+
+
+def score(m: Model, c: dict, bullets: list[dict], which: list[int], batch: int,
+          compact: bool = False, anchor: bool = False, feature: bool = False) -> dict[int, float]:
+    item = {"n": {"type": "integer"}}
+    if feature:
+        item["feature"] = {"type": "string", "enum": ["yes", "no"]}   # written before the letter
+    item["answer"] = {"type": "string", "enum": list(SCALE)}
+    fmt = obj({"scores": arr(obj(item))})
+    system = SCORE + (ANCHOR if anchor else "") + (FEATURE if feature else "") + (COMPACT if compact else "")
+    system = system.format(name=c["name"], criterion=c["criterion"])
     out = {}
     for s in range(0, len(which), batch):
         chunk = which[s:s + batch]
         listing = "\n".join(f"{j}. {bullets[i]['bullet']}" for j, i in enumerate(chunk, 1))
-        got = {g["n"]: g["answer"] for g in m.chat(system, f"Points:\n{listing}", fmt)["scores"]}
+        if compact:
+            # --compact: a bare list of letters, in order, instead of {n, answer} objects
+            letters = obj({"answers": dict(arr({"type": "string", "enum": list(SCALE)}),
+                                           minItems=len(chunk), maxItems=len(chunk))})
+            got = dict(enumerate(m.chat(system, f"Points:\n{listing}", letters)["answers"], 1))
+        else:
+            got = {g["n"]: (g["answer"] if g.get("feature", "yes") == "yes" else max(g["answer"], "C"))
+                   for g in m.chat(system, f"Points:\n{listing}", fmt)["scores"]}
         for j, i in enumerate(chunk, 1):
             out[i] = SCALE.get(got.get(j, "E"), 0.0)  # an unanswered point counts as no match
     return out
@@ -365,7 +431,7 @@ def score_all(m, concepts, bullets, vecs, scores, args) -> None:
             which = sorted({i for i in range(len(bullets)) if col in near[i]} | set(c["built_from"]))
         else:
             which = list(range(len(bullets)))
-        got = score(m, c, bullets, which, args.batch)
+        got = score(m, c, bullets, which, args.batch, args.compact)
         scores[c["id"]] = [got.get(i) for i in range(len(bullets))]
         print(f"  score {k}/{len(todo)} {c['id']} {c['name']!r}: "
               f"{sum(1 for v in got.values() if v >= args.threshold)} match  {time.time() - t0:.0f}s")
@@ -601,11 +667,13 @@ def main() -> None:
     ap.add_argument("--threshold", type=float, default=0.75, help="score at or above this is a match (B = agree)")
     ap.add_argument("--nearest", type=int, default=0, help="score each bullet against its N nearest concepts only")
     ap.add_argument("--batch", type=int, default=15, help="bullets per scoring call")
+    ap.add_argument("--compact", action="store_true", help="scores as a bare list of letters (fewer output tokens)")
     ap.add_argument("--loops", type=int, default=1)
     ap.add_argument("--dry", action="store_true", help="stop after naming and tidying round 0; print the concepts")
     args = ap.parse_args()
     args.tag = (f"n{args.n}{'-neg' if args.negative_only else ''}-m{args.min_size}"
-                f"{'-near' + str(args.nearest) if args.nearest else ''}-t{args.threshold}-l{args.loops}")
+                f"{'-near' + str(args.nearest) if args.nearest else ''}-t{args.threshold}-l{args.loops}"
+                f"{'-b' + str(args.batch) if args.batch != 15 else ''}{'-compact' if args.compact else ''}")
 
     if args.month:
         args.tag = f"{args.month}-s{args.seed}-" + args.tag

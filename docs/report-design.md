@@ -40,7 +40,7 @@ and the next steps, written so a fresh session can start building.
   - LLM: only a company-approved internal model. *Revised 2026-10-08: a
     small model run locally (Qwen3.5 9B through Ollama) for compliance,
     pending approval. It groups issues as well as naming them
-    ([llm-trials.md](llm-trials.md)).*
+    ([llm-trials.md](../trials/llm-trials.md)).*
   - Then: **demo first, delivery infrastructure later.**
 - **Design canvas tried, then set aside.** A claude.ai Design canvas
   (link in §4) was mocked up with real data. It was first built as a manager
@@ -95,10 +95,11 @@ and the next steps, written so a fresh session can start building.
 | D14 | **Hand curation lives in `curation.yaml`,** keyed by **label**: kind (issue / mood / outcome / hide), areas, and **anchor reviews**. On every run a cluster takes the label whose anchors it holds (an anchor goes to the cluster it is the medoid of, else where its unit is most central); several clusters under one label merge, counted as distinct reviews | Demo stand-in for D6–D8. Cluster ids change whenever a scheduled run re-clusters; anchors survive that. An uncurated cluster keeps its extractive title, marked "auto-labelled", and is filed by area keywords |
 | D15 | **The report is a periodic overview** (decided 2026-10-03). It covers one period (default 28 days, ending on the newest review's day) against "usual": the mean of the 6 equal periods before it. Change is a Poisson test against that rate (p < 0.05, at least 3 reviews), not a ratio. Quotes come from the period. Clustering still spans all history | Negative reviews run at ~55–80 a month (15–20 a week), so a week leaves most issues at 0–3 reviews, and ratios on small counts mislead ("1 → 3 = ×3"). 28 days matches the release rhythm (4.64 Jun 9, 4.65 Jul 7, 4.66 Aug 11, 4.67 Sep 9). Clustering only the period's ~70 reviews would give a few unstable clusters; full history keeps definitions stable and the report counts the period's share |
 | D16 | **Issues are filed by product area; roles read areas.** Areas and roles live in `curation.yaml`. The hub shows every area; each role gets a child page with only its areas (e.g. the UI & design team never sees sign-in connectivity). An issue can sit in several areas; the first is where the hub files it | A team member should see only what their team can act on. The mapping is a view-level lookup, not stored in the data (D10), and editable without touching code |
+| D17 | **Demo standard (decided 2026-10-14): 4 months of issues, complaints only.** `pv issues` runs on the local Qwen3.5 9B over a 4-month window (about 390 reviews, ~6,600 calls, ~19 h at the 10 s a call measured in the port check); "usual" is the mean of 3 periods, not 6; the per-issue heatmap shows only the periods the issue window covers; praise issues are left out. The review-count trend keeps all 12 periods, since it reads reviews directly | Scoring cost grows with the square of the window: the full 12-month layout is ~53,000 calls (~110 h). Three baseline periods keep the change flags working on small counts. Praise prompts are not validated. A full window and 6 baseline periods return when runs are cheaper or scheduled (llm-trials.md, "Cost controls") |
 
 ## 3. Confluence building blocks (all confirmed by probe 2)
 
-Probe 2 source: [spike/build_confluence_probe_native.py](spike/build_confluence_probe_native.py).
+Probe 2 source: [trials/confluence/build_confluence_probe_native.py](../trials/confluence/build_confluence_probe_native.py).
 Live page: MFS / "PV probe 2: native macros" (page 294964).
 
 | Use | Storage element |

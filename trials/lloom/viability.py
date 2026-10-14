@@ -3,8 +3,8 @@
     sheet DIR   write DIR/label-sheet.md: the live concepts and every complaint point,
                 without the model's matches, for blind labelling
     score DIR   compare DIR/labels.txt with the model's matches; print gates G1-G6
-    prod        write the production baseline sheet for V1 (out/llm-spike/viab-prod-sheet.md)
-    prod-score  score out/llm-spike/viab-prod-labels.txt (gate G7)
+    prod        write the production baseline sheet for V1 (trials/runs/viab-prod-sheet.md)
+    prod-score  score trials/runs/viab-prod-labels.txt (gate G7)
 
 labels.txt, one entry per line ('#' starts a comment):
     concept C001 specific|broad|general     how a concept is judged
@@ -12,7 +12,7 @@ labels.txt, one entry per line ('#' starts a comment):
     12 C001 C014                             point 12 fits these concepts
     13 G | U | N                             general opinion | specific but uncovered | not a complaint
 
-    .venv/Scripts/python.exe -X utf8 spike/viability.py sheet out/llm-spike/viab-v1
+    .venv/Scripts/python.exe -X utf8 trials/lloom/viability.py sheet trials/runs/viab-v1
 """
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "out" / "llm-spike"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "trials" / "runs"
 
 
 def load(d: Path):

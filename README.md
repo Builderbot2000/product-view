@@ -1,7 +1,7 @@
 # Product View
 
 Group Google Play Store reviews into product issues with a language model,
-and publish them to Confluence. See [project.md](project.md) for the full plan.
+and publish them to Confluence. See [project.md](docs/Project.md) for the full plan.
 
 Reviews are scraped into a JSONL archive, loaded into SQLite and translated;
 a language model then picks out what each review complains about or praises
@@ -118,7 +118,7 @@ pv issues show --detail   # the codebook's live issues, criteria and example quo
 ```
 
 `pv issues` uses a language model (see "Choosing the model" below). Its
-method, and the test it passed, are in [llm-trials.md](llm-trials.md)
+method, and the test it passed, are in [llm-trials.md](trials/llm-trials.md)
 ("Viability test"):
 
 1. **Distill.** The model reads each review in the window (default: the last
@@ -161,12 +161,30 @@ llm:
   models: {fast: gpt-5.4-nano, strong: gpt-5.4-mini}   # fast: most calls; strong: naming issues
   max_workers: 16
   temperature: null                  # some API models only accept the default
-  options: {reasoning_effort: low}   # any extra request fields, passed through as given
+  options: {reasoning_effort: none}  # any extra request fields, passed through as given
+  batch: true                        # Batch API: half price, answers within 24 hours
+  prices: {gpt-5.4-nano: [0.20, 1.25], gpt-5.4-mini: [0.75, 4.50]}   # USD per 1M tokens
+  budget_usd: 20                     # stop before spending past this
 ```
 
-The OpenAI connector has been checked offline (request shape, structured
-output, key handling) but not yet against the live API. Sending review text
-to OpenAI still needs sign-off (llm-trials.md decision 7). The cache is keyed
+The OpenAI connector works against the live API (live calls and Batch API
+jobs), but the method **fails validation on GPT-5.4 nano and mini**: their
+scoring matches too much, and a first run built a catch-all issue that
+crowded out the specific ones (llm-trials.md, "OpenAI models, first check").
+Use the local model. Sending review text to OpenAI also still needs sign-off
+(llm-trials.md decision 7).
+
+**Cost.** `pv issues --estimate` prints the calls, tokens and cost a run would
+take, from the codebook's state and rates measured in the trials (about 2x
+either way). With the settings above, about $8 for the 12-month window and
+$80 for the whole archive. Scoring is nearly all of it. Forming new issues
+works on a sample of at most `issues.mint_sample` points, so cost grows with
+the corpus rather than its square (about $3,500 for the whole archive
+without it). Token use is counted from every reply, and `budget_usd` stops a
+run before it spends past the limit; answers already paid for stay cached.
+Three cheaper scoring settings exist but failed validation and are off:
+`compact_scores`, `batch: 30` and `nearest: 10` (llm-trials.md, "Cost
+controls"). The cache is keyed
 by model, so switching models re-runs every call instead of mixing answers;
 points are re-distilled too, and an existing codebook keeps its issues and
 re-scores the new points against them.
@@ -272,6 +290,12 @@ store histogram from `data/meta/` alongside it — a PM who cross-checks against
 listing and finds an unexplained gap will stop trusting the whole dashboard.
 
 ## Layout
+
+```
+docs/      the plan (Project.md), requirements.xlsx, report and old clustering design
+trials/    every experiment: the trial log (llm-trials.md), scripts by trial, runs/ (output, gitignored)
+src/       the pv package, below
+```
 
 ```
 src/product_view/

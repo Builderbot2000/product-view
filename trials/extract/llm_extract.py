@@ -2,10 +2,10 @@
 
 Samples negative reviews, asks a local model (Ollama) for the complaints each
 review contains, and caches the answers as JSONL keyed by review_id. This step
-only cuts and rewrites; it does not filter. Run spike/llm_refine.py next to
-apply the quality rules, then spike/llm_cluster.py to group the result.
+only cuts and rewrites; it does not filter. Run trials/extract/llm_refine.py next to
+apply the quality rules, then trials/extract/llm_cluster.py to group the result.
 
-    .venv/Scripts/python.exe -X utf8 spike/llm_extract.py --n 200 --recent
+    .venv/Scripts/python.exe -X utf8 trials/extract/llm_extract.py --n 200 --recent
 """
 from __future__ import annotations
 
@@ -19,8 +19,8 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "out" / "llm-spike"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "trials" / "runs"
 OLLAMA = "http://127.0.0.1:11434/api/chat"
 PROMPT_VERSION = 4
 
