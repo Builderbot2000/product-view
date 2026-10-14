@@ -148,10 +148,13 @@ def issue_config(args: argparse.Namespace):
         min_chars=args.min_chars,
         sides=tuple(sec["sides"]),
         min_cluster_size=sec["min_cluster_size"],
+        min_cluster_share=sec["min_cluster_share"],
         threshold=sec["threshold"],
         loops=sec["loops"],
         batch=sec["batch"],
+        compact_scores=sec["compact_scores"],
         nearest=sec["nearest"],
+        mint_sample=sec["mint_sample"],
         join=sec["join"],
         overlap_cost=sec["overlap_cost"],
         concept_cost=sec["concept_cost"],
@@ -174,6 +177,14 @@ def cmd_issues(args: argparse.Namespace) -> int:
 
     cfg = issue_config(args)
     llm = open_llm(args)
+    if getattr(args, "estimate", False):
+        path = Path(args.data_dir) / "issues.db"
+        try:   # an estimate never creates the codebook
+            with _open(args) as store, Codebook(path if path.exists() else Path(":memory:")) as book:
+                pipeline.estimate(store, book, llm, cfg)
+        finally:
+            llm.close()
+        return 0
     try:
         llm.check()
         with _open(args) as store, Codebook(Path(args.data_dir) / "issues.db") as book:
@@ -183,7 +194,7 @@ def cmd_issues(args: argparse.Namespace) -> int:
         return 1
     finally:
         print(f"\nmodel calls: {llm.calls} made, {llm.hits} from cache, "
-              f"{llm.seconds / 60:.1f} min in the model")
+              f"{llm.seconds / 60:.1f} min in the model; {llm.spend()}")
         llm.close()
     print("\ninspect with: pv issues show")
     return 0
@@ -269,6 +280,8 @@ def add_parsers(sub, common, add_fetch_options) -> None:
         "issues", help="group what reviews say into issues, kept in the codebook (issues.db)")
     common(p_is)
     add_issue_options(p_is)
+    p_is.add_argument("--estimate", action="store_true",
+                      help="print the calls, tokens and cost a run would take, and stop")
     p_is.set_defaults(func=cmd_issues)
     is_sub = p_is.add_subparsers(dest="issues_command")
     p_show = is_sub.add_parser("show", help="list the codebook's live issues")

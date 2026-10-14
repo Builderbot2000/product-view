@@ -49,10 +49,13 @@ DEFAULTS: dict[str, Any] = {
         "window_months": 12,     # reviews this recent are distilled and grouped
         "sides": ["complaint", "praise"],
         "min_cluster_size": 4,   # HDBSCAN on the uncovered points
+        "min_cluster_share": 0.0,  # min size at least this share of the points clustered; 0: off
         "threshold": 0.75,       # a score at or above this is a match
         "loops": 1,              # rounds of minting from leftovers per run
         "batch": 15,             # points per scoring call
+        "compact_scores": False,  # scores as a bare list of letters (fewer output tokens)
         "nearest": 0,            # score a point only against its N nearest concepts; 0: all
+        "mint_sample": 0,        # form and select new issues on at most this many points; 0: all
         "join": 0.7,             # definition similarity at which a join with a live issue is checked
         "overlap_cost": 1.0,     # selection: cost of each repeated match
         "concept_cost": 2.0,     # selection: cost of each concept kept
@@ -69,6 +72,12 @@ DEFAULTS: dict[str, Any] = {
         "timeout": 600,
         "retries": 5,
         "options": {},           # extra request fields, passed through as given
+        "batch": False,          # openai: send uncached requests through the Batch API (half price)
+        "batch_requests": 10000,  # requests per batch job
+        "batch_jobs": 4,         # batch jobs in flight at once
+        "poll_seconds": 30,
+        "prices": {},            # model -> [input, output] USD per 1M tokens
+        "budget_usd": None,      # stop before spending past this; None: no limit
     },
     # `pv report`: a periodic overview, not all of history (report-design.md
     # D15). The period ends on the newest review's day; the baseline is the
@@ -145,7 +154,7 @@ def _merge(base: dict, user: dict, prefix: str, source: Path) -> None:
             known = ", ".join(f"{prefix}{k}" for k in base)
             raise ConfigError(f"{source}: unknown key {dotted!r} (expected one of: {known})")
         # Mappings whose keys are data, not schema.
-        if isinstance(base[key], dict) and dotted not in ("llm.models", "llm.options"):
+        if isinstance(base[key], dict) and dotted not in ("llm.models", "llm.options", "llm.prices"):
             if not isinstance(value, dict):
                 raise ConfigError(f"{source}: {dotted!r} must be a mapping")
             _merge(base[key], value, prefix=f"{dotted}.", source=source)

@@ -27,13 +27,18 @@ corpus:
 # `pv issues`: what reviews say, grouped into issues kept in data/issues.db.
 # Method and its validation: llm-trials.md ("Viability test").
 issues:
-  window_months: 12        # reviews this recent are distilled and grouped
-  sides: [complaint, praise]
+  window_months: 4         # reviews this recent are distilled and grouped (demo standard, report-design D17; 12 for the full layout)
+  sides: [complaint]       # praise prompts are not validated; add praise back once they are
   min_cluster_size: 4      # HDBSCAN on the points no issue covers yet
   threshold: 0.75          # a score at or above this counts as a match
   loops: 1                 # rounds of forming new issues per run
-  batch: 15                # points per scoring call
-  nearest: 0               # score a point only against its N nearest issues; 0: all
+  batch: 15                # points per scoring call (30 failed validation: precision -8 points)
+  compact_scores: false    # scores as a bare list of letters (failed validation: precision -10 points)
+  nearest: 0               # score a point only against its N nearest issues; 0: all (10: recall -5 points, not validated)
+  # Form and select new issues on a random sample of at most this many points, then
+  # score only the kept ones on the rest: keeps the cost linear in the corpus. Has
+  # no effect while a side has fewer points (12 months: about 2,600 complaints).
+  mint_sample: 3000
   join: 0.7                # definition similarity at which a join with an existing issue is checked
   overlap_cost: 1.0        # selection: cost of each repeated match
   concept_cost: 2.0        # selection: cost of each issue kept
@@ -53,13 +58,19 @@ llm:
   #   models: {fast: gpt-5.4-nano, strong: gpt-5.4-mini}
   #   max_workers: 16
   #   temperature: null
-  #   options: {reasoning_effort: low}   # passed through to the request as given
+  #   options: {reasoning_effort: none}  # passed through as given; reasoning is billed as output
+  #   batch: true                        # Batch API: half price, answers within 24 hours
+  #   prices:                            # USD per 1M tokens [input, output]; confirm on openai.com
+  #     gpt-5.4-nano: [0.20, 1.25]
+  #     gpt-5.4-mini: [0.75, 4.50]
+  #   budget_usd: 20                     # stop before spending past this; the cache keeps progress
+  # `pv issues --estimate` prints the calls, tokens and cost of a run before it starts.
 
 # `pv report`: a periodic overview. Negative reviews run at ~55-80 a month,
 # so a period much shorter than 4 weeks leaves most issues at 0-3 reviews.
 report:
   period_days: 28          # the reporting period, ending on the newest review's day
-  baseline_periods: 6      # "usual" = mean of this many equal periods before it
+  baseline_periods: 3      # "usual" = mean of this many equal periods before it (demo standard D17; 6 with a 12-month window)
   curation: curation.yaml  # areas and roles
   app_name: RBC Mobile     # hub title: "Product View @ <app_name>"; null: the app id
 

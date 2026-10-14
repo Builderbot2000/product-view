@@ -87,6 +87,10 @@ D: about something else.
 E: a general opinion or feeling that names no specific feature or fault.
 Judge only what the point says. Sharing a word or a symptom is not enough: a crash while scanning an ID is C for a concept about crashes on older phones."""
 
+# Appended to SCORE / SCORE_PRAISE when scores come back as a bare list of
+# letters (issues.compact_scores) instead of {n, answer} objects.
+COMPACT = "\nAnswer with one letter per point, in the order of the points."
+
 # --- praise (not yet validated) ------------------------------------------------
 
 SYNTHESIZE_PRAISE = """You find the specific things users like in a group of points taken from reviews of a mobile app.
