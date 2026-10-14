@@ -1274,6 +1274,127 @@ difficulties", "something went wrong") were taken from this app's reviews; the
 V3 labels were written by the same agent that built the method. A key written
 by a team member would be the independent check.
 
+## Embedding route, round 6: symptom and cause (set 2026-10-14, before running)
+
+Kevin chose option 2 of the handoff (docs/handoff-2026-10-14.md). Diagnosis on V3
+(now development data): in the "can't log in" grab-bag, the sentences the key
+files under another cause share a review with a sentence in that cause's
+cluster ("I can't log in" beside "it keeps saying to update when there is no
+update"); the sentences with no such neighbour are sign-in failures. In order 0,
+moving the co-occurring ones takes the cluster from 33% to 80%.
+
+Established method: implicit-aspect identification by co-occurrence association
+rules (Hai, Chang & Kim 2011; the "context-sensitive" variant picks the related
+explicit aspect from the same review). A unit that only gives a symptom takes
+its aspect from the cause it co-occurs with. Adapted here from words to clusters:
+
+- **C (cause attribution):** over the window's reviews, a rule S → C between two
+  kept issue clusters holds when at least 3 reviews contain both, conf(S → C) =
+  n(S, C) / n(S) ≥ 0.15 and lift ≥ 2. A unit of S whose own review has a unit in
+  C moves to C (the highest-confidence rule when several hold). S stays as an
+  issue with the rest of its units; the report shows S → C as a parent link.
+  Which side is the symptom:
+  - **Ca (code only):** S is the side with the lower conf in the reverse direction
+    (conf(S → C) > conf(C → S)), and at least 25% of S's reviews contain another
+    kept cluster.
+  - **Cb (model check):** one call per candidate pair, on 6 reviews containing
+    both: is one a consequence of the other, or are they independent?
+- **N (neutral wording):** the review prompts lose "worst bank" and "switching
+  banks", S2's example phrases are replaced by wording not taken from this app,
+  and the old set-aside's word list loses "rbc", "royal", "canada", "canadian".
+- **GPU embedding:** Ollama `qwen3-embedding:0.6b` for texts not already cached.
+  Checked against the CPU vectors on 200 V1 units: same-text cosine 0.9997
+  (min 0.997), top-10 neighbour overlap 96%.
+
+Screening (diagnostic): C applied to the saved round 5 labels on V1, V2, V3.
+Variants (full runs on V1, V2): v1 = round 5 v2 + N + Ca; v2 = + N + Cb; drop-one N.
+Development criteria: on V3, grab-bags ≤ 1 with P and R ≥ 60% in ≥ 4 of 5
+orders; on V1 and V2, median P and R no more than 3 points below round 5 v2,
+grab-bags and tone no higher.
+
+Held out: **V4**, 100 reviews drawn (seed 0) from September–October 2025, window
+July–October 2025: the newest window overlapping no earlier slice's (October
+alone has 61 reviews, so the draw takes the window's last two months, as V1
+spans two). 229 units of 86 reviews labelled blind before any run, every unit
+(`trials/runs/prellm/v4/labels.txt`, sha256 `b9122b3dbff480c8…`, labeller
+Claude, by cause as V3). The bundle runs once; pass bar as before (all four
+gates, ≥ 4 of 5 orders).
+
+### Result: passes on development, fails on held-out V4 (2026-10-14)
+
+Changes made on development data after the criteria were set (all method
+settings, no gate or rule changed):
+
+- C's candidate test: lift ≥ 2 never fired on V3's sign-in cluster. In an
+  incident month each cause is common and split over several clusters (the
+  update loop sat in three), so lift stays at 1.7–1.9 on real links. Replaced by
+  a one-sided Fisher exact test, p ≤ 0.05 (significant association rules, Webb
+  2007), and conf ≥ 0.10.
+- N's first wording dropped "technical issues" from the error-message example;
+  on V2 a "technical issues / glitches" cluster was then kept (P 48.5%, grab-bags
+  4: fails the development criteria). Reworded as the generic category
+  ("a generic error, glitch or outage message (technical issues, an error
+  occurred, try again later)"). Variant r6v2 is r6v1 with that wording.
+- Screen on saved round 5 labels: Cb (model check per pair) gave no gain on V3
+  (2/5), so it got no full run.
+
+| Run | Slice | P | R | Tone | Grab-bags | ARI | Pass |
+|---|---|---|---|---|---|---|---|
+| Round 5 v2 | V1 | 68% | 59% | 0 | 1 | 0.87 | 1/5 |
+| **r6v2** | V1 | 69% (67–70) | 62% (60–64) | 0 | 1 (1–2) | 0.88 | 3/5 |
+| r6v2 − N | V1 | 67% | 58% | 0 | 1 | 0.87 | 1/5 |
+| Round 5 v2 | V2 | 52% | 61.5% | 1 | 3 | 0.78 | 0/5 |
+| **r6v2** | V2 | 52% (46–53) | 61.5% (46–65) | 1 (1–3) | 3 (2–4) | 0.65 | 0/5 |
+| Round 5 v2 | V3 | 70% | 67% | 0 | 2 | 0.87 | 2/5 |
+| **r6v2** | V3 | 72% (71–76) | 70% (61–78) | 0 | 1 (0–1) | 0.87 | **5/5** |
+| **r6v2, held out** | **V4** | **53% (50–57)** | **54% (49–61)** | 0 (0–1) | 3 (2–5) | 0.81 | **0/5: fail** |
+
+Development criteria met (V3 ≥ 4/5; V1 and V2 no worse), with V2 less stable
+than before (ARI 0.65 against 0.78). V4: 841 units, embedded on the GPU in
+100 s, 6 minutes for 5 orders.
+
+Content check, V3: the sign-in cluster loses its update-loop and device
+sentences to their causes ("It wont let me log in" beside "still says I need to
+update") and keeps the sign-in failures; the remaining grab-bag is a coherent
+"forced update" cluster the key partly files under device support. V1's cost:
+"cannot complete verification when I e-transfer" moved from verification to
+e-transfer; C moves a sentence that names its own cause too.
+
+Content check, V4 (a calm window with many small issues; C made 2–4 rules and
+moved 12–23 units, so it is not the fault):
+
+- Real grab-bags: balance display + cheque hold + exchange-rate converter;
+  adding recipients + "Android 16" + unsubscribing; assorted credit-card
+  complaints. The band (35–50 clusters before the review) forces small issues
+  together in a window this size.
+- Fragmentation: verification and trusted devices split over four clusters;
+  device support over four.
+- Recall binds: missed issue sentences went to the general bucket (5 device
+  support), Miscellaneous (update loop, adding a payee, crashes) or the wrong
+  fragment.
+- Key artifact: "identity verification fails" and "can't activate the virtual
+  Visa" form coherent clusters, but each is in one sampled review, so the U rule
+  scores them wrong (the X problem of V1/V2 in another form). Diagnostic only,
+  U left out: P 62–71%, grab-bags 1–2, R still 49–61%: fails on recall alone.
+
+Checks requested after the run (scratch scripts, no GPU):
+
+- **Bootstrap over reviews** (1,000 resamples, 90% intervals of the medians):
+  V3 P 69–81%, R 66–79%, grab-bags 0–3, pass rule met in 46% of resamples; V1
+  P 60–78%, R 53–70%, 31%; V4 P 46–65%, R 49–66%, grab-bags 1–4, 0%. On ~220
+  labelled units a 5/5 pass is itself a coin toss; the grab-bag gate is the
+  noisiest.
+- **Size test of C** (round 5's V3 labels, before any move; reviews subsampled,
+  clustering fixed): rules 3.6 at 25% of reviews, 8.6 at 50%, 12 at 100%; units
+  moved 3.7%, 5.5%, 6.4%. The rule count grows with volume and does not level
+  off: the significance test needs an effect-size floor before larger windows.
+
+V4 is spent. Round 6 ends without a pass; the faults left, most severe first:
+granularity fixed regardless of window size (grab-bags and fragments in calm
+windows), recall lost to the general bucket and Miscellaneous, the cause step's
+volume dependence, and the key's U rule for issues rare in the sample (a rule
+question for Kevin).
+
 ## Production report review (2026-10-09)
 
 The latest production runs (2026-10-08) and the report built from them

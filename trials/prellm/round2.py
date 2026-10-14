@@ -51,6 +51,9 @@ class R2Options:
     context: bool = False           # S3: embed each unit with its neighbouring units (contextual chunks)
     second_look: bool = False       # W6:a second review on members spread across the cluster; a
                                     # cluster stays specific only if both reviews say so (self-consistency)
+    neutral: bool = False           # N: no wording taken from this app in prompts or the set-aside
+    cause: str = ""                 # C: symptom units join the cause cluster their review names;
+                                    # "code" (Ca, asymmetric confidence) or "model" (Cb, one call per pair)
 
     def drop(self, fix: str) -> "R2Options":
         if fix in ("W1", "W2"):
@@ -81,14 +84,34 @@ def embed(texts, instruction: str = INSTRUCTION) -> np.ndarray:
     todo = sorted({t for t in texts if key(t) not in have}, key=len)
     if todo:
         t0 = time.perf_counter()
-        v = _embedder().encode(todo, prompt=f"Instruct: {instruction}\nQuery: ", batch_size=16,
-                               normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False)
+        if os.environ.get("PRELLM_CPU_EMBED") == "1":
+            v = _embedder().encode(todo, prompt=f"Instruct: {instruction}\nQuery: ", batch_size=16,
+                                   normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False)
+        else:
+            v = embed_gpu(todo, instruction)
         for t, x in zip(todo, v):
             have[key(t)] = x.astype(np.float32)
         ks = sorted(have)
         np.savez(path, keys=np.array(ks), vecs=np.stack([have[k] for k in ks]))
         print(f"  embedded {len(todo)} new texts in {time.perf_counter() - t0:.0f}s", flush=True)
     return np.ascontiguousarray(np.stack([have[key(t)] for t in texts]), dtype=np.float32)
+
+
+GPU_EMBEDDER = "qwen3-embedding:0.6b"
+
+
+def embed_gpu(texts: list[str], instruction: str) -> np.ndarray:
+    """The same model served by Ollama on the GPU (same-text cosine with the CPU build
+    0.9997 on 200 V1 units), so new texts join the CPU cache."""
+    import urllib.request
+    out = []
+    for i in range(0, len(texts), 64):
+        body = json.dumps({"model": GPU_EMBEDDER,
+                           "input": [f"Instruct: {instruction}\nQuery: {t}" for t in texts[i:i + 64]]}).encode()
+        req = urllib.request.Request("http://localhost:11434/api/embed", body, {"Content-Type": "application/json"})
+        out.append(np.array(json.load(urllib.request.urlopen(req, timeout=600))["embeddings"], dtype=np.float32))
+    v = np.vstack(out)
+    return v / np.linalg.norm(v, axis=1, keepdims=True)
 
 
 def nn3(vectors: np.ndarray) -> np.ndarray:
@@ -154,6 +177,30 @@ REVIEW_OWNER2 = REVIEW_OWNER.replace(
     '- "sorry, something went wrong" / "always technical issues" / "error every time I open it, no '
     'idea why" -> broad\n- "app is so buggy" / "constant errors"')
 
+# Round 6, N: REVIEW_OWNER2 with nothing taken from this app: no banking words, and the
+# error-message examples reworded as the generic category (the first rewording dropped
+# "technical issues", generic English, and let that cluster through on V2).
+REVIEW_OWNER3 = REVIEW_OWNER.replace("switching banks", "switching to a competitor").replace(
+    "or got worse after updates; reinstalling did not fix it)",
+    "or got worse after updates; reinstalling did not fix it; a generic error, glitch or outage "
+    "message (technical issues, an error occurred, try again later) with no screen or action named)").replace(
+    '- "app is so buggy" / "constant errors"',
+    '- "oops, an error occurred" / "always technical issues" / "error pops up every time, no idea why" '
+    '-> broad\n- "app is so buggy" / "constant errors"')
+
+BRAND_WORDS = {"rbc", "royal", "canada", "canadian"}
+
+
+def vague_neutral(w: H.Window) -> np.ndarray:
+    """The old set-aside without this app's brand words and banking anchor (round 6, N)."""
+    from trials.prellm.legacy import vague as V
+    generic = V.GENERIC_WORDS - BRAND_WORDS
+    anchors = [a.replace("switching banks", "switching to a competitor") for a in V.ANCHORS]
+    near = (w.vectors @ np.asarray(H.encode(anchors), dtype=np.float32).T).max(axis=1) >= V.ANCHOR_SIMILARITY
+    n_content = np.array([sum(1 for t in V._TOKEN.findall(x.lower())
+                              if t not in generic and t.split("'")[0] not in generic) for x in w.texts])
+    return (n_content == 0) | (near & (n_content <= V.MAX_CONTENT_WORDS))
+
 
 @lru_cache(maxsize=1)
 def _llm():
@@ -168,7 +215,8 @@ def review_clusters(w: H.Window, labels: np.ndarray, shown: int, how: str = "two
     from product_view.issues.llm import Req, enum, obj
     prompt, answers = {"breadth": (REVIEW_BREADTH, ("specific", "broad", "general")),
                        "owner": (REVIEW_OWNER, ("specific", "broad", "general")),
-                       "owner2": (REVIEW_OWNER2, ("specific", "broad", "general"))}.get(
+                       "owner2": (REVIEW_OWNER2, ("specific", "broad", "general")),
+                       "owner3": (REVIEW_OWNER3, ("specific", "broad", "general"))}.get(
         how, (REVIEW, ("specific", "general")))
     cents = H.centres(w, labels)
     ids = sorted(cents)
@@ -231,7 +279,7 @@ def contextual_texts(w: H.Window, end: str) -> list[str]:
 
 def prepare(end: str, opts: R2Options) -> Prepared:
     base = window(end, opts)
-    vague = H.vague_mask(base)
+    vague = vague_neutral(base) if opts.neutral else H.vague_mask(base)
     cfg, so, mapping = H.ClusterConfig(band=opts.band), opts.stack, {}
     if not opts.w1:
         return Prepared(base, vague, cfg, so, mapping)
@@ -368,8 +416,100 @@ def cluster(p: Prepared, order_seed: int, opts: R2Options) -> tuple[np.ndarray, 
         info["w4_reassigned"] = int(ok.sum())
     if opts.unit_verdicts and opts.w2 and reviewed:
         labels, info["w5"] = unit_verdicts(w, labels, before, verdict, p.vague, so.pull, opts.rescue_bar)
+    if opts.cause:
+        labels, info["cause"] = attribute_causes(w, labels, opts.cause)
     labels = H.canonical(labels)
     return labels, info
+
+
+# ------------------------------------------------------------------- C ----
+
+CAUSE = """You see two groups of sentences from reviews of a mobile app, then reviews that contain a sentence from both groups. Decide how the two problems relate. Pick one answer:
+a_from_b: what group A describes is what the user sees because of the problem in group B (B is the cause).
+b_from_a: what group B describes is what the user sees because of the problem in group A (A is the cause).
+independent: two separate problems that happen to be mentioned in the same review.
+
+Examples from another domain:
+- A "can't place an order" / B "the app says my phone is no longer supported" -> a_from_b
+- A "driver map freezes" / B "promo code rejected" -> independent"""
+
+
+def attribute_causes(w: H.Window, labels: np.ndarray, how: str, min_sup: int = 3,
+                     min_conf: float = 0.10, max_p: float = 0.05, min_share: float = 0.25):
+    """C: co-occurrence association rules between kept clusters over the window's reviews
+    (implicit-aspect identification, Hai et al. 2011, with clusters for aspects). For a
+    rule S -> C, where S is the symptom side, the units of S whose own review has a unit
+    in C move to C; S keeps the rest and the rule is reported as a parent link. A pair is
+    a candidate when the reviews with both are more than chance allows (one-sided Fisher
+    exact test, Webb 2007): in an incident month a cause is common, so lift stays low."""
+    from scipy.stats import fisher_exact
+    kept = sorted(int(l) for l in np.unique(labels) if l >= 0)
+    if len(kept) < 2:
+        return labels, {"rules": []}
+    by_review: dict[str, set[int]] = {}
+    for rid, l in zip(w.review_id.tolist(), labels.tolist()):
+        if l >= 0:
+            by_review.setdefault(rid, set()).add(int(l))
+    n_rev = len(by_review)
+    n = {l: sum(l in s for s in by_review.values()) for l in kept}
+    shared = {l: sum(l in s and len(s) > 1 for s in by_review.values()) / n[l] for l in kept}
+    both = {}
+    for s in by_review.values():
+        for a in s:
+            for b in s:
+                if a != b:
+                    both[(a, b)] = both.get((a, b), 0) + 1
+    conf = {k: v / n[k[0]] for k, v in both.items()}
+    lift = {k: conf[k] / (n[k[1]] / n_rev) for k in both}
+    def p_value(a, b):
+        v = both[(a, b)]
+        return fisher_exact([[v, n[a] - v], [n[b] - v, n_rev - n[a] - n[b] + v]], alternative="greater")[1]
+    cand = [(a, b) for (a, b), v in both.items() if a < b and v >= min_sup and p_value(a, b) <= max_p]
+    rules = []                           # (symptom, cause)
+    if how == "code":
+        for a, b in cand:
+            s, c = (a, b) if conf[(a, b)] > conf[(b, a)] else (b, a)
+            if conf[(s, c)] >= min_conf and shared[s] >= min_share:
+                rules.append((s, c))
+    else:
+        from product_view.issues.llm import Req, enum, obj
+        cents = H.centres(w, labels)
+        reqs = []
+        for a, b in cand:
+            def top(l, k=4):
+                m = np.flatnonzero(labels == l)
+                return m[np.argsort(-(w.vectors[m] @ cents[l]), kind="stable")[:k]]
+            rids = sorted(rid for rid, s in by_review.items() if a in s and b in s)[:6]
+            pair = []
+            for rid in rids:
+                m = np.flatnonzero(w.review_id == rid)
+                ta = " / ".join(" ".join(w.texts[i].split())[:150] for i in m if labels[i] == a)
+                tb = " / ".join(" ".join(w.texts[i].split())[:150] for i in m if labels[i] == b)
+                pair.append(f"- A: {ta}\n  B: {tb}")
+            body = ("Group A:\n" + "\n".join(f"- {' '.join(w.texts[i].split())[:150]}" for i in top(a)) +
+                    "\n\nGroup B:\n" + "\n".join(f"- {' '.join(w.texts[i].split())[:150]}" for i in top(b)) +
+                    "\n\nReviews with both:\n" + "\n".join(pair))
+            reqs.append(Req(CAUSE, body, obj({"answer": enum("a_from_b", "b_from_a", "independent")})))
+        got = _llm().run(reqs, label="cause check") if reqs else []
+        for (a, b), g in zip(cand, got):
+            s, c = {"a_from_b": (a, b), "b_from_a": (b, a)}.get(g["answer"], (None, None))
+            if s is not None and conf[(s, c)] >= min_conf:
+                rules.append((s, c))
+    causes: dict[int, list[int]] = {}
+    for s, c in rules:
+        causes.setdefault(s, []).append(c)
+    out = labels.copy()
+    moved = 0
+    for i in np.flatnonzero(labels >= 0):
+        s = int(labels[i])
+        here = by_review.get(w.review_id[i], set())
+        opts_ = [c for c in causes.get(s, []) if c in here]
+        if opts_:
+            out[i] = max(opts_, key=lambda c: (conf[(s, c)], -c))
+            moved += 1
+    return out, {"candidates": len(cand), "rules": [dict(symptom=s, cause=c, conf=round(conf[(s, c)], 3),
+                                                         lift=round(lift[(s, c)], 2), reviews=both[(s, c)])
+                                                    for s, c in rules], "moved": moved}
 
 
 # ------------------------------------------------------------------ runs ----
@@ -412,14 +552,23 @@ VARIANTS = {
     "r5v3": R2Options(stack=replace(S.FINAL, u2=False, u4=False, runs=100), review="owner2", merge=0.45,
                       band=(35, 50), reassign=False, unit_verdicts=True, second_look=True, rescue_bar="member",
                       context=True),
+    # round 6, v1: round 5 v2 + N (neutral wording) + Ca (symptom units join the cause cluster
+    # their review names; rules by co-occurrence, code only)
+    "r6v1": R2Options(stack=replace(S.FINAL, u2=False, u4=False, runs=100), review="owner3", merge=0.45,
+                      band=(35, 50), reassign=False, unit_verdicts=True, second_look=True, rescue_bar="member",
+                      neutral=True, cause="code"),
 }
+# round 6, v2: v1 with N's error-message wording fixed (v1 ran with the first wording, which
+# dropped "technical issues"); the options are the same, the prompt text differs
+VARIANTS["r6v2"] = VARIANTS["r6v1"]
 
 
 def configs(base: R2Options, names: set[str]):
     drops = [("W1", base.drop("W1")), ("W2", base.drop("W2")), ("W3", replace(base, merge=0.45)),
              ("W4", replace(base, reassign=False)), ("band", replace(base, band=(20, 30))),
              ("W5", replace(base, unit_verdicts=False)), ("W6", replace(base, second_look=False)),
-             ("U2", base.drop("U2")), ("U4", base.drop("U4")), ("U6", base.drop("U6"))]
+             ("U2", base.drop("U2")), ("U4", base.drop("U4")), ("U6", base.drop("U6")),
+             ("N", replace(base, neutral=False, review="owner2")), ("C", replace(base, cause=""))]
     plan = [("R2", base)] + [(f"R2-{f}", o) for f, o in drops]
     return [(n, o) for n, o in plan if not names or n in names]
 
@@ -427,7 +576,7 @@ def configs(base: R2Options, names: set[str]):
 def run_one(name: str, opts: R2Options, end: str, slice_: str, out: Path, prepared: dict) -> dict:
     # Only the window and its vectors are shared between runs; the thresholds and the
     # cluster settings (band, U2, U6) come from this run's options.
-    key = (opts.w1, opts.stack.u4, opts.instruction, opts.merge, opts.context, end)
+    key = (opts.w1, opts.stack.u4, opts.instruction, opts.merge, opts.context, opts.neutral, end)
     if key not in prepared:
         prepared[key] = prepare(end, opts)
     p = prepare_settings(prepared[key], opts)
@@ -458,6 +607,7 @@ def run_one(name: str, opts: R2Options, end: str, slice_: str, out: Path, prepar
 
 
 END_V3 = "2024-10-31"
+END_V4 = "2025-10-31"
 _gold = H.gold
 
 
@@ -466,6 +616,9 @@ def _gold_any(w, slice="v1"):
     if slice == "v3":
         from trials.prellm import v3_gold
         return v3_gold.gold(w)
+    if slice == "v4":
+        from trials.prellm import unit_gold
+        return unit_gold.gold(w, "v4")
     return _gold(w, slice)
 
 
@@ -476,13 +629,15 @@ def main():
     """round2.py VARIANT [runs...]       development on V1
        round2.py dev2-VARIANT [runs...]  development on V2 (spent as held-out since round 4)
        round2.py final-VARIANT           held-out V2 (round 4)
-       round2.py final3-VARIANT          held-out V3, once (needs PRELLM_HELDOUT=1)"""
+       round2.py final3-VARIANT          held-out V3, once (needs PRELLM_HELDOUT=1)
+       round2.py dev3-VARIANT [runs...]  development on V3 (spent as held-out in round 5)
+       round2.py final4-VARIANT          held-out V4, once (needs PRELLM_HELDOUT=1)"""
     variant = sys.argv[1]
     names = set(sys.argv[2:])
     mode, _, key = variant.partition("-") if "-" in variant else ("", "", variant)
     end, slice_ = {"": (END_DEV, "v1"), "dev2": (END_HELD, "v2"), "final": (END_HELD, "v2"),
-                   "final3": (END_V3, "v3")}[mode]
-    if mode == "dev2":
+                   "final3": (END_V3, "v3"), "dev3": (END_V3, "v3"), "final4": (END_V4, "v4")}[mode]
+    if mode in ("dev2", "dev3"):
         os.environ["PRELLM_HELDOUT"] = "1"   # V2 is development data from round 5 on
     base = VARIANTS[key]
     out = H.OUT / "R2" / variant
