@@ -977,6 +977,303 @@ Caveats: about 5 labelled sentences per cluster, so tone and grab-bag flags
 can turn on one sentence; one issue point is about 1 point of recall; all
 in-sample on V1.
 
+## Embedding route, round 2: steer the embedding (set 2026-10-14, before running)
+
+Round 1 failed because a raw sentence's embedding carries its topic and tone,
+not its problem. Distill fixed that with a model call per review, which this
+route rules out (minutes, not hours; the model only in calls over the whole
+cluster list). The literature has an established way to steer an embedding
+toward one facet of the text without generating anything: **instruction-tuned
+embedders** (INSTRUCTOR, Su et al. 2023; used by ClusterLLM, Zhang et al.
+2023, to set a clustering's "perspective"). A comparison of LLM uses in
+clustering (Viswanathan et al. 2023) found that improving each document's
+representation helped on every metric, while LLM post-correction of clusters
+helped little. So the representation is the main fix here, and the model's
+cluster-level calls come second.
+
+**Fixes**, as one bundle on top of the round-1 final stack (U2 + U4 + U6), with
+drop-one runs:
+
+| # | Fix | Main measure |
+|---|---|---|
+| W1 | Units embedded by **Qwen3-Embedding-0.6B** with a task instruction ("the app feature and the problem with it"), replacing MiniLM for clustering, the range cap and quote ranking. The vague set-aside keeps MiniLM (its anchors are MiniLM vectors). The range cap's reach and pull are re-set from the new space's similarity distribution, label-free, at the percentiles MiniLM's 0.40 and 0.50 sat at | P, tone |
+| W2 | **Cluster review by the model**: one call per issue cluster (≤ 20 a run), showing its 12 members closest to the centre: specific problem, or general opinion. General clusters go to the general bucket | Tone, P |
+
+**Gates** unchanged from round 1: on the held-out window (V2), medians over 5
+input orders, P ≥ 60%, R ≥ 60%, at most one tone cluster and one grab-bag;
+stability reported. Following T07, also reported as a pass rate: the number of
+the 5 orders that meet all four bars (pass needs at least 4).
+
+**Rules**, as round 1: tune on V1 only, at most 3 variants of the bundle,
+every variant reported; a fix stays only if dropping it worsens its main
+measure beyond B0's order spread, or costs P or R more than 3 points; the final
+bundle runs once on V2; stop once the main measure clearly fails. Each trial
+is kept under 45 minutes.
+
+### Result: no variant passes on V1 (2026-10-14)
+
+Script [round2.py](prellm/round2.py); results in `trials/runs/prellm/R2/`. V1,
+medians over 5 orders, with the number of orders meeting all four bars:
+
+| Variant | P | R | Tone | Grab-bags | ARI | Pass | Minutes |
+|---|---|---|---|---|---|---|---|
+| Round 1 final (U2 + U4 + U6) | 41% | 59% | 4 | 6 | 0.93 | 0/5 | <1 |
+| v1: W1 + W2 two-way | 48% (46–51) | 52% (49–53) | 2 | 5 | 0.89 | 0/5 | 9 (7 embedding, once) |
+| v2: W2 breadth (specific / broad / general) + W3 segments, not re-joined units | **67% (62–67)** | 42% | **0** | **1** | 0.94 | 0/5 | 2 |
+| v3: v2 + 35–50 clusters before review + W4 outliers back at the pull bar | 49% (47–51) | 53% (51–56) | 1 | 5 | 0.80 | 0/5 | 3 |
+
+What each step showed:
+
+- **W1 works on what it is for.** With the instructed embedder, the specific
+  clusters are clean (e-transfer 71%, two-factor 83%, sign-in 71%; round 1:
+  57%, 40–100%, 53%). Tone and opinion still cluster, but as their own
+  clusters ("avoid it", "doesn't work, reinstalled", "updates made it worse",
+  "technical difficulties") instead of inside issue ones.
+- **W2 needs the breadth definition.** Two-way (specific / general) let
+  "doesn't work" and "confusing UI" clusters pass as specific; the validated
+  breadth definition (broad = names no single feature) removes them, and
+  every cluster it removed was below 30% precision. That gives v2's
+  precision and tone.
+- **Recall is the gap.** In v2, before the review, R is 55%: 10 issue points
+  have no unit (the sentiment filter or the 3-word floor drops them), 16 sit
+  only in Miscellaneous, and the rest sit in clusters credited with another
+  issue: at 20–30 clusters before a review that removes about half, trusted
+  device shares a cluster with ID verification and never gets credit.
+- **v3's finer band fixed that** (trusted device became its own cluster, 6 of
+  6), **but W4 broke precision:** about 90 Miscellaneous units came back, most
+  of them from the clusters the review had just removed as broad, and formed
+  new G-majority grab-bags. A unit closest to a rejected cluster should stay
+  out.
+- W2 made 20 calls a run in v1–v2 and 34–36 in v3 (one per cluster, about 1 s
+  each), over the 20 set: a deviation, recorded here.
+
+Three variants used, so round 2 stops (rule 1). Its findings set round 3.
+
+## Embedding route, round 3 (set 2026-10-14, before running)
+
+The bundle is v2 plus the two parts of v3 that the result supports, with W4
+corrected:
+
+- **Band 35–50** clusters before the review (it removes about half).
+- **W4, corrected:** a Miscellaneous unit joins an issue cluster only when the
+  closest centre of *all* reviewed clusters (kept, broad and general) is that
+  issue cluster's, and its similarity reaches the pull bar. Units closest to a
+  removed cluster stay out (BERTopic `reduce_outliers` over the full topic
+  set, the removed topics acting as outlier topics).
+
+Drop-one runs for W1–W4, the band, U2, U4 and U6, with the same keep rule.
+W2 is allowed one call per cluster (up to 50 a run). Gates, held-out rule and
+pass rate as round 2. At most 3 variants.
+
+### Result: closest yet, still no pass (2026-10-14)
+
+V1, medians over 5 orders:
+
+| Variant | P | R | Tone | Grab-bags | ARI | Pass |
+|---|---|---|---|---|---|---|
+| v1: W1 + W2 breadth + W3 + W4 corrected + band 35–50, on U2 + U4 + U6 | 63% | 50% | 0 | 3 | 0.80 | 0/5 |
+| **v2: v1 less the dead weight (below)** | **61% (59–65)** | **59% (56–60)** | **0** | 2 | 0.71 | 0/5 |
+| v3: v2 with band 45–60 | 63% | 54% | 0 | 2 | 0.82 | 0/5 |
+
+Drop-one on v1 (P / R): without W1 61 / 41 (stays); W2 40 / 64, tone 4,
+grab-bags 10 (stays); band 67 / 42 (stays); U6 65 / 50.5, ARI 0.80 → 0.66
+(stays). Dead weight: W3 (re-joined units beat segments, 71 / 49.5), W4 (moves
+4–7 units), U2 (no gain in P or grab-bags; U6 holds stability) and **U4**
+(the sentence-sentiment filter: 67 / 52 without it; the review now does its
+job, and it dropped neutral-sounding complaints). The first drop-one batch
+reused one window's band and U2/U6 settings for every run (a cache bug); band,
+U2 and U6 were re-run after the fix.
+
+v3's search reached 42–45 clusters, and the review then removed about 29, so
+recall fell. The review judges a cluster whole: a verdict right for most
+members is wrong for some. In v2, 12 issue points sit in clusters judged
+general (long units mixing opinion with a complaint: "RBC you are bad people,
+you no longer support … Android tablets"), and kept clusters still hold
+opinion units.
+
+Content check of v2 (members read across each cluster, not only the labelled
+ones): 10 of 14 clusters are one specific problem (sign-in, e-transfer,
+repeated two-factor, device support, trusted device, verification on
+e-transfers, transactions not shown, too many security checks, cheque
+deposit, crash on open). The two grab-bags are ID checks by driver's licence
+(coherent; the labels split it over photo capture, trusted device and
+sign-in) and the "technical difficulties" message (coherent; labelled general
+or uncovered). Two weak ones pass the review: "please try again later / has not
+worked for months" and "cannot turn features off / privacy".
+
+## Embedding route, round 4: unit-level verdicts (set 2026-10-14, before running)
+
+The base is round 3 v2. One fix:
+
+- **W5, verdicts per unit.** As TnT-LLM (Wan et al. 2024) does, the model's
+  labels train a lightweight classifier on the embeddings, which then labels
+  every item. Here the labels are free: each unit takes its cluster's review
+  verdict (specific, broad or general). A logistic regression on the W1
+  vectors, cross-fitted (5 folds, so no unit is judged by a model trained on
+  its own label), gives each unit a verdict. A unit in a kept cluster whose
+  verdict is general goes to the general bucket, broad to Miscellaneous. A unit
+  outside the issue clusters (Miscellaneous, or a removed cluster) whose
+  verdict is specific joins the nearest kept cluster when it reaches the pull
+  bar. The vague set-aside is untouched. No extra model calls.
+
+Gates, rules, held-out run and pass rate as rounds 2–3; drop-one is W5 on and
+off (off is round 3 v2). At most 3 variants.
+
+### Result: passes on V1, fails on held-out V2 (2026-10-14)
+
+| Variant | Slice | P | R | Tone | Grab-bags | ARI | Pass |
+|---|---|---|---|---|---|---|---|
+| v1: round 3 v2 + W5 | V1 | 65% (58–68) | 62% (59–63) | 0 | 2 (1–3) | 0.65 | 0/5 |
+| v2: + W6 second look | V1 | 71% | 49.5% | 0 | 1 | 0.70 | 0/5 |
+| **v3: W6 with the review pitched at what one team owns** | V1 | **66% (59–69)** | **63% (59–65)** | 0 | **1** (1–4) | 0.75 | **3/5** |
+| v3, drop W5 | V1 | 61% | 61% | 2 | 2 | 0.77 | 0/5 |
+| v3, drop W6 | V1 | 56% | 67% | 0 | 4 | 0.78 | 0/5 |
+| **v3, held out** | **V2** | **56% (41–59)** | **61.5% (45–63)** | 1 | **3 (1–5)** | **0.56** | **0/5** |
+
+W6 at first removed real issues: read across the whole cluster, e-transfer
+shows several failures of one action (crash, fee, limit, double send), and
+the concept-level wording "one feature and one kind of failure" called that
+broad. v3 pitches the review at the level the synthesize prompt uses ("what
+one product team would own"; the details may differ). W5 and W6 both stay.
+
+Content check, V1 v3 order 0: 14 of 15 clusters are one ownable problem
+(sign-in, e-transfer, two-factor, ID checks by licence, device support, card
+tap to send e-transfers, trusted device, verification on e-transfers, too
+many security checks, GrapheneOS, cheque deposit, transactions not shown,
+dark mode, credit-card balance delay); one is mixed ("settings I had to turn
+off"). The broad clusters are gone.
+
+**V2 fails.** Two causes, read from the clusters with their labels:
+
+1. **The labels miss sentences the distiller never extracted.** V2 has 44 X
+   sentences of 174 labelled (V1: 19 of 184), and P counts every X as a miss.
+   The V2 grab-bags are coherent: "app not compatible / phone too old" and "no
+   tablet support" score 33–38% because half their labelled sentences are X
+   ("not available on my tablet so I change bank", "Add my name to the no
+   tablet version available"); "can't sign in" is split by the labels between
+   web sign-in and two-factor. With X sentences left out (a diagnostic, not the
+   gate), P is 54–69% and grab-bags 0–1.
+2. **The method is unstable on new data (a real fault).** Even with X left
+   out, only orders 1–3 would pass. Orders 0 and 4 lose a third of recall (45%
+   and 48%); in order 0 the e-transfer cluster is gone. ARI 0.56 (V1: 0.75).
+
+Round 4 stops here: V2 has been seen, so it can no longer serve as held-out
+data for this route. Open: whether the precision rule should count X
+sentences (a gate revision, the team's call), and a fresh held-out slice
+(V3, October 2024, has no recall labels) labelled blind before any further
+run.
+
+**Decided 2026-10-14 (Kevin):** label every sentence blind. The next held-out
+slice is V3 (the 100 October 2024 reviews of `sel-v3`). Before any run touches
+its window, each unit of those reviews (the units the method clusters: the
+1–3★ stream, segments re-joined at 0.45) is labelled from the review text
+alone against the concept list (`sel-v3/concepts.json`, live issues), or G /
+U / N. There are no X units: every sentence has a label. P is unchanged in
+form. R is counted over units with an issue label instead of points.
+
+Done the same day, before any run on the V3 window ([v3_gold.py](prellm/v3_gold.py);
+`trials/runs/prellm/v3/labels.txt`, sha256 `32c4b28400e5fb85…`): 215 units
+from 91 reviews (9 are 4–5★). App not supported on the device 66, update
+prompt with no update to install 48, sign-in 6, general 63, not a complaint
+30, other specific 5. October 2024 is the incident month, so V3 is mostly two
+intertwined issues, a hard test of keeping them apart.
+
+## Embedding route, round 5: stability (set 2026-10-14, before running)
+
+Diagnosis on V2 (now spent, so usable for development): the instability
+starts in the clustering, not in the model calls. In order 0 the e-transfer
+and sign-in clusters never form; in orders 2 and 4 they do, from the same
+data. Each order's consensus averages only 20 clustering runs. And the review
+called "technical difficulties" specific in every order: the validated
+breadth definition's example "app shows errors and crashes, with no screen or
+action named → broad" was left out of the cluster prompt.
+
+- **S1:** consensus over 100 clustering runs instead of 20 (the co-association
+  matrix converges as runs grow; Monti et al. 2003).
+- **S2:** the review prompt gets back the validated example: an error message
+  with no screen or action named is broad.
+
+Development data: V1 and V2, both to be passed. Held out: V3, once, against
+its blind labels. Gates and pass rate as before (≥ 4 of 5 orders). At most 3
+variants; drop-one for S1 and S2.
+
+### Result on the development slices (2026-10-14)
+
+| Variant | Slice | P | R | Tone | Grab-bags | ARI | Pass |
+|---|---|---|---|---|---|---|---|
+| Round 4 v3 | V1 | 66% (59–69) | 63% (59–65) | 0 | 1 (1–4) | 0.75 | 3/5 |
+| Round 4 v3 | V2 | 56% (41–59) | 61.5% (45–63) | 1 | 3 (1–5) | 0.56 | 0/5 |
+| v1: S1 + S2 | V1 | 67% (64–69) | 59% (58–61) | 0 | 1 (1–1) | **0.87** | 1/5 |
+| v1 | V2 | 51% (51–53) | 61.5% (55–62) | 1 | 3 (3–3) | **0.78** | 0/5 |
+| **v2: + W5 rescue against each cluster's own spread** | V1 | **68% (65–71)** | 59% (58–61) | 0 | 1 (1–1) | 0.87 | 1/5 |
+| v2 | V2 | 52% (52–54) | 61.5% (55–62) | 1 | 3 (3–3) | 0.78 | 0/5 |
+| v3: + S3 contextual unit embeddings | V1 | 45% | 25% | 0 | 3 | 0.72 | 0/5 (V2 not run) |
+
+- **S1 fixed the instability.** Order-to-order ranges shrank from 18 points of
+  P and recall to 2–7; on V2 no order loses e-transfer or sign-in any more, and
+  the same clusters come out every time.
+- On V2 the three grab-bags are the same in every order, and all three are
+  coherent: sign-in (split by the labels between web sign-in and two-factor),
+  phone compatibility and tablet support (half their labelled sentences X).
+  With X left out (diagnostic only): P 63–65%, grab-bags 0–1, tone 0 in every
+  order; recall 55–62%.
+- **Recall now binds.** W5's rescue was blocked by the old pull bar (units
+  judged specific sat 0.73–0.78 from a kept centre against a 0.79 bar). v2
+  measures each unit against the cluster's own 10th-percentile member
+  (HDBSCAN `approximate_predict`, BERTopic topic distributions): +1–2 P, no
+  recall. The V1 misses left are context-labelled sentences ("always shows an
+  error" is a trusted-device point only because of the sentence before it),
+  issues too small to form a cluster in the window (savings, ATM, Wi-Fi: 12
+  points), and long units that mix opinion with a complaint.
+- **S3 failed clearly.** Embedding each unit with its neighbours made units of
+  one review stick together; 54% went to Miscellaneous. Stopped before V2.
+
+v2 is the round's bundle, run once on V3 below.
+
+### Result on held-out V3: P and R pass, grab-bags fail (2026-10-14)
+
+| Gate | V3, median (range over 5 orders) | Bar |
+|---|---|---|
+| P | **70% (69–71)** | ≥ 60% |
+| R | **67% (65–68)** | ≥ 60% |
+| Tone clusters | **0 (0–0)** | ≤ 1 |
+| Grab-bags | 2 (1–3) | ≤ 1 |
+| ARI | 0.87 | reported |
+| Orders meeting all four | **2/5** | ≥ 4/5: **fail** |
+
+The window is the incident month: 4,362 units from 1,849 reviews, about 6
+times V1. Embedding took 36 minutes on CPU (once; cached) and each order
+4.5–5 minutes, against the ~12 estimated from V1's size. On a window this size
+the run is over the 45-minute trial budget; embedding on the GPU would remove
+most of it.
+
+Content check (members read across each cluster, unlabelled ones included):
+the large clusters are clean: "no longer compatible with my device" (283
+units, 92%), "asks me to update but there is no update" (181, 100%), plus
+device-model, tablet and Android-version splits of the compatibility issue.
+The grab-bags:
+
+- **"Can't log in"** (flagged in all 5 orders): every member is a sign-in
+  failure, but the V3 labels file sign-in failures by cause (in a review about
+  the update prompt, "I can't log in" is the update issue). The cluster groups
+  by symptom; one sentence does not say the cause.
+- **"Can't open the app / can't get into my account"** (2–3 orders): the same
+  symptom with causes spread over the update loop, incompatibility and
+  sign-in; closer to genuinely broad.
+
+So the method fails the pass rule on its own merits, with one nameable
+limitation left: a sentence carries a symptom, and in an incident month one
+symptom has several causes. P and R pass in every order on a complete, blind
+key, and the result is stable. V3 is now spent as held-out data.
+
+Caveats on the whole of rounds 2–5: the variants and thresholds were chosen
+by reading V1 (and in round 5, V2) gold results, so those slices are
+optimistic (round 4: P 66% on V1, 56% on V2); the cluster-review prompts name
+banks ("worst bank", "switching banks") and S2's example phrases ("technical
+difficulties", "something went wrong") were taken from this app's reviews; the
+V3 labels were written by the same agent that built the method. A key written
+by a team member would be the independent check.
+
 ## Production report review (2026-10-09)
 
 The latest production runs (2026-10-08) and the report built from them
