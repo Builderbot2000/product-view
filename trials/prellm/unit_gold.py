@@ -27,7 +27,9 @@ from trials.prellm import harness as H  # noqa: E402
 # slice -> (window end, sampled months); V4's window is the newest whose 4 months overlap
 # no earlier slice's window (rule set before the month was read). October 2025 alone has
 # 61 reviews, so the draw is from the window's last two months, as V1 spans two.
-SLICES = {"v4": ("2025-10-31", ("2025-09", "2025-10"))}
+SLICES = {"v4": ("2025-10-31", ("2025-09", "2025-10")),
+          # V5 (round 7): the newest 4-month window overlapping no earlier slice, same draw rule
+          "v5": ("2025-06-30", ("2025-05", "2025-06"))}
 
 
 def slice_reviews(slice_: str) -> list[dict]:

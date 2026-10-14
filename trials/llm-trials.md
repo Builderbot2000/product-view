@@ -1581,3 +1581,67 @@ with the model as a setting, and run the 1,000-review slice.
 - [Gemma 4 vs Qwen 3.5 benchmark matchups](https://gemma4all.com/blog/gemma-4-vs-qwen-3-5-benchmarks)
 - [BenchLM: Gemma 4 12B](https://benchlm.ai/md/models/gemma-4-12b.md)
 - [Gemma 4 vs Qwen 3.5 — MindStudio](https://www.mindstudio.ai/blog/gemma-4-vs-qwen-3-5-open-weight-comparison)
+
+## Embedding route, round 7: granularity from the data (set 2026-10-14, before running)
+
+Fault (round 6, V4): one granularity for every window. Each of the 100 consensus
+runs searches for 35–50 clusters itself, so the consensus can only repeat that
+granularity: in a calm window small issues are forced together (grab-bags) and
+large ones split (fragments).
+
+Established method: **evidence accumulation clustering** (Fred & Jain 2005):
+base clusterings at varied granularity, then the co-association matrix cut by
+stability rather than a target count. The cut used here is HDBSCAN's
+excess-of-mass selection on the co-association distance, with the minimum
+cluster size a share of the window (BERTopic's guidance that min_topic_size
+scales with corpus size); units in no stable cluster are noise (Miscellaneous)
+instead of a forced cluster.
+
+- **E:** per order, one band search finds the resolution r* for 35–50 clusters;
+  the 100 base runs then use Leiden at r* × e^u, u uniform on [ln ¼, ln 2]
+  (coarser to finer), each filtered as before; HDBSCAN (precomputed 1 − co,
+  min_samples 5, EOM) with min cluster size max(5, f × units).
+- **F (floor):** C's rules also need lift ≥ 1.5 (round 6's size test: the rule
+  count grows with volume under the significance test alone; V3's real links
+  had lift 1.66–1.87).
+
+Variants: v1 = round 6 v2 + E (f = 0.5%) + F; v2 = + E (f = 1%) + F;
+drop-one E and F. Development: V1–V4 (V4 spent in round 6). Criteria: V3 and V4
+≥ 4 of 5 orders meeting all four gates; V1 and V2 median P and R no more than 3
+points below round 6 v2, grab-bags and tone no higher.
+
+Held out: **V5**, 100 reviews drawn (seed 0) from May–June 2025, window
+March–June 2025 (overlaps no earlier slice's), V4's draw rule. 227 units of 84
+reviews labelled blind before any run (`trials/runs/prellm/v5/labels.txt`,
+sha256 `6551c0959274d4af…`, labeller Claude, conventions as V4; the U rule is
+kept). The bundle runs once.
+
+Added within the round after v1 and v2 failed the development criteria (V1
+recall 50.5% and 53% against 62%; noise units left in Miscellaneous), set
+before running: **v3** = v1 + noise units join the cluster they co-occur with
+most when the mean co-association is ≥ 0.2 (outlier reduction: BERTopic
+`reduce_outliers`, HDBSCAN soft clustering).
+
+### Result: no variant passes development (2026-10-14). V5 not run
+
+| Variant | V4: P | R | Grab-bags | Pass | V1: P | R | Pass |
+|---|---|---|---|---|---|---|---|
+| Round 6 v2 | 53% | 54% | 3 | 0/5 | 69% | 62% | 3/5 |
+| v1: E, f = 0.5% | **60.5% (55–67)** | **62%** | 2 (1–2) | 0/5 | 70% | **50.5%** | 0/5 |
+| v2: E, f = 1% | 51% | 57% | 3 | 0/5 | 70% | 53% | 0/5 |
+| v3: v1 + outlier join | 55% | 61% | 3 | 0/5 | 68% | 57% | 0/5 |
+
+- E does what it was meant to on V4: finer clusters where the window has many
+  small issues (30 kept against 17), P and R both up about 8 points. But on V1
+  it leaves ~100 units as noise and recall falls 11 points; ARI drops from 0.88
+  to about 0.69 (base runs at random resolutions agree less).
+- The outlier join recovers part of V1's recall (57%) and V4's stability (ARI
+  0.84) but gives back V4's precision.
+- No variant meets the criteria on V4 or V1, so the drop-ones, V2, V3 and the
+  held-out run were not made. V5 stays unspent; its key is frozen.
+
+Round 7 ends without a pass. Two rounds since the handoff have each fixed the
+fault they targeted on the window that showed it (V3's symptoms, V4's
+granularity) and lost elsewhere, while round 6's bootstrap puts a 5/5 on ~220
+labelled units at 31–46% odds. Further tuning against these keys risks fitting
+their noise; see the handoff for the options put to Kevin.

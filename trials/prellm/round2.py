@@ -54,6 +54,11 @@ class R2Options:
     neutral: bool = False           # N: no wording taken from this app in prompts or the set-aside
     cause: str = ""                 # C: symptom units join the cause cluster their review names;
                                     # "code" (Ca, asymmetric confidence) or "model" (Cb, one call per pair)
+    cause_lift: float = 0.0         # F: C's rules also need this lift (round 7: 1.5)
+    eac: float = 0.0                # E: > 0 = evidence accumulation; the minimum cluster size as a
+                                    # share of the units (varied-resolution base runs, HDBSCAN cut)
+    eac_outliers: float = 0.0       # E: noise units join the cluster they co-occur with most, at this
+                                    # mean co-association (BERTopic reduce_outliers); 0 = off
 
     def drop(self, fix: str) -> "R2Options":
         if fix in ("W1", "W2"):
@@ -371,7 +376,10 @@ def cluster(p: Prepared, order_seed: int, opts: R2Options) -> tuple[np.ndarray, 
         labels[far] = H.MISC
         info["reach_misc"] = int(len(far))
     elig = np.flatnonzero(labels == 0)
-    if so.u6:
+    if opts.eac:
+        local, info["core"] = evidence_accumulation(w.vectors[elig], cfg, order_seed, so.runs, opts.eac,
+                                                    outliers=opts.eac_outliers)
+    elif so.u6:
         local, info["core"] = S.consensus(w.vectors[elig], cfg, order_seed, so.runs, so.tau, so.search)
     else:
         local, info["core"] = S.base_cluster(w.vectors[elig], cfg, order_seed, so.search)
@@ -417,9 +425,59 @@ def cluster(p: Prepared, order_seed: int, opts: R2Options) -> tuple[np.ndarray, 
     if opts.unit_verdicts and opts.w2 and reviewed:
         labels, info["w5"] = unit_verdicts(w, labels, before, verdict, p.vague, so.pull, opts.rescue_bar)
     if opts.cause:
-        labels, info["cause"] = attribute_causes(w, labels, opts.cause)
+        labels, info["cause"] = attribute_causes(w, labels, opts.cause, min_lift=opts.cause_lift)
     labels = H.canonical(labels)
     return labels, info
+
+
+# ------------------------------------------------------------------- E ----
+
+def evidence_accumulation(vectors: np.ndarray, cfg: H.ClusterConfig, order_seed: int, runs: int,
+                          frac: float, min_samples: int = 5, outliers: float = 0.0) -> tuple[np.ndarray, dict]:
+    """E (Fred & Jain 2005): base runs at varied granularity, then the co-association
+    matrix cut by stability (HDBSCAN, excess of mass) with a minimum cluster size that is
+    a share of the window. The band search runs once, to place the resolution range."""
+    from sklearn.cluster import HDBSCAN
+    from trials.prellm.legacy import granularity
+    from trials.prellm.legacy.strategies import LeidenStrategy
+    n = len(vectors)
+    if n < cfg.min_size:
+        return np.full(n, H.MISC, dtype=np.int64), {"n_clusters": 0}
+    _, pilot = S.base_cluster(vectors, cfg, order_seed)
+    r_star = pilot["param"]
+    rng = np.random.default_rng(order_seed)
+    strat = LeidenStrategy(seed=cfg.leiden_seed)
+    co = np.zeros((n, n), dtype=np.float32)
+    for i in range(runs):
+        perm = rng.permutation(n)
+        v = vectors[perm]
+        r = r_star * float(np.exp(rng.uniform(np.log(0.25), np.log(2.0))))
+        lab = strat.fit(v, graph.build_knn(v, k=cfg.knn_k), r)
+        clusters, _ = granularity.filter_clusters(lab, v, cfg.min_size, cfg.cohesion_floor)
+        for members in clusters.values():
+            m = perm[members]
+            co[np.ix_(m, m)] += 1
+    co /= runs
+    np.fill_diagonal(co, 1.0)
+    mcs = max(cfg.min_size, int(round(frac * n)))
+    hd = HDBSCAN(metric="precomputed", min_cluster_size=mcs, min_samples=min_samples,
+                 cluster_selection_method="eom").fit((1.0 - co).astype(np.float64))
+    lab = hd.labels_.astype(np.int64)
+    clusters, uncl = granularity.filter_clusters(lab, vectors, cfg.min_size, cfg.cohesion_floor)
+    out = np.full(n, H.MISC, dtype=np.int64)
+    for new, (_, members) in enumerate(sorted(clusters.items())):
+        out[members] = new
+    joined = 0
+    if outliers and len(clusters):
+        ids = sorted(set(out[out >= 0].tolist()))
+        noise = np.flatnonzero(out < 0)
+        aff = np.stack([co[np.ix_(noise, np.flatnonzero(out == l))].mean(axis=1) for l in ids], axis=1)
+        best = aff.argmax(axis=1)
+        ok = aff[np.arange(len(noise)), best] >= outliers
+        out[noise[ok]] = np.array(ids)[best[ok]]
+        joined = int(ok.sum())
+    return out, {"n_clusters": len(clusters), "r_star": r_star, "min_cluster_size": mcs,
+                 "noise": int((lab < 0).sum()), "unclustered": int(uncl), "outliers_joined": joined}
 
 
 # ------------------------------------------------------------------- C ----
@@ -435,7 +493,8 @@ Examples from another domain:
 
 
 def attribute_causes(w: H.Window, labels: np.ndarray, how: str, min_sup: int = 3,
-                     min_conf: float = 0.10, max_p: float = 0.05, min_share: float = 0.25):
+                     min_conf: float = 0.10, max_p: float = 0.05, min_share: float = 0.25,
+                     min_lift: float = 0.0):
     """C: co-occurrence association rules between kept clusters over the window's reviews
     (implicit-aspect identification, Hai et al. 2011, with clusters for aspects). For a
     rule S -> C, where S is the symptom side, the units of S whose own review has a unit
@@ -464,7 +523,8 @@ def attribute_causes(w: H.Window, labels: np.ndarray, how: str, min_sup: int = 3
     def p_value(a, b):
         v = both[(a, b)]
         return fisher_exact([[v, n[a] - v], [n[b] - v, n_rev - n[a] - n[b] + v]], alternative="greater")[1]
-    cand = [(a, b) for (a, b), v in both.items() if a < b and v >= min_sup and p_value(a, b) <= max_p]
+    cand = [(a, b) for (a, b), v in both.items() if a < b and v >= min_sup and p_value(a, b) <= max_p
+            and max(lift[(a, b)], lift[(b, a)]) >= min_lift]
     rules = []                           # (symptom, cause)
     if how == "code":
         for a, b in cand:
@@ -561,6 +621,11 @@ VARIANTS = {
 # round 6, v2: v1 with N's error-message wording fixed (v1 ran with the first wording, which
 # dropped "technical issues"); the options are the same, the prompt text differs
 VARIANTS["r6v2"] = VARIANTS["r6v1"]
+# round 7: E (evidence accumulation, minimum cluster size a share of the window) + F (lift floor)
+VARIANTS["r7v1"] = replace(VARIANTS["r6v2"], eac=0.005, cause_lift=1.5)
+VARIANTS["r7v2"] = replace(VARIANTS["r6v2"], eac=0.01, cause_lift=1.5)
+# round 7, v3: v1 + noise units join the cluster they co-occur with most (mean co-association >= 0.2)
+VARIANTS["r7v3"] = replace(VARIANTS["r7v1"], eac_outliers=0.2)
 
 
 def configs(base: R2Options, names: set[str]):
@@ -568,7 +633,8 @@ def configs(base: R2Options, names: set[str]):
              ("W4", replace(base, reassign=False)), ("band", replace(base, band=(20, 30))),
              ("W5", replace(base, unit_verdicts=False)), ("W6", replace(base, second_look=False)),
              ("U2", base.drop("U2")), ("U4", base.drop("U4")), ("U6", base.drop("U6")),
-             ("N", replace(base, neutral=False, review="owner2")), ("C", replace(base, cause=""))]
+             ("N", replace(base, neutral=False, review="owner2")), ("C", replace(base, cause="")),
+             ("E", replace(base, eac=0.0)), ("F", replace(base, cause_lift=0.0))]
     plan = [("R2", base)] + [(f"R2-{f}", o) for f, o in drops]
     return [(n, o) for n, o in plan if not names or n in names]
 
@@ -608,6 +674,7 @@ def run_one(name: str, opts: R2Options, end: str, slice_: str, out: Path, prepar
 
 END_V3 = "2024-10-31"
 END_V4 = "2025-10-31"
+END_V5 = "2025-06-30"
 _gold = H.gold
 
 
@@ -616,9 +683,9 @@ def _gold_any(w, slice="v1"):
     if slice == "v3":
         from trials.prellm import v3_gold
         return v3_gold.gold(w)
-    if slice == "v4":
+    if slice in ("v4", "v5"):
         from trials.prellm import unit_gold
-        return unit_gold.gold(w, "v4")
+        return unit_gold.gold(w, slice)
     return _gold(w, slice)
 
 
@@ -636,8 +703,9 @@ def main():
     names = set(sys.argv[2:])
     mode, _, key = variant.partition("-") if "-" in variant else ("", "", variant)
     end, slice_ = {"": (END_DEV, "v1"), "dev2": (END_HELD, "v2"), "final": (END_HELD, "v2"),
-                   "final3": (END_V3, "v3"), "dev3": (END_V3, "v3"), "final4": (END_V4, "v4")}[mode]
-    if mode in ("dev2", "dev3"):
+                   "final3": (END_V3, "v3"), "dev3": (END_V3, "v3"), "final4": (END_V4, "v4"),
+                   "dev4": (END_V4, "v4"), "final5": (END_V5, "v5")}[mode]
+    if mode in ("dev2", "dev3", "dev4"):
         os.environ["PRELLM_HELDOUT"] = "1"   # V2 is development data from round 5 on
     base = VARIANTS[key]
     out = H.OUT / "R2" / variant
