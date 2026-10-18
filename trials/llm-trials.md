@@ -1785,3 +1785,82 @@ criteria catch. Content check: read every merged pair of order 0.
 "turn off USB debugging", repeated verification prompts with crashing, verification
 with "security setup is garbage". The local model says "same" far too readily and
 union-find chains the pairs. V3 not run; M dropped. Best bundle stays **r8v2**.
+
+## Embedding route, round 10: U rule, then V5 (set 2026-10-18, before running)
+
+Rule change, decided in the loop (Kevin, 2026-10-18: the loop decides autonomously). The
+keys' U ("specific, no issue another review of the 100-review sample shares") is judged on
+the sample, while clusters are built from the whole 4-month window. On V4 (r8v2, order 0)
+the U-heavy clusters recur across the window: ID photo capture in 17 reviews, virtual Visa
+debit activation in 9, cheque deposit in 5. Each was scored as wrong. **From round 10, a unit
+whose labels carry U and no issue id leaves the key**: it is neither right nor wrong in P
+and does not count towards tone or grab-bags (`harness.evaluate`; `PRELLM_U_RULE=wrong`
+restores the old rule). X stays as it is (Kevin's earlier decision). Recall is unaffected
+because U units carry no issue.
+
+Because the rule was changed after seeing results, it is confirmed only on the unspent V5
+(Mar–Jun 2025 window, blind key frozen in round 7).
+
+Plan and criteria:
+1. Re-score the saved r6v2 and r8v2 labels on V1–V4 under the new rule (no new runs).
+   Development criteria as in round 8: V3 and V4 ≥ 4 of 5 orders meeting all four gates;
+   V1 and V2 median P and R no more than 3 points below r6v2, grab-bags and tone no higher.
+2. If r8v2 meets them, run `final5-r8v2` once on V5. **Pass:** medians P ≥ 60%, R ≥ 60%,
+   tone ≤ 1, grab-bags ≤ 1, and at least 4 of 5 orders meeting all four. No change of rule
+   or method after V5 is seen. V5 is spent either way.
+3. Content check of V5 order 0: read every kept cluster's members, not only the scores.
+
+### Re-score under the new rule (2026-10-18, saved labels, no new runs)
+
+| Slice | Bundle | Old rule: P | R | Tone | Grab | Pass | New rule: P | R | Tone | Grab | Pass |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| V1 | r6v2 | 69% | 62% | 0 | 1 | 3/5 | 74.5% | 62% | 0 | 1 | 4/5 |
+| V1 | r8v2 | 70% | 62% | 0 | 1 | 3/5 | 74% | 62% | 0 | 0 | 3/5 |
+| V2 | r6v2 | 52% | 61.5% | 1 | 3 | 0/5 | 59.5% | 61.5% | 1 | 2 | 1/5 |
+| V2 | r8v2 | 47% | 69% | 1 | 3 | 0/5 | 58.5% | 69% | **3** | 1 | 0/5 |
+| V3 | r6v2 | 72% | 70% | 0 | 1 | 5/5 | 73.5% | 70% | 0 | 1 | 5/5 |
+| V3 | r8v2 | 77% | 69.5% | 0 | 1 | 5/5 | 77% | 69.5% | 0 | 1 | 5/5 |
+| V4 | r6v2 | 53% | 54% | 0 | 3 | 0/5 | 67% | 54% | 0 | 1 | 0/5 |
+| V4 | r8v2 | 55% | 71% | 0 | 5 | 0/5 | **71%** | **71%** | 1 | 1 | **5/5** |
+
+r8v2 meets the criteria on V1, V3 and V4 and misses one on V2: tone 3 against r6v2's 1.
+Content of V2's three tone clusters (order 0; the same three in orders 0–3): "no tablet
+app" (12 members, all about tablets; 4 of 6 labelled units X), "forced to install the app"
+(7, coherent; X and U), and "security should be the priority" (7, real opinion, the one
+real tone cluster). The rise comes from the V1/V2 keys' X convention, which V5's blind
+complete key does not have.
+
+**Deviation, recorded before the V5 run:** the V2 tone criterion is failed by the measure,
+and V5 is run anyway. The reasons are the content above and that V5 is the only test the
+X convention doesn't touch. It is the last unspent slice. A fail there ends the bundle,
+and the next held-out test needs a new blind month.
+
+### Result: r8v2 fails held-out V5, 2/5 (2026-10-18)
+
+| Run | Slice | P | R | Tone | Grab-bags | Split | ARI | Pass |
+|---|---|---|---|---|---|---|---|---|
+| r8v2, new rule | V5 | 69% (67–72) | 65% (64–70) | 0 | **2 (1–3)** | 5 | 0.88 | **2/5** |
+| r8v2, old rule (for reference) | V5 | 62% | 65% | 0 | 3 | | | |
+
+6 minutes (ETA 15–20; the review answers were quick). P, R and tone pass in every order;
+grab-bags fail in 3 of 5. V5 is spent.
+
+Content check (order 0, every kept cluster read). The grab-bags are real mixes, not
+key conventions:
+- **"account"** (22 members, in orders 0, 2 and 4): grouped on the word, not the fault:
+  can't sign in, phone incompatible, third-party linkage, PIN not set up, accounts not
+  loading, "ready to close my account", Dominion Securities pop-up.
+- **context fragments** (19, in every order): sentences that name no feature and carry
+  meaning only in their review ("it's only 2 yrs old....really", "apparently THAT isn't
+  good enough", "Awesome, thanks guys!", "I have a Samsung galaxy s24 ultra", "Works
+  pretty well on my Samsung phone"). Both reviews called it specific.
+- **compatibility with "check your other device"** (orders 1 and 4): two issues together.
+
+The rest is good: card activation, tablets, OS support, 2FA, e-transfer, log-in,
+password reset, trusted device, update loop, direct investing, push notifications, and
+low vision (unlabelled, but coherent) are each clean. One reader-facing fault no gate
+counts: "app not supported on my device" is split over 7 clusters.
+
+Next faults: (1) a cluster held together by a generic noun ("account"); (2) feature-less
+context fragments that the review keeps. A further held-out test needs a new blind month:
+the window ending 2025-02-28 (Nov 2024–Feb 2025) overlaps no earlier slice.

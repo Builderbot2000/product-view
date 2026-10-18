@@ -475,7 +475,8 @@ def evaluate(w: Window, labels: np.ndarray, slice: str = "v1", g: Gold | None = 
     Grab-bags: issue clusters with >= 5 labelled units and P < 50%.
     Split: issues credited to two or more clusters.
     Coverage: share of window units in issue clusters.
-    Mostly-U: issue clusters with >= 2 labelled units, more than half carrying U.
+    Mostly-U: issue clusters with >= 2 labelled units, more than half carrying U (none
+      under the round-10 rule, which leaves U-only units out of the key).
     Quote precision: per credited cluster, the top 5 labelled members by closeness to
       the centre vs by thumbs-up (ties by unit index); pooled share carrying the issue.
     """
@@ -484,6 +485,11 @@ def evaluate(w: Window, labels: np.ndarray, slice: str = "v1", g: Gold | None = 
     names = names or {}
     cents = centres(w, labels)
     ul = g.unit_labels
+    if os.environ.get("PRELLM_U_RULE", "exclude") == "exclude":
+        # Round 10 rule: U ("no other review of the 100-review sample shares it") is judged on
+        # the sample while clusters span the whole window, so U units leave the key (neither
+        # right nor wrong). PRELLM_U_RULE=wrong restores the rule of rounds 4-9.
+        ul = {i: s for i, s in ul.items() if not ("U" in s and not _issues(s))}
     rows, credited = [], {}
     hits = total = 0
     qp_close = [0, 0]
