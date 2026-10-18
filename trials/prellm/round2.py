@@ -54,6 +54,8 @@ class R2Options:
     context: bool = False           # S3: embed each unit with its neighbouring units (contextual chunks)
     second_look: bool = False       # W6:a second review on members spread across the cluster; a
                                     # cluster stays specific only if both reviews say so (self-consistency)
+    split_large: tuple = ()         # K: (factor, floor) = kept clusters larger than factor x the
+                                    # median kept size and at least floor are split (round 13)
     standalone: str = ""            # S: "spread" or "centre" = kept clusters get a stand-alone check
                                     # on those members; "not" sends the cluster to Miscellaneous
     abtt: int = 0                   # A: all-but-the-top (Mu & Viswanath 2018): the window's mean and
@@ -294,6 +296,72 @@ def standalone_check(w: H.Window, labels: np.ndarray, ids: list, shown: int, how
     return {l: g["answer"] for l, g in zip(ids, got)}
 
 
+def split_large(w: H.Window, labels: np.ndarray, before: np.ndarray, verdict: dict,
+                opts: R2Options) -> tuple[np.ndarray, np.ndarray, dict, dict]:
+    """K (round 13; divisive re-clustering of large clusters, as bisecting k-means, with the
+    LLM check per child as in reasoning-based cluster refinement, arXiv 2604.07562): each
+    kept cluster larger than factor x the median kept size (and >= floor) is split by
+    k-means into the k of 2-4 with the best silhouette. Children below the minimum size
+    join their nearest sibling. Each child gets the cluster review (two looks) and S like
+    any cluster; a child not judged specific leaves as its verdict says."""
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
+    factor, floor = opts.split_large
+    kept = [l for l, v in verdict.items() if v == "specific"]
+    if not kept:
+        return labels, before, verdict, {"split": []}
+    sizes = {l: int((labels == l).sum()) for l in kept}
+    bar = max(floor, factor * float(np.median(list(sizes.values()))))
+    big = [l for l in kept if sizes[l] > bar]
+    labels, before, verdict = labels.copy(), before.copy(), dict(verdict)
+    nxt = int(max(labels.max(), before.max(), max(verdict))) + 1
+    children = []
+    for l in big:
+        m = np.flatnonzero(labels == l)
+        x = w.vectors[m]
+        best = None
+        for k in range(2, 5):
+            if len(m) < 2 * k * opts.min_size:
+                break
+            lab = KMeans(k, n_init=10, random_state=0).fit_predict(x)
+            sc = silhouette_score(x, lab, metric="cosine")
+            if best is None or sc > best[0]:
+                best = (sc, lab)
+        if best is None:
+            continue
+        lab = best[1]
+        cent = {c: x[lab == c].mean(axis=0) for c in set(lab)}
+        small = [c for c in cent if (lab == c).sum() < opts.min_size]
+        big_c = [c for c in cent if c not in small]
+        for c in small:
+            j = max(big_c, key=lambda b: float(cent[c] @ cent[b]))
+            lab[lab == c] = j
+        del verdict[l]
+        for c in sorted(set(lab)):
+            labels[m[lab == c]] = before[m[lab == c]] = nxt
+            children.append(nxt)
+            nxt += 1
+    if children:
+        sub_l = np.where(np.isin(labels, children), labels, -1)
+        v1 = review_clusters(w, sub_l, opts.review_shown, opts.review)
+        v2 = review_clusters(w, sub_l, opts.review_shown, opts.review, spread=True) if opts.second_look else v1
+        vc = {c: v1[c] if v1[c] != "specific" else v2[c] for c in children}
+        if opts.standalone:
+            keep = [c for c in children if vc[c] == "specific"]
+            sa = standalone_check(w, sub_l, keep, opts.review_shown, opts.standalone)
+            for c in keep:
+                if sa[c] == "not":
+                    vc[c] = "broad"
+        for c in children:
+            verdict[c] = vc[c]
+            if vc[c] == "general":
+                labels[labels == c] = H.GENERAL
+            elif vc[c] == "broad":
+                labels[labels == c] = H.MISC
+    return labels, before, verdict, {"bar": bar, "split": big, "children": len(children),
+                                     "children_kept": sum(verdict[c] == "specific" for c in children)}
+
+
 # ------------------------------------------------------------- pipeline ----
 
 @dataclass
@@ -484,6 +552,8 @@ def cluster(p: Prepared, order_seed: int, opts: R2Options) -> tuple[np.ndarray, 
             labels[labels == l] = H.MISC
         info["w2_general"], info["w2_broad"] = gen, broad
         info["w2_calls"] = len(verdict)
+        if opts.split_large:
+            labels, before, verdict, info["k"] = split_large(w, labels, before, verdict, opts)
     if opts.reassign and reviewed:
         # Nearest centre among all reviewed clusters: a unit closest to a removed (broad or
         # general) cluster stays out; one closest to a kept cluster joins it at the pull bar.
@@ -771,6 +841,9 @@ VARIANTS["r11v3"] = replace(VARIANTS["r8v2"], review="owner4")
 # round 12: r8v2 + S (a stand-alone check on kept clusters that can only remove them)
 VARIANTS["r12v1"] = replace(VARIANTS["r8v2"], standalone="spread")
 VARIANTS["r12v2"] = replace(VARIANTS["r8v2"], standalone="centre")
+# round 13: r12v2 + K (split kept clusters much larger than the window's median kept cluster)
+VARIANTS["r13v1"] = replace(VARIANTS["r12v2"], split_large=(2.0, 40))
+VARIANTS["r13v2"] = replace(VARIANTS["r12v2"], split_large=(1.5, 30))
 
 
 def configs(base: R2Options, names: set[str]):
@@ -821,6 +894,7 @@ END_V3 = "2024-10-31"
 END_V4 = "2025-10-31"
 END_V5 = "2025-06-30"
 END_V6 = "2025-02-28"
+END_V7 = "2024-06-30"
 _gold = H.gold
 
 
@@ -829,7 +903,7 @@ def _gold_any(w, slice="v1"):
     if slice == "v3":
         from trials.prellm import v3_gold
         return v3_gold.gold(w)
-    if slice in ("v4", "v5", "v6"):
+    if slice in ("v4", "v5", "v6", "v7"):
         from trials.prellm import unit_gold
         return unit_gold.gold(w, slice)
     return _gold(w, slice)
@@ -851,8 +925,8 @@ def main():
     end, slice_ = {"": (END_DEV, "v1"), "dev2": (END_HELD, "v2"), "final": (END_HELD, "v2"),
                    "final3": (END_V3, "v3"), "dev3": (END_V3, "v3"), "final4": (END_V4, "v4"),
                    "dev4": (END_V4, "v4"), "final5": (END_V5, "v5"), "dev1": (END_DEV, "v1"),
-                   "dev5": (END_V5, "v5"), "final6": (END_V6, "v6")}[mode]
-    if mode in ("dev2", "dev3", "dev4", "dev5"):
+                   "dev5": (END_V5, "v5"), "final6": (END_V6, "v6"), "dev6": (END_V6, "v6"), "final7": (END_V7, "v7")}[mode]
+    if mode in ("dev2", "dev3", "dev4", "dev5", "dev6"):
         os.environ["PRELLM_HELDOUT"] = "1"   # V2 is development data from round 5 on
     base = VARIANTS[key]
     out = H.OUT / "R2" / variant

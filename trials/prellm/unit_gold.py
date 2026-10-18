@@ -31,7 +31,9 @@ SLICES = {"v4": ("2025-10-31", ("2025-09", "2025-10")),
           # V5 (round 7): the newest 4-month window overlapping no earlier slice, same draw rule
           "v5": ("2025-06-30", ("2025-05", "2025-06")),
           # V6 (round 11): Nov 2024-Feb 2025, between V3 and V5, same draw rule
-          "v6": ("2025-02-28", ("2025-01", "2025-02"))}
+          "v6": ("2025-02-28", ("2025-01", "2025-02")),
+          # V7 (round 13): Mar-Jun 2024, the 4 months before V3, same draw rule
+          "v7": ("2024-06-30", ("2024-05", "2024-06"))}
 
 
 def slice_reviews(slice_: str) -> list[dict]:

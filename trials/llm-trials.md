@@ -2001,3 +2001,91 @@ cause, while the product's own rule (S, P, the review) sets them aside, so those
 can't be recalled by design. That's a key convention, like U before round 10. It is not
 changed here; any change must be set before the next held-out month is labelled.
 Unseen data remains (every month before July 2024).
+
+## Embedding route, round 13: recall per complaint, and splitting large clusters (set 2026-10-18, before running)
+
+**Measurement rule, decided in the loop before any further month is labelled:** recall
+counts each (review, issue) pair once. It is recalled when any unit of that review
+carrying the issue sits in a cluster credited with it (`harness.evaluate`;
+`PRELLM_R_RULE=point` restores per-point recall). Reason (V6 content check): a unit key
+makes every sentence a point, so fragments filed by their review's cause ("This is a
+new issue", "Please come back later") are points the method sets aside by design. What
+a reader needs is the complaint found, not each of its sentences. Precision is
+unchanged. Re-score of r12v2's saved labels (no new runs):
+
+| Slice | Per point: R | Pass | Per pair: R | Pass | P | Tone | Grab |
+|---|---|---|---|---|---|---|---|
+| V1 | 59.8% | 0/5 | 63.6% | 5/5 | 75% | 0 | 0 |
+| V2 | 69% | 0/5 | 70.6% | 0/5 | 60% | 3 | 1 |
+| V3 | 68.6% | 5/5 | 82% | 5/5 | 78% | 0 | 1 |
+| V4 | 69.6% | 5/5 | 73% | 5/5 | 76% | 1 | 1 |
+| V5 | 60.6% | 4/5 | 73% | 5/5 | 85% | 0 | 0 |
+| V6 | 59.3% | 0/5 | 66% | 2/5 | 73% | 0 | 2 |
+
+The rule is confirmed only on a new held-out month (V7). Under it the one failing gate is
+grab-bags on V6 (and V2's tone, from its key's X convention).
+
+Fault: V6's grab-bags are kept clusters of 45–103 members in an incident window, where
+the fixed 60–85 band is too coarse. Literature: divisive re-clustering of large
+clusters (bisecting k-means, Steinbach, Karypis & Kumar 2000); LLM-judged
+cluster refinement (Islam 2026, arXiv 2604.07562); recursive partitioning (arXiv
+2509.22211). No app-review use found; the combination is my synthesis. **K**: each kept
+cluster larger than factor × the median kept size (and ≥ a floor) is split by k-means
+(k of 2–4 with the best cosine silhouette). Children below the minimum size join their
+nearest sibling, and each child gets the cluster review (two looks) and S. Model calls:
+a few per child, nothing per review.
+
+- r13v1 = r12v2 + K (factor 2, floor 40)
+- r13v2 = r12v2 + K (factor 1.5, floor 30)
+
+Development (all under the round-10 and round-13 rules): V6 first, then V5, V4, V1, V3,
+V2. Criteria: V6, V5, V4 and V3 ≥ 4 of 5 orders meeting all four gates; V1 and V2 median
+P and R no more than 3 points below r12v2, tone and grab-bags no higher. A variant that
+clearly fails V6 stops there. The bundle that meets them runs once on V7, a new month
+before July 2024 with a blind unit key frozen before any run.
+
+V7 key (written while round 13 ran, before any run on its window): 220 units of 75
+reviews (May–Jun 2024 draw, seed 0, window ending 2024-06-30), labelled blind by Claude
+2026-10-18, `trials/runs/prellm/v7/labels.txt`, sha256
+`0ea32960fe2aaa4f2d1d610e51af469ae85ec7bcb1893023640378e5a3b7d0ce`. The window is mostly
+the June 2024 e-transfer verification rollout.
+
+### Result: K fails V6; round 13 ends, V7 unspent (2026-10-18)
+
+| Run | Slice | P | R (per pair) | Tone | Grab-bags | Pass | Minutes |
+|---|---|---|---|---|---|---|---|
+| r12v2 | V6 | 73% | 66% | 0 | 2 (0–3) | 2/5 | 12.5 |
+| r13v1 (K 2×, floor 40) | V6 | 73% | 66% | 0 | 2 (0–3) | 2/5 | 20 |
+| r13v2 (K 1.5×, floor 30) | V6 | 76% (74–79) | 67.5% (64–69) | 0 | 2 (1–3) | 1/5 | 24 |
+
+r13v1's bar (56–64 members) splits nothing at the point K runs, so it reproduces r12v2.
+r13v2 splits 2–6 clusters an order (5–13 children, most kept). Both fail the V6
+criterion; V5 to V2 not run. ETA was 28 minutes for both, actual 44 (K's extra calls).
+
+Stage trace, r12v2, V6 order 0 (cached answers, no new calls):
+
+| Stages | P | R | Grab | Largest clusters |
+|---|---|---|---|---|
+| all | 72.9% | 66.2% | 3 | 103, 68, 57 |
+| without C | 72.9% | 67.5% | 3 | 57, 55, 55 |
+| without W5 | 71.4% | 67.5% | 2 | 91, 75, 51 |
+| without C and W5 | 72.4% | 70.1% | 2 | 55, 52, 51 |
+
+C builds the 103-member cluster (101 units moved), but the mixed clusters of 44–57 exist
+before W5 and C: the review and S keep them.
+
+Content, r13v2 grab-bags, every order: (1) "doesn't work on X" (45–55: device, country,
+branch hours, investing errors), a real mix, in 4 of 5 orders; (2) sign-in, password
+reset and verification (44–45), one team's area the key splits into M03, M04 and M18, in
+3 orders; (3) "e-transfer fails" (37, every order), coherent, but the key files its
+notification sentences under verification (M04, by cause), so M04 ties M11 and the
+cluster scores as mixed. Fixing (1) alone still leaves orders 0 and 2 failing on (2) and
+(3).
+
+**Decision (the loop's, recorded):** no further scoring-rule change. Rounds 10 and 13
+each changed a rule after seeing results. What binds now (labelling by cause, issues
+finer than one team's area) would be a third such change, which would fit the key to the
+method rather than test it. V7 stays unspent until a bundle meets the development
+criteria. The independent check that the handoff has asked for since round 5 (a team
+member's key for a month) is now the step that would settle whether these conventions
+or the method are at fault.

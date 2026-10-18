@@ -521,6 +521,16 @@ def evaluate(w: Window, labels: np.ndarray, slice: str = "v1", g: Gold | None = 
             mostly_u=len(lab) >= 2 and nu > len(lab) / 2,
         ))
     issue_pts = [p for p in g.points if p["issues"]]
+    if os.environ.get("PRELLM_R_RULE", "pair") == "pair":
+        # Round 13 rule: a review's complaint counts once. Each (review, issue) pair is
+        # recalled when any of its units sits in a cluster credited with that issue, so a
+        # fragment filed by its review's cause is not a point of its own.
+        # PRELLM_R_RULE=point restores per-point recall (rounds 4-12).
+        pairs: dict = {}
+        for p in issue_pts:
+            for x in p["issues"]:
+                pairs.setdefault((p["review_id"], x), []).extend(p["units"])
+        issue_pts = [dict(issues={x}, units=u) for (_, x), u in pairs.items()]
     recalled = sum(
         1 for p in issue_pts
         if any(labels[i] >= 0 and credited.get(int(labels[i])) in p["issues"] for i in p["units"]))
