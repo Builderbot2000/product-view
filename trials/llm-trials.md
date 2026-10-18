@@ -1864,3 +1864,140 @@ counts: "app not supported on my device" is split over 7 clusters.
 Next faults: (1) a cluster held together by a generic noun ("account"); (2) feature-less
 context fragments that the review keeps. A further held-out test needs a new blind month:
 the window ending 2025-02-28 (Nov 2024–Feb 2025) overlaps no earlier slice.
+
+## Embedding route, round 11: generic-word clusters and context fragments (set 2026-10-18, before running)
+
+Faults (V5, r8v2): (1) a cluster held together by a common word ("account") over
+different problems; (2) a cluster of fragments that name no feature on their own and
+mean something only inside their review; both cluster reviews called it specific.
+
+Literature: (1) frequent-word similarity sits in the embeddings' common mean and top
+principal directions; removing them is **all-but-the-top** (Mu & Viswanath 2018, ICLR),
+reported to help sentence clustering (arXiv 2009.11226). Ait-Saada & Nadif 2023
+(ACL short 103) find a limited effect, so the gain is not assured. (2) **Sentence
+specificity**: whether a sentence stands on its own without prior context (Li & Nenkova
+2015 SPECITELLER; Li et al. 2016 LREC, specificity in context; Ko, Durrett & Li 2019,
+arXiv 1811.05085, unsupervised domain adaptation). No app-review use found. The test
+is applied here in the existing once-per-cluster review, so it adds no model calls.
+
+- **A**: all-but-the-top on the Qwen3 vectors (window mean and top 2 principal
+  directions removed, renormalised) before the threshold mapping, so the mapped
+  thresholds follow.
+- **P**: review prompt `REVIEW_OWNER4` = owner3 + the stand-alone test. Sentences that name no
+  part of the app and no fault on their own are general (examples from another domain).
+  A mix over a shared common word ("account", "app", "phone": generic English) is broad.
+- Variants: r11v1 = r8v2 + A + P (bundle); r11v2 = r8v2 + A; r11v3 = r8v2 + P.
+
+Development: V5 first (it shows the faults; spent, so development now), then V4, V1,
+V3, V2. Criteria, all under the round-10 rule: V5, V3 and V4 ≥ 4 of 5 orders meeting
+all four gates; V1 and V2 median P and R no more than 3 points below r8v2, grab-bags
+and tone no higher than r8v2's (V1 0 and 0, V2 1 and 3). A variant that clearly fails V5 stops
+there. The bundle that meets them runs once on **V6** (window ending 2025-02-28, Nov
+2024–Feb 2025, which overlaps no earlier slice), whose blind unit key is written and
+frozen with a hash before any run on that window. Content check: every grab-bag and
+every cluster the review sends to the general bucket under P, order 0.
+
+V6 key: 210 units of 92 reviews (Jan–Feb 2025 draw, seed 0), labelled blind by Claude on
+2026-10-18 before any run on the window, `trials/runs/prellm/v6/labels.txt`, sha256
+`b3345bf8a37a2e5b3209a67599c862f928c0802eb5c5c1f098eba4b81ee19fb0`.
+
+### Result: A and P fail (2026-10-18)
+
+| Run | Slice | P | R | Tone | Grab-bags | Pass |
+|---|---|---|---|---|---|---|
+| r8v2 (round-10 rule) | V5 | 69% | 65% | 0 | 2 | 2/5 |
+| r11v1 (A + P) | V5 | 77% | 51% | 0 | 0 | 0/5 |
+| r11v2 (A) | V5 | 80% | 58.5% | 0 | 0 | 0/5 |
+| **r11v3 (P)** | V5 | 74% (72–75) | 64% (61–65) | 0 | 1 (1–1) | **5/5** |
+| r11v3 | V4 | 68% | 67% | 0 (0–2) | 1 (1–2) | 3/5 |
+| r11v3 | V1 | 70% | 62.5% | 1 (0–2) | 0 | 3/5 |
+| r11v3 | V2 | 53.5% | 74% | 4 | 2 | 0/5 |
+
+About 6 minutes a run. A clears the grab-bags but loses 6–14 recall points: dropped.
+P passes V5. On V5 it sends the fragment cluster to Miscellaneous (18 of 19 members) and
+drops the compatibility + "check your other device" mix. The "account" cluster stays
+(1 grab-bag, every order). But P fails development: V4 3/5; V1 P 4 points below r8v2 and
+tone up; V2 P −5, tone and grab-bags up. V3 not run. Content (order 0): the changed
+prompt moves the 9B model's verdict on other borderline clusters both ways. V1 keeps two
+more clusters (G and N units), and V4's verification cluster grows to 34 mixed members.
+The fault is the side effect on verdicts, not the stand-alone test.
+
+## Embedding route, round 12: a stand-alone check that only removes (set 2026-10-18, before running)
+
+Fault: round 11's P fixed V5's fragments but moved other verdicts. Fix: keep r8v2's
+review prompt and add **S**, a separate check on clusters both reviews call specific.
+It is one call per kept cluster (STANDALONE: "read each sentence on its own"; "one" =
+most name the same part of the app and a problem; "not" = fragments, or different
+problems sharing a common word; examples from another domain). "not" sends the cluster
+to Miscellaneous before W5, which learns from it. It can only remove clusters, so the
+verdicts r8v2 got right stay. Established parts: sentence specificity in context (Li
+et al. 2016), and LLM cluster checks that only reject (round 9's Janssens et al. 2025
+used merge; this one rejects). The combination is my synthesis.
+
+- r12v1 = r8v2 + S on 12 members spread across the cluster
+- r12v2 = r8v2 + S on the 12 members closest to the centre
+
+Criteria unchanged from round 11 (V5 first, then V4, V1, V3, V2; V5, V3, V4 ≥ 4/5; V1
+and V2 P and R within 3 points of r8v2, tone and grab-bags no higher). The bundle that
+meets them runs once on V6.
+
+### Result: r12v2 meets V5, V4, V1 and V2 (2026-10-18)
+
+| Run | Slice | P | R | Tone | Grab-bags | ARI | Pass |
+|---|---|---|---|---|---|---|---|
+| r8v2 | V5 | 69% | 65% | 0 | 2 | 0.88 | 2/5 |
+| r12v1 (S, spread) | V5 | 85% (83–85) | 59.6% (58.5–62) | 0 | 0 | 0.88 | 2/5 |
+| **r12v2 (S, centre)** | V5 | 85% (83–85) | 60.6% (60–62) | 0 | 0 | 0.90 | **4/5** |
+| r8v2 | V4 | 71% | 71% | 1 | 1 | | 5/5 |
+| **r12v2** | V4 | 75.7% (73–77.5) | 69.6% (68–71) | 1 (0–1) | 1 (1–1) | 0.87 | **5/5** |
+| r8v2 | V1 | 74% | 62% | 0 | 0 | | 3/5 |
+| **r12v2** | V1 | 75.4% (74.6–78) | 59.8% | 0 | 0 (0–1) | 0.86 | 0/5 |
+| r8v2 | V2 | 58.5% | 69% | 3 | 1 | | 0/5 |
+| **r12v2** | V2 | 60.3% (58–61) | 69.2% (66–72) | 3 | 1 (1–2) | 0.88 | 0/5 |
+
+About 4–5 minutes a run. Criteria: V5 met (4/5), V4 met (5/5). V1 met: P up, R −2.1 (limit
+3), tone and grab-bags no higher; it fails its own gates on recall, as r8v2 did in 2 of 5
+orders. V2 met. r12v1 dropped (V5 2/5). S removes 5–6 of ~30 kept clusters an order.
+
+Content, V5 order 0, every cluster S removed: the "account" mix (22), the context
+fragments (19), the compatibility + "check your other device" mix (16), a context cluster
+about living abroad and language (9), "won't load" (5: a real issue, wrongly removed),
+and a 3-member fragment cluster ("since last update", "just the 4.46.1"). Of the 11 issue
+points lost, most are sentences the key files by their review's cause inside those mixes.
+
+V3 (development, the round's last check): r12v2 P 78% (77–79), R 68.6% (68–71), tone 0,
+grab-bags 1, **5/5**, 21 minutes (ETA 55; r8v2's 57 included the first S-free band search).
+r12v2 meets every development criterion and runs once on V6.
+
+### Result: r12v2 fails held-out V6, 0/5 (2026-10-18)
+
+| Run | Slice | P | R | Tone | Grab-bags | Split | ARI | Pass |
+|---|---|---|---|---|---|---|---|---|
+| r12v2 | V6 | 73% (70–75) | **59.3% (57–62)** | 0 | **2 (0–3)** | 3 | 0.86 | **0/5** |
+
+12.5 minutes (ETA 12), 2,098 units. Orders 0 and 2 have R ≥ 60% but 3 grab-bags; order 4
+has none but R 57%. V6 is spent.
+
+Content check (order 0, every cluster). V6 is a device-support incident: "app not
+supported on my device" fills about 15 of 37 clusters (split, which no gate counts but
+a reader would see), and clusters are large (up to 103 members). The grab-bags:
+- **"reinstalled, same error"** (103): reinstalling and generic error messages across
+  investing, compatibility, verification and abroad. The breadth prompt calls
+  reinstall-not-fixing-it broad; the review and S both kept it.
+- **"doesn't work on X"** (57): device, country, branch hours, investing errors.
+- **sign-in, password reset and verification** (45): one area, three key issues.
+
+Of the 43 missed issue points: about 14 are fragments the key files by their review's
+cause ("This is a new issue", "Please come back later", "Done that, have that, still
+useless"), which the method sets aside on purpose (S, the review, W5); about 12 sit in a
+neighbouring issue's cluster where the key files the sentence by cause (e-transfer
+sentences in the verification cluster, labelled M04 by cause); about 7 are in the three
+grab-bags; credit score (M23), e-deposit and the e-transfer limit get no cluster.
+
+Two findings for the next round. (1) The fixed 60–85 band is too coarse for an
+incident window of this size: the large mixed clusters come from it (round 6 already
+asked for a window-size-aware band). (2) The key labels fragments by their review's
+cause, while the product's own rule (S, P, the review) sets them aside, so those points
+can't be recalled by design. That's a key convention, like U before round 10. It is not
+changed here; any change must be set before the next held-out month is labelled.
+Unseen data remains (every month before July 2024).

@@ -54,6 +54,10 @@ class R2Options:
     context: bool = False           # S3: embed each unit with its neighbouring units (contextual chunks)
     second_look: bool = False       # W6:a second review on members spread across the cluster; a
                                     # cluster stays specific only if both reviews say so (self-consistency)
+    standalone: str = ""            # S: "spread" or "centre" = kept clusters get a stand-alone check
+                                    # on those members; "not" sends the cluster to Miscellaneous
+    abtt: int = 0                   # A: all-but-the-top (Mu & Viswanath 2018): the window's mean and
+                                    # this many top principal directions leave the vectors
     neutral: bool = False           # N: no wording taken from this app in prompts or the set-aside
     cause: str = ""                 # C: symptom units join the cause cluster their review names;
                                     # "code" (Ca, asymmetric confidence) or "model" (Cb, one call per pair)
@@ -198,6 +202,21 @@ REVIEW_OWNER3 = REVIEW_OWNER.replace("switching banks", "switching to a competit
     '- "oops, an error occurred" / "always technical issues" / "error pops up every time, no idea why" '
     '-> broad\n- "app is so buggy" / "constant errors"')
 
+# Round 11, P: REVIEW_OWNER3 with the stand-alone test (Li et al. 2016, sentence specificity in
+# context): sentences that name no part of the app on their own are general, and a group
+# held together by a common word over different problems is broad.
+REVIEW_OWNER4 = REVIEW_OWNER3.replace(
+    "or they mix several different parts of the app.",
+    "or they mix several different parts of the app, even when they share a common word such as "
+    "\"account\", \"app\" or \"phone\".").replace(
+    "or the quality of customer support.",
+    "or the quality of customer support. Also general: sentences that name no part of the app and "
+    "no fault on their own and only make sense with the rest of their review (remarks, asides, "
+    "thanks, describing what one owns or did).").replace(
+    '- "worst delivery app ever"',
+    '- "it\'s only a year old....really" / "thanks a lot guys" / "I just bought a new bike" / '
+    '"apparently that isn\'t good enough" -> general\n- "worst delivery app ever"')
+
 BRAND_WORDS = {"rbc", "royal", "canada", "canadian"}
 
 
@@ -226,7 +245,8 @@ def review_clusters(w: H.Window, labels: np.ndarray, shown: int, how: str = "two
     prompt, answers = {"breadth": (REVIEW_BREADTH, ("specific", "broad", "general")),
                        "owner": (REVIEW_OWNER, ("specific", "broad", "general")),
                        "owner2": (REVIEW_OWNER2, ("specific", "broad", "general")),
-                       "owner3": (REVIEW_OWNER3, ("specific", "broad", "general"))}.get(
+                       "owner3": (REVIEW_OWNER3, ("specific", "broad", "general")),
+                       "owner4": (REVIEW_OWNER4, ("specific", "broad", "general"))}.get(
         how, (REVIEW, ("specific", "general")))
     cents = H.centres(w, labels)
     ids = sorted(cents)
@@ -241,6 +261,36 @@ def review_clusters(w: H.Window, labels: np.ndarray, shown: int, how: str = "two
         listing = "\n".join(f"- {' '.join(w.texts[i].split())[:200]}" for i in top)
         reqs.append(Req(prompt, f"Sentences:\n{listing}", obj({"answer": enum(*answers)})))
     got = _llm().run(reqs, label="cluster review") if reqs else []
+    return {l: g["answer"] for l, g in zip(ids, got)}
+
+
+STANDALONE = """You see sentences taken from reviews of a mobile app, grouped because they are similar. Read each sentence on its own, without guessing what the rest of its review said. Pick one answer:
+one: most sentences, each on its own, name the same part of the app (a screen, an action such as paying or signing in, a setting, a kind of device or connection, or the app failing to open) and a problem with it.
+not: most sentences name no part of the app on their own (remarks, asides, thanks, describing what one owns or did, reactions), or they describe different problems that only share a common word.
+
+Examples from another domain:
+- "driver map froze again" / "can't see where my driver is" / "tracking stops updating" -> one
+- "promo code rejected" / "promo code expired too early" / "can't combine two promo codes" -> one
+- "it's only a year old....really" / "thanks a lot guys" / "I just bought a new bike" / "apparently that isn't good enough" -> not
+- "my order never came" / "order history is empty" / "can't cancel my order" / "order total is wrong" -> not"""
+
+
+def standalone_check(w: H.Window, labels: np.ndarray, ids: list, shown: int, how: str) -> dict:
+    """S (round 12; sentence specificity in context, Li et al. 2016): one call per kept cluster
+    on its members spread across the closeness ranking ("spread") or closest to the centre."""
+    from product_view.issues.llm import Req, enum, obj
+    cents = H.centres(w, labels)
+    reqs = []
+    for l in ids:
+        m = np.flatnonzero(labels == l)
+        ranked = m[np.argsort(-(w.vectors[m] @ cents[l]), kind="stable")]
+        if how == "spread":
+            top = ranked[np.unique(np.linspace(0, len(ranked) - 1, min(shown, len(ranked))).round().astype(int))]
+        else:
+            top = ranked[:shown]
+        listing = "\n".join(f"- {' '.join(w.texts[i].split())[:200]}" for i in top)
+        reqs.append(Req(STANDALONE, f"Sentences:\n{listing}", obj({"answer": enum("one", "not")})))
+    got = _llm().run(reqs, label="stand-alone check") if reqs else []
     return {l: g["answer"] for l, g in zip(ids, got)}
 
 
@@ -297,6 +347,8 @@ def prepare(end: str, opts: R2Options) -> Prepared:
         v = embed(contextual_texts(base, end), CONTEXT_INSTRUCTION)
     else:
         v = embed(base.texts, opts.instruction)
+    if opts.abtt:
+        v = all_but_the_top(v, opts.abtt)
     w = replace(base, vectors=v, info=dict(base.info, embedder=EMBEDDER))
     elig = np.flatnonzero(~vague)
     f = quantile_map(nn3(base.vectors[elig]), nn3(v[elig]))
@@ -304,6 +356,15 @@ def prepare(end: str, opts: R2Options) -> Prepared:
     so = replace(so, reach=mapping["reach"], pull=mapping["pull"])
     cfg = replace(cfg, cohesion_floor=mapping["cohesion"])
     return Prepared(w, vague, cfg, so, mapping)
+
+
+def all_but_the_top(v: np.ndarray, d: int) -> np.ndarray:
+    """A (Mu & Viswanath 2018): remove the common mean and the top d principal directions,
+    which carry what every unit shares (frequent words), then renormalise."""
+    x = v - v.mean(axis=0)
+    _, _, vt = np.linalg.svd(x, full_matrices=False)
+    x = x - (x @ vt[:d].T) @ vt[:d]
+    return (x / np.linalg.norm(x, axis=1, keepdims=True)).astype(np.float32)
 
 
 def unit_verdicts(w: H.Window, labels: np.ndarray, before: np.ndarray, verdict: dict[int, str],
@@ -406,6 +467,15 @@ def cluster(p: Prepared, order_seed: int, opts: R2Options) -> tuple[np.ndarray, 
             verdict = {l: v if v != "specific" else again[l] for l, v in verdict.items()}
             info["w6_changed"] = sum(1 for l in verdict if again[l] != "specific" and verdict[l] == again[l]
                                      and again[l] != "specific")
+        if opts.standalone:
+            # S (round 12): a check that only removes; kept clusters whose sentences, each on
+            # its own, don't name one part of the app go to Miscellaneous
+            keep = [l for l, v in verdict.items() if v == "specific"]
+            sa = standalone_check(w, labels, keep, opts.review_shown, opts.standalone)
+            for l in keep:
+                if sa[l] == "not":
+                    verdict[l] = "broad"
+            info["s_removed"] = [l for l in keep if sa[l] == "not"]
         gen =[l for l, v in verdict.items() if v == "general"]
         broad = [l for l, v in verdict.items() if v == "broad"]
         for l in gen:
@@ -694,6 +764,13 @@ VARIANTS["r8v2"] = replace(VARIANTS["r6v2"], band=(60, 85))
 VARIANTS["r8v3"] = replace(VARIANTS["r8v1"], min_size=3)
 # round 9: r8v2 + M (the reduce step: merge kept clusters the model judges the same issue)
 VARIANTS["r9v1"] = replace(VARIANTS["r8v2"], merge_pairs=2)
+# round 11: A (all-but-the-top, 2 directions) and P (stand-alone test in the cluster review)
+VARIANTS["r11v1"] = replace(VARIANTS["r8v2"], abtt=2, review="owner4")
+VARIANTS["r11v2"] = replace(VARIANTS["r8v2"], abtt=2)
+VARIANTS["r11v3"] = replace(VARIANTS["r8v2"], review="owner4")
+# round 12: r8v2 + S (a stand-alone check on kept clusters that can only remove them)
+VARIANTS["r12v1"] = replace(VARIANTS["r8v2"], standalone="spread")
+VARIANTS["r12v2"] = replace(VARIANTS["r8v2"], standalone="centre")
 
 
 def configs(base: R2Options, names: set[str]):
@@ -710,7 +787,7 @@ def configs(base: R2Options, names: set[str]):
 def run_one(name: str, opts: R2Options, end: str, slice_: str, out: Path, prepared: dict) -> dict:
     # Only the window and its vectors are shared between runs; the thresholds and the
     # cluster settings (band, U2, U6) come from this run's options.
-    key = (opts.w1, opts.stack.u4, opts.instruction, opts.merge, opts.context, opts.neutral, end)
+    key = (opts.w1, opts.stack.u4, opts.instruction, opts.merge, opts.context, opts.neutral, opts.abtt, end)
     if key not in prepared:
         prepared[key] = prepare(end, opts)
     p = prepare_settings(prepared[key], opts)
@@ -743,6 +820,7 @@ def run_one(name: str, opts: R2Options, end: str, slice_: str, out: Path, prepar
 END_V3 = "2024-10-31"
 END_V4 = "2025-10-31"
 END_V5 = "2025-06-30"
+END_V6 = "2025-02-28"
 _gold = H.gold
 
 
@@ -751,7 +829,7 @@ def _gold_any(w, slice="v1"):
     if slice == "v3":
         from trials.prellm import v3_gold
         return v3_gold.gold(w)
-    if slice in ("v4", "v5"):
+    if slice in ("v4", "v5", "v6"):
         from trials.prellm import unit_gold
         return unit_gold.gold(w, slice)
     return _gold(w, slice)
@@ -772,8 +850,9 @@ def main():
     mode, _, key = variant.partition("-") if "-" in variant else ("", "", variant)
     end, slice_ = {"": (END_DEV, "v1"), "dev2": (END_HELD, "v2"), "final": (END_HELD, "v2"),
                    "final3": (END_V3, "v3"), "dev3": (END_V3, "v3"), "final4": (END_V4, "v4"),
-                   "dev4": (END_V4, "v4"), "final5": (END_V5, "v5"), "dev1": (END_DEV, "v1")}[mode]
-    if mode in ("dev2", "dev3", "dev4"):
+                   "dev4": (END_V4, "v4"), "final5": (END_V5, "v5"), "dev1": (END_DEV, "v1"),
+                   "dev5": (END_V5, "v5"), "final6": (END_V6, "v6")}[mode]
+    if mode in ("dev2", "dev3", "dev4", "dev5"):
         os.environ["PRELLM_HELDOUT"] = "1"   # V2 is development data from round 5 on
     base = VARIANTS[key]
     out = H.OUT / "R2" / variant
