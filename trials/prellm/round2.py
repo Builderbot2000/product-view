@@ -44,6 +44,9 @@ class R2Options:
     review: str = "two-way"         # W2 prompt: "two-way" (specific/general) or "breadth" (specific/broad/general)
     merge: float = 0.45             # W3: segments re-joined into units at this cosine; > 1 keeps segments apart
     band: tuple[int, int] = (20, 30)  # clusters the band search aims for, before the review
+    min_size: int = 5               # smallest cluster kept (round 8: 3 lets small issues form one)
+    merge_pairs: int = 0            # M: > 0 = each kept cluster's this many nearest are put to the
+                                    # model as merge candidates (reduce after over-clustering)
     reassign: bool = False          # W4: Misc units join the nearest kept issue cluster at the pull bar
                                     # (BERTopic reduce_outliers, embeddings strategy)
     unit_verdicts: bool = False     # W5: a classifier trained on the cluster verdicts judges each unit
@@ -103,6 +106,8 @@ def embed(texts, instruction: str = INSTRUCTION) -> np.ndarray:
 
 
 GPU_EMBEDDER = "qwen3-embedding:0.6b"
+# Ollama's address; OLLAMA_HOST moves it when Windows reserves the default port at boot
+OLLAMA = "http://" + os.environ.get("OLLAMA_HOST", "127.0.0.1:11434").removeprefix("http://")
 
 
 def embed_gpu(texts: list[str], instruction: str) -> np.ndarray:
@@ -113,7 +118,7 @@ def embed_gpu(texts: list[str], instruction: str) -> np.ndarray:
     for i in range(0, len(texts), 64):
         body = json.dumps({"model": GPU_EMBEDDER,
                            "input": [f"Instruct: {instruction}\nQuery: {t}" for t in texts[i:i + 64]]}).encode()
-        req = urllib.request.Request("http://localhost:11434/api/embed", body, {"Content-Type": "application/json"})
+        req = urllib.request.Request(f"{OLLAMA}/api/embed", body, {"Content-Type": "application/json"})
         out.append(np.array(json.load(urllib.request.urlopen(req, timeout=600))["embeddings"], dtype=np.float32))
     v = np.vstack(out)
     return v / np.linalg.norm(v, axis=1, keepdims=True)
@@ -210,7 +215,7 @@ def vague_neutral(w: H.Window) -> np.ndarray:
 @lru_cache(maxsize=1)
 def _llm():
     from product_view.issues.llm import LLM, LLMConfig
-    return LLM(LLMConfig(), CACHE / "llm-calls.db")
+    return LLM(LLMConfig(base_url=OLLAMA), CACHE / "llm-calls.db")
 
 
 def review_clusters(w: H.Window, labels: np.ndarray, shown: int, how: str = "two-way",
@@ -285,7 +290,7 @@ def contextual_texts(w: H.Window, end: str) -> list[str]:
 def prepare(end: str, opts: R2Options) -> Prepared:
     base = window(end, opts)
     vague = vague_neutral(base) if opts.neutral else H.vague_mask(base)
-    cfg, so, mapping = H.ClusterConfig(band=opts.band), opts.stack, {}
+    cfg, so, mapping = H.ClusterConfig(band=opts.band, min_size=opts.min_size), opts.stack, {}
     if not opts.w1:
         return Prepared(base, vague, cfg, so, mapping)
     if opts.context:
@@ -358,7 +363,7 @@ def unit_verdicts(w: H.Window, labels: np.ndarray, before: np.ndarray, verdict: 
 
 def prepare_settings(p: Prepared, opts: R2Options) -> Prepared:
     """p's window and vectors with opts' stack switches, band and (mapped) thresholds."""
-    so, cfg = opts.stack, H.ClusterConfig(band=opts.band)
+    so, cfg = opts.stack, H.ClusterConfig(band=opts.band, min_size=opts.min_size)
     if p.mapping:
         so = replace(so, reach=p.mapping["reach"], pull=p.mapping["pull"])
         cfg = replace(cfg, cohesion_floor=p.mapping["cohesion"])
@@ -424,10 +429,67 @@ def cluster(p: Prepared, order_seed: int, opts: R2Options) -> tuple[np.ndarray, 
         info["w4_reassigned"] = int(ok.sum())
     if opts.unit_verdicts and opts.w2 and reviewed:
         labels, info["w5"] = unit_verdicts(w, labels, before, verdict, p.vague, so.pull, opts.rescue_bar)
+    if opts.merge_pairs:
+        labels, info["merge"] = merge_clusters(w, labels, opts.merge_pairs, opts.review_shown)
     if opts.cause:
         labels, info["cause"] = attribute_causes(w, labels, opts.cause, min_lift=opts.cause_lift)
     labels = H.canonical(labels)
     return labels, info
+
+
+# ------------------------------------------------------------------- M ----
+
+MERGE = """You see two groups of sentences taken from reviews of a mobile app. Each group was judged to be about one specific problem. Decide whether both groups describe the same problem, so that one product team would fix them together as one issue. Pick one answer:
+same: both groups are about the same part of the app (the same screen, action, setting, kind of device or step) failing in the same way, even if worded differently or describing different moments of the same step.
+different: the groups are about different parts of the app, or different failures of the same part that would be fixed separately.
+
+Examples from another domain:
+- A "driver map froze" / "can't see my driver" and B "tracking stops updating" / "driver location wrong" -> same
+- A "promo code rejected" and B "card declined at checkout" -> different
+- A "can't log in" and B "password reset email never arrives" -> different"""
+
+
+def merge_clusters(w: H.Window, labels: np.ndarray, k: int, shown: int) -> tuple[np.ndarray, dict]:
+    """M (reduce after over-clustering; Janssens et al. 2025, LLM-assisted topic merging):
+    each kept cluster's k nearest kept clusters by centre are candidate pairs; one call per
+    pair on the members closest to each centre; pairs judged the same merge (union-find)."""
+    from product_view.issues.llm import Req, enum, obj
+    cents = H.centres(w, labels)
+    ids = sorted(cents)
+    if len(ids) < 2:
+        return labels, {"pairs": 0, "merged": 0}
+    mat = np.stack([cents[l] for l in ids])
+    sim = mat @ mat.T
+    np.fill_diagonal(sim, -1)
+    pairs = sorted({tuple(sorted((ids[a], ids[b]))) for a in range(len(ids))
+                    for b in np.argsort(-sim[a])[:k]})
+
+    def listing(l):
+        m = np.flatnonzero(labels == l)
+        top = m[np.argsort(-(w.vectors[m] @ cents[l]), kind="stable")[:shown // 2]]
+        return "\n".join(f"- {' '.join(w.texts[i].split())[:200]}" for i in top)
+
+    reqs = [Req(MERGE, f"Group A:\n{listing(a)}\n\nGroup B:\n{listing(b)}", obj({"answer": enum("same", "different")}))
+            for a, b in pairs]
+    got = _llm().run(reqs, label="cluster merge")
+    parent = {l: l for l in ids}
+
+    def root(l):
+        while parent[l] != l:
+            parent[l] = parent[parent[l]]
+            l = parent[l]
+        return l
+
+    same = [(a, b) for (a, b), g in zip(pairs, got) if g["answer"] == "same"]
+    for a, b in same:
+        ra, rb = root(a), root(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+    out = labels.copy()
+    for l in ids:
+        out[labels == l] = root(l)
+    return out, {"pairs": len(pairs), "same": [list(p) for p in same],
+                 "clusters_before": len(ids), "clusters_after": len({root(l) for l in ids})}
 
 
 # ------------------------------------------------------------------- E ----
@@ -626,6 +688,12 @@ VARIANTS["r7v1"] = replace(VARIANTS["r6v2"], eac=0.005, cause_lift=1.5)
 VARIANTS["r7v2"] = replace(VARIANTS["r6v2"], eac=0.01, cause_lift=1.5)
 # round 7, v3: v1 + noise units join the cluster they co-occur with most (mean co-association >= 0.2)
 VARIANTS["r7v3"] = replace(VARIANTS["r7v1"], eac_outliers=0.2)
+# round 8: finer clusters before the review (over-cluster; the review and W5 decide what stays)
+VARIANTS["r8v1"] = replace(VARIANTS["r6v2"], band=(50, 70))
+VARIANTS["r8v2"] = replace(VARIANTS["r6v2"], band=(60, 85))
+VARIANTS["r8v3"] = replace(VARIANTS["r8v1"], min_size=3)
+# round 9: r8v2 + M (the reduce step: merge kept clusters the model judges the same issue)
+VARIANTS["r9v1"] = replace(VARIANTS["r8v2"], merge_pairs=2)
 
 
 def configs(base: R2Options, names: set[str]):
@@ -704,7 +772,7 @@ def main():
     mode, _, key = variant.partition("-") if "-" in variant else ("", "", variant)
     end, slice_ = {"": (END_DEV, "v1"), "dev2": (END_HELD, "v2"), "final": (END_HELD, "v2"),
                    "final3": (END_V3, "v3"), "dev3": (END_V3, "v3"), "final4": (END_V4, "v4"),
-                   "dev4": (END_V4, "v4"), "final5": (END_V5, "v5")}[mode]
+                   "dev4": (END_V4, "v4"), "final5": (END_V5, "v5"), "dev1": (END_DEV, "v1")}[mode]
     if mode in ("dev2", "dev3", "dev4"):
         os.environ["PRELLM_HELDOUT"] = "1"   # V2 is development data from round 5 on
     base = VARIANTS[key]

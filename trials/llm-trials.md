@@ -1645,3 +1645,143 @@ fault they targeted on the window that showed it (V3's symptoms, V4's
 granularity) and lost elsewhere, while round 6's bootstrap puts a 5/5 on ~220
 labelled units at 31–46% odds. Further tuning against these keys risks fitting
 their noise; see the handoff for the options put to Kevin.
+
+## Embedding route, round 8: where V4's losses happen (2026-10-17, screens only)
+
+Diagnosis first: r6v2's saved V4 labels, order 0, traced stage by stage (set-aside,
+consensus, cluster review, W5, C). Of the issue units that end outside every issue
+cluster, 18 of 21 leave with a whole cluster at the review (9 to the general bucket,
+9 to Miscellaneous), 2 at W5, 1 at the set-aside. Of the 33 missed issue points: about
+12 are sentences that name no feature ("doesnt work at all", "Technical difficulties,
+every time", "RBC fix this asap") and carry their issue only through the review; about
+11 sit in a neighbouring issue's cluster (biometrics in two-step verification, blocked
+account in device access, GrapheneOS in phone compatibility); about 6 belong to issues
+too small for a cluster in this window (adding a bill or payee, late Visa alerts,
+crashes); about 4 are specific sentences grouped with general ones on the bank's name
+("No RBC Mobile app is available for my Samsung tablet" with "I love rbc"). Both
+grab-bags are mostly U units.
+
+Three fixes screened on saved labels, no new model calls; none got a full run:
+
+- **D, split broad clusters** (LLM-confirmed splitting of low-cohesion clusters,
+  arXiv 2603.08159; recursive re-clustering, arXiv 2510.16152): each broad cluster
+  re-clustered into 2–4 children. Children stay vague ("technical difficulties",
+  "no idea why"); about 3 of 18 look specific, carrying 1–3 issue points, mostly U.
+  Not worth the calls.
+- **Rm, similarity rescue from removed clusters** (BERTopic reduce_outliers,
+  embeddings, at each kept cluster's 10th-percentile member): 113 units join, of the
+  labelled ones 4 right and 33 wrong. Fail.
+- **Ci, context attribution for units outside the issue list** (round 6's C,
+  Hai et al. 2011, extended to Miscellaneous and general-bucket units in a review
+  with a kept issue unit), all slices, 5 orders:
+
+| Slice | r6v2: P | R | Grab | Pass | Misc, one cluster: P | R | Grab | Pass |
+|---|---|---|---|---|---|---|---|---|
+| V1 | 69% | 62% | 1 | 3/5 | 55% | 64.5% | 2 | 0/5 |
+| V2 | 52% | 61.5% | 3 | 0/5 | 40% | 61.5% | 4 | 0/5 |
+| V3 | 72% | 70% | 1 | 5/5 | 73% | 71% | 1 | 5/5 |
+| V4 | 53% | 54% | 3 | 0/5 | 45% | 57% | 5 | 0/5 |
+
+  Recall rises 1–3 points (up to 8 with the general bucket included) and precision
+  falls 7–20: the keys mark most such sentences G, X or U. Fail.
+
+Round 8 ends without a full run; V5 stays unspent. What V4 still lacks is mostly the
+key's conventions rather than a fault a single method change reaches: sentences filed
+by their review's cause, issues finer than one team's area, and the U rule. Each
+remaining reachable loss is worth 3–4 recall points on V4, against 6 needed in
+precision and recall at once.
+
+### Round 8 continued: finer clusters before the review (set 2026-10-17, before running)
+
+Fault (V4 trace above): about 11 missed points sit in a neighbouring issue's cluster
+and about 6 belong to issues with no cluster of their own, so the clusters are coarser
+than the issues before the review sees them. Neither P nor R penalises a finer split
+(each cluster is credited with its own majority issue); only grab-bags, tone and the
+minimum cluster size push back.
+
+Established method: over-cluster, then reduce (BERTopic's guidance to fit many topics
+and reduce after; Janssens et al. 2025, arXiv 2509.19365, LLM-assisted reduction of an
+over-clustered BERTopic model). The reduce step only fixes fragments, which no gate
+counts; it is left out unless the content check shows fragments a reader would mind.
+
+- v1 = r6v2 with the band at 50–70 clusters before the review (was 35–50)
+- v2 = r6v2 with the band at 60–85
+- v3 = v1 with a minimum cluster size of 3 (was 5)
+
+Development: V4 first (the window that shows the fault), then V1, V3, V2. Criteria:
+V3 and V4 ≥ 4 of 5 orders meeting all four gates; V1 and V2 median P and R no more
+than 3 points below r6v2, grab-bags and tone no higher. A variant that clearly fails
+V4 stops there. The bundle that meets them runs once on V5.
+
+### Result: v2 best; meets V1 and V3, fails V2 and V4 on X and U clusters (2026-10-18)
+
+| Run | Slice | P | R | Tone | Grab-bags | ARI | Pass |
+|---|---|---|---|---|---|---|---|
+| r6v2 | V4 | 53% | 54% | 0 | 3 | 0.81 | 0/5 |
+| v1 (50–70) | V4 | 50% (48–53) | 61% (54–65) | 0 | 4 (2–5) | 0.77 | 0/5 |
+| **v2 (60–85)** | V4 | 55% (53–55) | **71% (68–71)** | 0 | 5 (4–5) | 0.88 | 0/5 |
+| v3 (v1, min 3) | V4 | 50.5% (49.5–56) | 63% (62–65) | 0 | 5 (1–5) | 0.78 | 0/5 |
+| **v2** | V1 | 70% (69–71) | 62% (60–62) | 0 | 1 (0–1) | 0.89 | 3/5 |
+| **v2** | V2 | 47% (44–48) | 69% (65–74) | 1 (1–2) | 3 (2–3) | 0.89 | 0/5 |
+| **v2** | V3 | 77% (73–77) | 69.5% (69–72) | 0 | 1 (1–1) | 0.86 | 5/5 |
+
+About 12 minutes per variant on V4, V1 and V2; V3 took 57 minutes (ETA 45: the
+finer band search on 4,362 units). Criteria: V3 met, V1 met (no worse), V2 fails
+(P 5 points below r6v2, limit 3), V4 fails (0/5). V5 not run.
+
+Content check: every grab-bag read on V4 and V2, order 0, is a coherent cluster but one:
+V4 "two-step verification, biometrics, trusted devices" (one area, three key issues),
+"only on the website" (U), "balance shows the previous day" (U), and one real mix
+(credit-card sign-up, credit score, a loan, a locked account); V2 "no tablet app"
+(X), "e-transfer daily limits" (N, U), "forced to install the app" (X, U). The recall
+gain is real: dark mode, adding a payee and GrapheneOS get clusters of their own.
+
+Diagnostic, scored with U (and on V1/V2 X) units left out of the key, saved labels:
+V4 v2 P 71%, R 71%, grab-bags 1, **5/5** (r6v2 0/5); V2 v2 P 78%, R 69%, **5/5**
+(r6v2 3/5); V1 v2 P 82%, R 59%, 0/5 (recall binds). Not a pass: the gates are
+unchanged.
+
+Next fault, V1 recall (trace of order 0): 10 of 20 lost issue units are left
+unclustered by the consensus, mostly long sentences naming two or three faults.
+
+Screened after the result, on saved r8v2 labels (no model calls), for V1's recall:
+**A, clause assignment** (BERTopic `approximate_distribution`: a Miscellaneous unit is
+split into clauses and joins the kept cluster its best clause reaches at that
+cluster's 10th- or 25th-percentile member). V1 R unchanged (61.7%), P 58–65% (from
+70%); V2 and V4 P down 2–4, R up 1–2. Fail. V1's missed points are mostly the
+incident's one flow filed under three key issues: 4 of 9 missed "photo capture"
+points sit in the trusted-device cluster ("adding a trusted device does not work,
+there is no capture image button when scanning back of license").
+
+## Embedding route, round 9: the reduce step (set 2026-10-18, before running)
+
+Fault (r8v2, every slice): fragments. One issue spread over several kept clusters
+(V1: two-factor in 5, sign-in in 4; split 3–5 per slice). No gate counts them, but a
+reader sees one problem listed several times. Established method: the second half
+of over-cluster-then-reduce (Janssens et al. 2025, LLM-assisted merging of an
+over-clustered topic model): **M**, each kept cluster's 2 nearest kept clusters by
+centre are candidate pairs; one model call per pair on the 6 members closest to each
+centre ("same problem, fixed together by one team" or "different", examples from
+another domain); pairs judged the same merge (union-find). Before C.
+
+Variant: r9v1 = r8v2 + M. Criteria, on V4, V1, V2 then V3: split lower than r8v2;
+median P and R no more than 2 points below r8v2; grab-bags and tone no higher; the
+pass gates as before. A merge that joins two key issues raises grab-bags, which the
+criteria catch. Content check: read every merged pair of order 0.
+
+### Result: M fails (2026-10-18)
+
+| Run | Slice | P | R | Grab-bags | Split | Clusters | Pass |
+|---|---|---|---|---|---|---|---|
+| r8v2 | V4 | 55% | 71% | 5 | 5 | 31 | 0/5 |
+| r9v1 | V4 | 50.5% | 65% | 6 (6–8) | 4 | 22 | 0/5 |
+| r8v2 | V1 | 70% | 62% | 1 | 5 | 24 | 3/5 |
+| r9v1 | V1 | 57% | **49%** | 1 | 2 | 11 | 0/5 |
+| r8v2 | V2 | 47% | 69% | 3 | 2 | 33 | 0/5 |
+| r9v1 | V2 | 47% | 69% | 2 | 2 | 25 | 0/5 |
+
+26 minutes for the three slices. Content, V1 order 0: 14 of 36 pairs judged the same,
+24 clusters became 13; merged were e-transfer with cheque deposit, e-transfer with
+"turn off USB debugging", repeated verification prompts with crashing, verification
+with "security setup is garbage". The local model says "same" far too readily and
+union-find chains the pairs. V3 not run; M dropped. Best bundle stays **r8v2**.
