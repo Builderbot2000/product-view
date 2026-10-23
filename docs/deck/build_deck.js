@@ -1,8 +1,8 @@
 // Build docs/deck/product-view-pitch.pptx: the proposal deck for senior managers (pitch-deck-brief.md,
 // revisions of 2026-10-23). Slide sources live in out/deck/sources.md, not in the deck.
 // Run from the repo root: NODE_PATH=<node_modules dir> PPTX_SKILL=<pptx skill dir> node docs/deck/build_deck.js
-// Needs pptxgenjs, react, react-dom, react-icons, sharp and js-yaml, plus the gitignored inputs
-// out/deck/assets/ (charts rasterised from the demo report) and out/deck/brand/rbc-logo-small.png.
+// Needs pptxgenjs, react, react-dom, react-icons, sharp and js-yaml. Inputs are in docs/deck/assets/:
+// two charts rasterised from the demo report (out/report-proofread/) and the logo.
 const fs = require("fs");
 const path = require("path");
 const pptxgen = require("pptxgenjs");
@@ -13,7 +13,7 @@ const fa = require("react-icons/fa");
 const { applyTheme } = require(process.env.PPTX_SKILL + "/scripts/apply_theme.js");
 
 const OUT = process.env.DECK_OUT || "docs/deck/product-view-pitch.pptx";
-const ASSETS = "out/deck/assets";
+const ASSETS = "docs/deck/assets";
 
 // RBC brand guide 6.1, "Mass" palette: Bright Blue Tint 1 (digital primary) 006AC3, Bright Blue
 // 0051A5, Cool White E7EEF1, Warm Yellow FFC72C; Dark Blue 003168 is for High Net Worth only.
@@ -46,7 +46,7 @@ const CW = W - 2 * M; // content width
 const slideNum = () => ({ x: M, y: 6.98, w: 0.5, h: 0.32, fontSize: 11, color: HEX.accent3, align: "left" });
 // RBC logo, bottom-right as in every guide sample. 0.5" tall = 48px, the digital minimum (guide 3.4).
 // Source: en.wikipedia.org File:RBC_Royal_Bank.svg (not an RBC-supplied file), rendered to PNG.
-const LOGO_PNG = "out/deck/brand/rbc-logo-small.png"; // rbc-logo.png downsized to 400 px tall
+const LOGO_PNG = path.join(ASSETS, "rbc-logo-small.png"); // 400 px tall
 const LOGO_RATIO = 277.35 / 360.56; // width / height of the shield
 const logoAt = (right, y, h) => ({ image: { x: right - h * LOGO_RATIO, y, w: h * LOGO_RATIO, h, path: LOGO_PNG, altText: "RBC logo" } });
 const logoObjs = () => [logoAt(W - M, 6.85, 0.5)];
