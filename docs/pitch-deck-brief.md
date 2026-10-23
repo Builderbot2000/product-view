@@ -93,7 +93,7 @@ know this project, and they won't read code.
 > every week", not containers or a scheduler; "four weeks", not period.
 > Technical names (Ollama, Qwen, SMTP, embeddings, YAML) go only in speaker
 > notes, for questions. Mark anything not yet built as planned on the slide
-> itself. The generator is `out/deck/build_deck.js` (gitignored).
+> itself. The generator is `docs/deck/build_deck.js`.
 >
 > **Revised again 2026-10-23 (supersedes the story arc, honesty slide and
 > appendix below):** the deck proposes the whole project; Azure resources come
