@@ -85,6 +85,28 @@ The audience is **RBC managers** (Mobile division product leadership and the
 managers around it). They know the RBC Mobile app and the business. They don't
 know this project, and they won't read code.
 
+> **Revised 2026-10-23:** the deck goes to **higher-level managers** who know
+> neither the project's internals nor the technology. Assume no internal terms
+> and no tech vocabulary, in the appendix too: "sort reviews by feature", not
+> tag or match; "our internal wiki", not Confluence (name it once in the talk
+> track); "the AI runs on our own computer", not local model; "runs by itself
+> every week", not containers or a scheduler; "four weeks", not period.
+> Technical names (Ollama, Qwen, SMTP, embeddings, YAML) go only in speaker
+> notes, for questions. Mark anything not yet built as planned on the slide
+> itself. The generator is `out/deck/build_deck.js` (gitignored).
+>
+> **Revised again 2026-10-23 (supersedes the story arc, honesty slide and
+> appendix below):** the deck proposes the whole project; Azure resources come
+> in the second half. Order: need (Slack, one review at a time) → what the
+> Mobile product manager asked for (a weekly email per team on its own
+> features; RBC's push on AI is mentioned as the inspiration, one line) →
+> requirements → how it works and how a report is put together (principle
+> only) → what teams receive → running it on Azure → what we need → next steps
+> and the decision. **No appendix. No trials, failures or build status**: the
+> only progress stated is that a demo is deployed and the Mobile product
+> manager's feedback was positive. Speaker notes hold the talk track only;
+> sources are in `out/deck/sources.md`.
+
 - **Write slide text in their language.** Follow the project's rule for
   reader-facing copy: no tool or file names (`pv`, `curation.yaml`), no pipeline
   terms (embedding, Leiden, clustering, medoid, ILP), and no statistics terms
