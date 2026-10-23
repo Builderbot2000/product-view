@@ -6,3 +6,6 @@ __pycache__/
 .env
 trials/confluence/confluence-probe/*/ProbeDashboard/
 trials/runs/
+
+# The real team -> member -> topic matrix is confidential; only matrix.sample.yaml is committed
+matrix.yaml

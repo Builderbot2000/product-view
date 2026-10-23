@@ -22,6 +22,33 @@ update") to tell good clustering from bad.
 Written as a session handoff: everything below was established by running things,
 not by reasoning about them. A fresh session should not need to re-derive any of it.
 
+### Requirements change, 2026-10-22 (read before anything below)
+
+Reports are now tailored to a fixed matrix of **team → team member → topic**.
+Topics are specific, predefined app features ("change password or PIN", "more /
+settings menu"); Product View matches reviews to them and no longer forms its
+own issues. Each team has several members, each owning several topics. The
+application must also run entirely in containers, email each member a link to
+a report on their own topics, and collect the newest reviews on a schedule.
+Decisions D18–D22 and the open questions are in
+[report-design.md](report-design.md) §9. None of it is built yet.
+
+- **Format, with invented content:** [matrix.sample.yaml](../matrix.sample.yaml).
+  The real `matrix.yaml` is confidential and gitignored; Kevin populates it from
+  the internal document, keeping the format.
+- **Superseded:** issue forming as the goal of `pv issues` and of the
+  embedding-route trials (R03; [handoff-2026-10-18.md](handoff-2026-10-18.md));
+  "no app-specific curation" ([llm-trials.md](../trials/llm-trials.md) decision 4),
+  since the topics are app-specific by design; role pages (report-design.md
+  D16), replaced by team pages and member reports; delivery by @mentions and
+  Slack (D9), replaced by email; and "no scheduler daemon" (§1 non-goals, §7).
+- **Kept:** collection, translation, the review store, the report's charts and
+  periodic layout (D15), Confluence publishing, the local model, and
+  traceable quotes.
+- **Validation:** the embedding-route results measure issue forming, not
+  matching. Matching needs its own check against reviews labelled with the
+  topic list (report-design.md §9).
+
 ### What is built
 
 | Stage | Status |
@@ -807,6 +834,10 @@ storage-format restriction after building a CSS-heavy dashboard means rebuilding
 the renderer.
 
 ## 7. Scheduling (demo)
+
+> **Superseded 2026-10-22:** periodic collection is now a requirement, run by a
+> scheduler inside the containerized application (report-design.md D22). The
+> recipes below describe the demo.
 
 No daemon. Documented recipes only. The scheduled command is `pv run --fetch`:
 fetch the latest reviews, rebuild the database clean, then translate, embed and

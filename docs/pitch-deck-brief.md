@@ -3,6 +3,28 @@
 Instructions for a Claude session asked to build the Product View pitch deck.
 Written 2026-10-22. Read all of it before writing a slide.
 
+> **Revised 2026-10-22, after the requirements change** (Project.md §0
+> "Requirements change"; report-design.md §9). Where this brief and those
+> sections disagree, they win. The deck now tells this story:
+>
+> - Step 3 of the flow is **matching reviews to a fixed list of topics**
+>   (specific features), not grouping them into issues the tool names. Don't
+>   say issues "keep the same name": topics are given.
+> - A slide on **who gets what**: the team → member → topic matrix, shown with
+>   the invented sample from `matrix.sample.yaml`, labelled as illustrative.
+>   Never show the real matrix: it is confidential.
+> - **Delivery:** one Confluence page per team for the high-level view, and an
+>   email to each member linking to a report on their own topics, built from
+>   one standard template.
+> - **Runs itself:** containerized, with collection on a schedule.
+> - **Where it stands:** the grouping results measured forming issues, not
+>   matching. Keep them in the appendix, labelled as the earlier approach; the
+>   main deck says matching is not built or tested yet. Containers, email and
+>   the schedule are not built either.
+> - **The ask** adds a place to run it: a host for the containers, a mail
+>   relay and the mailing lists, and the real matrix. The independent check is
+>   now a month labelled against the topic list.
+
 ## Workflow: build here, polish in PowerPoint
 
 1. **Build (Claude Code, this repo):** the full deck, from the sources below,
@@ -161,6 +183,27 @@ The validation numbers are the easiest part to oversell. Don't.
 - If a number isn't in the files above, leave it out.
 
 ## RBC branding
+
+> **Brand guide in use (2026-10-22):** the deck follows the RBC brand guide
+> pages published on Behance by Akil Worrell (design lead on the RBC rebrand),
+> https://www.behance.net/gallery/182802527/RBC-Brand-Guidelines. It is a
+> portfolio copy, not RBC's own file, so an official template still wins.
+> Values taken from it, replacing the fallback palette below:
+>
+> - **Colour (6.1, "Mass"):** Bright Blue Tint 1 `#006AC3` (primary blue for
+>   digital), Bright Blue `#0051A5` (print primary; subheads here), Cool White
+>   `#E7EEF1`, Warm Yellow `#FFC72C`. Dark Blue `#003168` is for High Net
+>   Worth audiences only.
+> - **Type (5.0, 5.5):** RBC Display and RBC Text, custom faces. Headline RBC
+>   Medium in Bright Blue; subhead RBC Bold in Bright Blue; body RBC Regular in
+>   black; call to action RBC Bold in yellow on blue. The deck uses Arial
+>   (headlines not bold) because the RBC faces may not be installed.
+> - **Logo (3.4):** clear space 1x on every side (x = the height of two "R"s in
+>   the logo); minimum height 48 px digital, 9.5 mm print. Every sample places
+>   it bottom right.
+> - **Energy Lines (section 4):** the brand's graphic device, nested lines from
+>   the shield's shape that come down the right edge and sweep left. Keep the
+>   logo's clear space; minimum field is 20% of the layout height (4.7).
 
 - **Use the official template if there is one.** Ask Kevin whether he has the
   RBC PowerPoint template (`.potx`) or a brand guide before you start. If he

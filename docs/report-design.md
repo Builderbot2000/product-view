@@ -258,3 +258,46 @@ Still open:
 - Which internal model and how to call it (API, or chat only).
 - Who maintains `curation.yaml` (labels, areas, roles) as new clusters appear.
 - Whether the developer account can write to the team's space.
+
+## 9. Requirements change (2026-10-22): a fixed team, member and topic matrix
+
+The requirements changed on 2026-10-22. Reports are now tailored to a fixed
+matrix of **team → team member → topic**. Topics are specific app features
+("change password or PIN", "more / settings menu"), and they are predefined:
+Product View no longer forms its own issues. Each team has several members,
+and each member owns several topics. Three operational needs come with it:
+the whole application runs in containers, reports reach people by email, and
+collection runs on a schedule.
+
+None of D18–D22 is built yet. The Project.md §0 "Requirements change" block
+lists what each one supersedes.
+
+| # | Decision | Why |
+|---|---|---|
+| D18 | **Topics are fixed and given; reviews are matched to them.** Product View never creates, renames or merges a topic. A review can match several topics or none; reviews with no topic are counted and reported as "no topic", so gaps in the list stay visible. Supersedes issue forming (R03's open-ended grouping), D6 (names written by a model), D8 (merging near-duplicate issues) and the issue part of D14 | Teams already know which features they own, and want reports keyed to those features, not to groups the tool invents. A fixed list also keeps every trend's meaning stable: "change password or PIN" means the same thing every period |
+| D19 | **One matrix file, in a standard format.** `matrix.sample.yaml` (committed) defines the format with invented content: `topics` (id, name, description) and `teams` (name, mailing list, members with name, email and topics). The real `matrix.yaml` is gitignored and never committed. Every member topic must exist, and every topic needs at least one owner. The matrix replaces `roles` in `curation.yaml`; the `areas` there are kept only while the earlier report still renders | The real matrix is a confidential internal document holding staff names and addresses. Kevin populates the real file from it with an AI assistant, keeping the format, so the format has to be fixed and documented first |
+| D20 | **Confluence: one page per team, and one report per member from a standard template.** The team page is the high-level view of every topic its members own. Each member's report covers only their topics, built from one template: the period and their topics; tiles (reviews on their topics against usual, the top change); a table of their topics (this period, usual, change, 12-period trend); then per topic the change, counts, app versions and up to 3 quotes; a link to the team page. The overview page (today's hub) stays as the parent. Supersedes D16's role pages; the role page layout (§5) is the starting point for the template | Managers and leads read at team level; each member wants only what they own. One template keeps every member's report the same shape, so it can be read cold |
+| D21 | **Email delivery.** After publishing, each member gets an email with a link to their own report, and each team's mailing list gets a link to its team page. Mail goes through an SMTP relay; its address and credentials come from the environment or `.env`, like the Confluence token (R22). Supersedes D9's delivery by @mentions and Slack | People act on what reaches them; a page nobody is told about is not read. A link keeps the email short and keeps one copy of the report |
+| D22 | **Containerized and scheduled.** The whole application runs in containers: the app, the local model server (Ollama, with the model in a volume), and a scheduler that triggers a run periodically (fetch the newest reviews, match, report, publish, email). Default cadence weekly (D9). Supersedes the "no scheduler daemon" non-goal (N01) and Project.md §7's documented-recipes-only approach | Collection must run without anyone starting it. The image built 2026-09-29 predates the issue stage and holds no model, so it cannot run the current pipeline locally |
+
+**What this does to validation.** Matching reviews to a fixed list is a
+different task from forming issues, and the embedding-route pass bar
+(handoff-2026-10-18.md: precision and recall per formed cluster, tone clusters,
+grab-bags) was written for forming them. Its results do not measure matching.
+A matching check needs reviews labelled against the topic list, ideally by a
+team analyst (the independent check the handoff has asked for since round 5),
+scored per topic.
+
+**Open (2026-10-22):**
+- **The matching method.** Candidates from parts already built: sentence
+  embeddings compared with each topic's description, and the local model
+  confirming matches. The embedding route's rule of no model call per review
+  was set for forming issues; whether it holds for matching is to be decided.
+- **Where the member report lives.** Assumed to be a Confluence page under its
+  team page, because the email carries a link. To confirm.
+- Whether the overview page and the analyst's all-topics view stay as they are.
+- Which SMTP relay, sender address and mailing lists to use, and who may
+  receive review quotes by email.
+- Where the containers run (host, schedule owner) and how the scheduler is
+  built (a scheduler container, or host cron calling compose).
+- Who maintains the real matrix as teams and features change.

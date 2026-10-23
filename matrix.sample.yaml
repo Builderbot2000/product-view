@@ -1,0 +1,112 @@
+# Team -> member -> topic matrix (report-design.md §9, D18–D22).
+#
+# SAMPLE CONTENT. Every team, member, address and topic below is invented to
+# show the format. The real matrix is a confidential internal document: copy
+# this file to matrix.yaml (gitignored, never committed), then replace the
+# content, keeping the format.
+#
+# topics:  the fixed list of app features reviews are matched to. Product View
+#          never creates, renames or merges topics; a review that fits none is
+#          counted as "no topic", so gaps in the list show up in the report.
+#          id           stable, kebab-case; reports and history key on it, so
+#                       renaming an id starts a new topic
+#          name         shown in reports
+#          description  one sentence on what the topic covers, written the
+#                       way a user would describe the feature; used for
+#                       matching and shown beside the name
+# teams:   who reads which topics.
+#          name          shown in reports; one Confluence page per team
+#          mailing_list  the team's list address (optional)
+#          members       each with a name, an email address and the topics
+#                        they own. A member's report covers only their topics;
+#                        the team page covers every topic its members own.
+#
+# Rules: every topic a member lists must exist under topics; every topic is
+# owned by at least one member; a topic may be owned by several members, in
+# the same team or in different teams.
+
+topics:
+  change-password-pin:     {name: "Change password or PIN",
+                            description: "changing the sign-in password or card PIN from inside the app"}
+  biometric-sign-in:       {name: "Fingerprint and face sign-in",
+                            description: "signing in with fingerprint or face recognition, setting it up, it not being offered"}
+  two-step-verification:   {name: "Two-step verification codes",
+                            description: "the one-time code sent by text message or call at sign-in, codes not arriving or expiring"}
+  trusted-device:          {name: "Trusted device and ID check",
+                            description: "making a new phone a trusted device, the ID photo and selfie check that goes with it"}
+  remember-me:             {name: "Remember my card number",
+                            description: "the app saving the card number or username between sign-ins"}
+  session-timeout:         {name: "Session timeout and sign-out",
+                            description: "being signed out too soon, staying signed in, finding the sign-out button"}
+  etransfer-send:          {name: "Send an Interac e-Transfer",
+                            description: "sending money by e-Transfer, adding recipients, limits, security questions"}
+  etransfer-receive:       {name: "Receive an Interac e-Transfer",
+                            description: "accepting or depositing an incoming e-Transfer, autodeposit"}
+  bill-payments:           {name: "Pay bills",
+                            description: "paying bills, adding payees, scheduled and recurring payments"}
+  credit-card-payment:     {name: "Credit card payment and due date",
+                            description: "paying the credit card, seeing the payment due date and minimum payment"}
+  mobile-cheque-deposit:   {name: "Mobile cheque deposit",
+                            description: "depositing a cheque by taking a photo of it"}
+  balances-transactions:   {name: "Balances and transactions",
+                            description: "seeing account balances, pending and past transactions, searching them"}
+  statements-documents:    {name: "Statements and documents",
+                            description: "viewing or downloading statements, tax slips and other documents"}
+  more-settings-menu:      {name: "More / settings menu",
+                            description: "the More tab and settings screens, finding options in them"}
+  alerts-notifications:    {name: "Alerts and notifications",
+                            description: "push notifications and account alerts, setting them up, too many or too few"}
+  profile-contact-details: {name: "Profile and contact details",
+                            description: "updating address, phone number, email and other personal details"}
+  app-crash-launch:        {name: "App crashes or won't open",
+                            description: "the app closing on its own, freezing, or not opening at all"}
+  technical-error:         {name: "\"Technical difficulties\" error",
+                            description: "generic error messages such as technical difficulties, try again later"}
+  connectivity:            {name: "Connection errors",
+                            description: "the app saying there is no connection, failing on mobile data or Wi-Fi"}
+  forced-update:           {name: "Forced update prompt",
+                            description: "being told to update the app before using it, update loops"}
+  device-support:          {name: "Device and OS support",
+                            description: "phones, tablets and operating system versions the app does or does not run on"}
+  customer-support:        {name: "Getting help from support",
+                            description: "calling or chatting with support, wait times, problems support could not solve"}
+
+teams:
+  sign-in-security:
+    name: "Sign-in & security"
+    mailing_list: "sign-in-security-team@example.com"
+    members:
+      - {name: "Alex Martin", email: "alex.martin@example.com",
+         topics: [change-password-pin, biometric-sign-in, two-step-verification]}
+      - {name: "Priya Shah", email: "priya.shah@example.com",
+         topics: [trusted-device, remember-me, session-timeout]}
+  payments:
+    name: "Payments & transfers"
+    mailing_list: "payments-team@example.com"
+    members:
+      - {name: "Jordan Lee", email: "jordan.lee@example.com",
+         topics: [etransfer-send, etransfer-receive]}
+      - {name: "Sophie Tremblay", email: "sophie.tremblay@example.com",
+         topics: [bill-payments, credit-card-payment, mobile-cheque-deposit]}
+  accounts-settings:
+    name: "Accounts & settings"
+    mailing_list: "accounts-settings-team@example.com"
+    members:
+      - {name: "Daniel Okafor", email: "daniel.okafor@example.com",
+         topics: [balances-transactions, statements-documents]}
+      - {name: "Maria Lopez", email: "maria.lopez@example.com",
+         topics: [more-settings-menu, alerts-notifications, profile-contact-details]}
+  app-platform:
+    name: "App platform (Engineering / QA)"
+    mailing_list: "app-platform-team@example.com"
+    members:
+      - {name: "Chris Wong", email: "chris.wong@example.com",
+         topics: [app-crash-launch, technical-error, connectivity]}
+      - {name: "Nadia Haddad", email: "nadia.haddad@example.com",
+         topics: [forced-update, device-support]}
+  support-cx:
+    name: "Support / CX"
+    mailing_list: "support-cx-team@example.com"
+    members:
+      - {name: "Sam Gagnon", email: "sam.gagnon@example.com",
+         topics: [customer-support, trusted-device, change-password-pin]}
