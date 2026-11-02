@@ -283,8 +283,14 @@ These cost real time to discover:
     `color` and `background-color` on spans; named `excerpt`; `anchor` macro +
     `ac:link ac:anchor`; `ac:link` to a page by title; `expand` holding a
     table; `toc`; `<time>`; emoticons; `code`; `details` (page properties);
-    `chart` (renders, but the look is dated). Not yet tested:
-    `excerpt-include` across pages, @mentions.
+    `chart` (renders, but the look is dated).
+  - **Probe 3, `excerpt-include` across pages** (2026-11-02,
+    [trials/confluence/build_confluence_probe_excerpt.py](../trials/confluence/build_confluence_probe_excerpt.py),
+    source page 6160393, target page 6160416). **Works:** a table with a
+    `status` lozenge and an SVG image both render on the including page. The
+    image resolves to the source page's attachment even when `ri:attachment`
+    names no page, so the renderer's image markup needs no change. @mentions
+    are no longer needed: email replaced them (D21).
   - **Conclusion:** the renderer writes storage format directly. HTML
     conversion caps the page at plain tables. Charts are our own SVGs, not the
     `chart` macro.
@@ -822,7 +828,7 @@ environment or a gitignored `.env`.
 | # | Milestone | Deliverable |
 |---|-----------|-------------|
 | 0 | Skeleton ✅ | **Done.** Repo, `pyproject.toml`, CLI, JSONL archive. SQLite deferred to milestone 3, where it earns its place |
-| 1 | **Confluence spike** (partly done) | Probe built with [trials/confluence/build_confluence_probe.py](../trials/confluence/build_confluence_probe.py), imported by zip and published over REST (2026-09-30). Only checks 18–19 are recorded. **Remaining:** record checks 1–17 and 20 for the REST page. *Constrains milestone 4.* |
+| 1 | Confluence spike ✅ | **Done 2026-11-02.** Probe built with [trials/confluence/build_confluence_probe.py](../trials/confluence/build_confluence_probe.py). Checks 1–11 and 13–16 are in §0 "Still open" (probe 1). Republished over REST on 2026-11-02 (page 6127631) for the rest: **12** dark-mode media query fails (the class survives, but `<style>` is dropped, so no rule applies); **17** an image from the page's media folder becomes an attachment of the page and renders; **20** publishing the same page again updates it in place as version 2 with unchanged attachments skipped (the zip importer this check was written for is retired). `excerpt-include` and the native macros: probes 2 and 3 |
 | 2 | Ingest ✅ | **Done.** `pv fetch --all-langs` backfilled 21,506 RBC reviews across 18 locales, resumable and deduped; `pv langs` probes coverage; `pv export` → CSV; `pv info` → summary with store-listing contrast |
 | 3 | Cluster ✅ | **Done.** `pv db build`, `pv translate`, `pv embed`, `pv cluster`, `pv painpoints`. Complaint-unit clustering: 43 negative / 51 positive pain points, 0 reviews uncovered, deterministic, three strategies behind one interface. Design in [aggregation-plan.md](aggregation-plan.md) |
 | 4 | Render ✅ (demo, uncommitted) | `pv report` emits a periodic hub plus role pages in Confluence storage format with SVG charts (2026-10-03). Remaining: §0 "Remaining work" |

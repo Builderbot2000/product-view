@@ -83,7 +83,7 @@ and the next steps, written so a fresh session can start building.
 | D2 | **Charts are SVGs we design**, uploaded as page attachments. The `chart` macro is not used | Styled SVG renders intact. The `chart` macro works but looks dated |
 | D3 | **Full-width pages**, set through the `content-appearance-published` / `-draft` content properties | Confirmed over REST. The default page width squeezes wide tables |
 | D4 | **Page tree per run:** a hub page (analyst view), one child page per top issue, role pages | Nothing is interactive, so different views have to be different pages |
-| D5 | **Shared sections:** sections are built once, wrapped in named `excerpt`, and reused on role pages with `excerpt-include` | One source for every view, and analysts can reuse the same sections in their own pages. `excerpt` is confirmed; `excerpt-include` across pages is **not yet tested** |
+| D5 | **Shared sections:** sections are built once, wrapped in named `excerpt`, and reused on role pages with `excerpt-include` | One source for every view, and analysts can reuse the same sections in their own pages. `excerpt` and `excerpt-include` across pages are both confirmed, including tables, status lozenges and SVG images (probe 3, 2026-11-02) |
 | D6 | **Issue names:** a label written by the **company-approved internal model** (assume it is weak), with the medoid quote shown under it as "in users' words". The current extractive title is the fallback | Today's titles are raw review sentences ("It is frustrating"). The model's job is narrow and checkable. All numbers stay deterministic, and the report must work without the model |
 | D7 | **General sentiment is kept apart from actionable issues.** Clusters with no specific cause ("This app is terrible") get their own section, not the ranked list | In the current run, 4 of the top 8 negative clusters are mood, not a cause |
 | D8 | **Near-duplicate clusters are shown merged.** Example: two update-prompt clusters (930 + 972 reviews) | Duplicates split the volume and crowd the list |
@@ -305,7 +305,9 @@ scored per topic.
   `matrix.sample.yaml`, which is a complete mock in the real format.
 - **Where the member report lives.** Assumed to be a Confluence page under its
   team page, because the email carries a link. To confirm.
-- Whether the overview page and the analyst's all-topics view stay as they are.
+- The overview page and the analyst's all-topics view. Decided 2026-11-02
+  (Kevin): both are revised to fit D18–D20, but only after the pipeline works
+  end to end. Until then they stay as they are.
 - Which SMTP relay, sender address and mailing lists to use, and who may
   receive review quotes by email.
 - Where the containers run. Decided 2026-11-02 (Kevin): a portable container
@@ -313,5 +315,9 @@ scored per topic.
   in-house run environments. One image runs one cycle (`pv cycle`) and exits.
   The host's scheduler starts it, and compose with a cron container is only the
   local default. This amends D22's "a scheduler container". The plan is in
-  docs/production-plan.md §0. Still open: which environment comes first.
-- Who maintains the real matrix as teams and features change.
+  docs/production-plan.md §0. Decided 2026-11-02 (Kevin): no production host
+  is targeted or tested yet. The image stays containerized and environment
+  agnostic.
+- Who maintains the real matrix as teams and features change. Decided
+  2026-11-02 (Kevin): Kevin adds the real matrix at deployment. Development
+  stays on `matrix.sample.yaml`.

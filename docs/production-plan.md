@@ -169,12 +169,23 @@ embedding model. Before go-live, and after any model change:
 - After the first month of real matches, review a sample with the topic owners
   and adjust descriptions, not thresholds.
 
-## 3. Open questions for Kevin
-- The in-house chat model. The method was validated on qwen3.5:9b. Any other
-  model has to pass `pv check-matching` first. A larger model is likely to do
-  better on the routed third, not worse.
-- Which run environment the first deployment targets (Kubernetes CronJob, a
-  cloud job service, or a VM with compose). This sets which example is built first.
+## 3. Decisions and open questions
+
+Decided 2026-11-02 (Kevin):
+- **Chat model:** the same in-house model the method was validated on
+  (qwen3.5:9b). Any later change still has to pass `pv check-matching`.
+- **Run environment:** no production host is targeted or tested yet. The goal
+  is an image that stays containerized and environment agnostic. In step 8,
+  only `compose.yaml` is built and run. The Kubernetes and job-service examples
+  wait until a host is chosen.
+- **Real matrix:** Kevin adds it at deployment. Until then everything runs on
+  `matrix.sample.yaml`.
+- **Order of work:** get the pipeline working end to end (steps 1–7) first.
+  Revising the overview page for the new requirements comes later.
+
+Still open:
 - SMTP relay, sender and mailing lists. Whether quotes may appear in email.
-- Who maintains the real matrix, and who reviews topic descriptions.
-- Where the member report lives (assumed: a Confluence page under its team page).
+  Until this is settled, development uses `--dry-run`.
+- Who reviews topic descriptions once the real matrix is in.
+- The member report as defined in D20 (one page per member, under their team
+  page, covering only their topics). Kevin to confirm.
