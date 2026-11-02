@@ -206,9 +206,9 @@ When customers rate our app on Google Play, many of them write a few lines sayin
   }
   band(s, "Inspired by RBC's push to put AI to work, Product View is a proposal to deliver exactly that.", 5.65, 0.75, "Inspiration band");
   s.addNotes(
-`TALK TRACK (about 1.5 min)
-The Mobile product team asked for something simple: a weekly email for each team, covering only the features that team owns. What customers said, how much of it there was, and whether it's getting better or worse.
-That helps everyone around the app. Analysts get a head start on their own reports: the numbers and the quotes. Feature owners get just their features, in their inbox, every week. Engineering can see which app release started a problem. Customer support sees what customers raise, in their own words. It doesn't replace analysts; it gives them better evidence.
+`TALK TRACK (about 1 min)
+The Mobile product team asked for something simple: a weekly email for each team, covering only the features that team owns. What customers said, how much, and whether it's getting better or worse.
+That helps everyone around the app: analysts get a head start on their reports, feature owners get just their features, engineering sees which release started a problem, and support hears customers in their own words.
 RBC's push to put AI to work inspired this project. Product View is my proposal to deliver what the product team asked for.`);
 
   // 4. Requirements
@@ -256,7 +256,7 @@ RBC's push to put AI to work inspired this project. Product View is my proposal 
     text(s, b, { x: x + 0.4, y: y + 0.38, w: 3.18, h: 0.5, fontSize: 13 });
   });
   s.addNotes(
-`TALK TRACK (about 1.5 min)
+`TALK TRACK (about 1 min)
 Here's what it has to do. It starts from one list: the teams, the people in each team, and the specific app features each person owns. The teams set the list; the tool never invents its own features, so "change password or PIN" means the same thing every week.
 And it has to fit the bank: each owner sees only their own features; it reads only what customers have posted publicly on Google Play; the data stays inside RBC's own cloud, Azure or AWS; every number is a count of real reviews and every quote links back to the review it came from; and it runs by itself every week.`);
 
@@ -345,10 +345,9 @@ That's why the numbers can be trusted. The AI has one narrow job, deciding which
   caption(s, "Examples from the demo (Aug 26 – Sep 22, 2026).", ex, 5.7, exw);
   band(s, "A working demo is deployed, and the Mobile product manager's feedback has been positive.", 6.1, 0.6, "Demo band");
   s.addNotes(
-`TALK TRACK (about 1.5 min)
-Here's what lands with each team. On the left, the team page: complaints by area of the app over the latest four weeks, against what's normal. Red means up, so a lead sees at a glance where to look.
-On the right, one section of a personal email report: one feature, sixteen complaints in four weeks against a normal ten, nine of them from app version 4.66, so the team can see it started with that release, and then the customers' own words behind the number.
-Both are real examples from the demo. A working demo is deployed, and the Mobile product manager's feedback has been positive.`);
+`TALK TRACK (about 45 s; the demo after the pitch shows this live, so keep it brief)
+Here's what lands with each team: a team page showing where complaints are up against normal, and a personal email per feature, like this one, where sixteen complaints against a normal ten point straight at app version 4.66, with the customers' own words behind the number.
+A working demo is deployed and the Mobile product manager's feedback has been positive. I'll walk through it live right after these slides.`);
 
   // 8. Running it in RBC's cloud: Azure or AWS
   pres.addSection({ title: "Running it" });
@@ -391,9 +390,9 @@ Both are real examples from the demo. A working demo is deployed, and the Mobile
   }
   band(s, "Everything stays inside RBC's own cloud, whichever we choose. Team pages stay on our existing wiki.", 5.95, 0.6, "Cloud band");
   s.addNotes(
-`TALK TRACK (about 1.5 min)
-To run this properly it needs a home at RBC, and it fits either of our clouds, Azure or AWS. Reviews come in from Google Play, the weekly run happens inside RBC's cloud, and the results go out to our teams as wiki pages and emails.
-Six pieces do the work, and each cloud has a ready-made service for every one. Something to run it every week on a timer, charging only while it runs: Azure Container Apps or Amazon ECS. The AI that sorts reviews, inside our own cloud rather than through an outside service: Microsoft Foundry or Amazon Bedrock. Storage that keeps the reviews between runs. A safe for the wiki and email passwords. An email service. And a place to store the app and flag a run that fails.
+`TALK TRACK (about 1 min)
+To run this properly it needs a home at RBC, and it fits either of our clouds, Azure or AWS. Reviews come in from Google Play, the weekly run happens inside RBC's cloud, and the results go out as wiki pages and emails.
+Each cloud has a ready-made service for every piece: a weekly timer, the AI that sorts reviews (Microsoft Foundry or Amazon Bedrock, inside our cloud rather than an outside service), storage, a safe for passwords, email, and monitoring.
 Everything stays inside RBC's own cloud, whichever we choose, and the team pages stay on the wiki we already use.
 
 IF ASKED: the choice between Azure and AWS is the cloud team's; Product View ships as a standard container, so it moves between them without changes. Microsoft and Amazon both state prompts and outputs are not used to train their models. The workload is small: one short weekly run over a few dozen new reviews.`);
@@ -430,9 +429,9 @@ IF ASKED: the choice between Azure and AWS is the cloud team's; Product View shi
   s.addNotes(
 `DRAFT, CONFIRM WITH KEVIN: the people, owners and cloud items are drafted; Kevin sets the final asks.
 
-TALK TRACK (about 1.5 min)
-Here's what it takes. In the cloud, Azure or AWS: an allocation for Product View, sized by our cloud team; access to AI models through Microsoft Foundry or Amazon Bedrock; the services on the previous slide; and permission to send email to staff.
-From people: the list of teams, owners and features, and someone to keep it current, likely Mobile product leadership. An analyst to check the first month's reports, so quality is judged by the people who'll use them. Compliance sign-off to use cloud AI on public reviews. And a space on our wiki.
+TALK TRACK (about 1 min)
+Here's what it takes. In the cloud: an allocation sized by our cloud team, access to its AI models, the services on the previous slide, and permission to email staff.
+From people: someone to keep the feature list current, an analyst to check the first month's reports, Compliance sign-off to use cloud AI on public reviews, and a space on our wiki.
 The workload is small: one short run a week over a few dozen new reviews.`);
 
   // 10. Next steps and the decision
@@ -482,10 +481,12 @@ So what I'm asking for today: approval for Product View, and a cloud allocation 
     text(s, b, { x: x + 0.3, y: y + 1.2, w: cw3 - 0.6, h: 0.75, fontSize: 15 });
   }
   text(s, "The ask: approve Product View and a cloud allocation for a trial with the Mobile team.", { x: M, y: 4.95, w: 10.2, h: 0.5, fontSize: 18, bold: true, color: C.text2 });
-  text(s, "Thank you. Questions?", { x: M, y: 5.75, w: 6, h: 0.6, fontSize: 28, color: C.accent1 });
+  text(s, "Next: see it working in a live demo", { x: M, y: 5.75, w: 9, h: 0.6, fontSize: 28, color: C.accent1 });
   s.addNotes(
 `TALK TRACK (about 30 s)
-To sum up: Product View sorts every review by the app feature it's about, gives every team its own report in its inbox each week, and runs on its own inside RBC's cloud, with numbers anyone can check. What I'm asking for is approval and a cloud allocation for a trial with the Mobile team. Thank you; I'm happy to take questions.`);
+To sum up: Product View sorts every review by the app feature it's about, gives every team its own report in its inbox each week, and runs on its own inside RBC's cloud, with numbers anyone can check. What I'm asking for is approval and a cloud allocation for a trial with the Mobile team. Now let me show you the working demo; I'll take questions after.
+
+TIMING: the slides run about 10 minutes, leaving the rest of the 30-minute meeting for the demo and questions.`);
 
   await pres.writeFile({ fileName: OUT });
   await applyTheme(OUT, THEME);
