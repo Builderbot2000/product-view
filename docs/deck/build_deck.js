@@ -1,5 +1,5 @@
 // Build docs/deck/product-view-pitch.pptx: the proposal deck for senior managers (pitch-deck-brief.md,
-// revisions of 2026-10-23). Slide sources live in out/deck/sources.md, not in the deck.
+// revisions of 2026-10-23 and 2026-11-02). Slide sources live in out/deck/sources.md, not in the deck.
 // Run from the repo root: NODE_PATH=<node_modules dir> PPTX_SKILL=<pptx skill dir> node docs/deck/build_deck.js
 // Needs pptxgenjs, react, react-dom, react-icons, sharp and js-yaml. Inputs are in docs/deck/assets/:
 // two charts rasterised from the demo report (out/report-proofread/) and the logo.
@@ -67,6 +67,14 @@ pres.defineSlideMaster({
   ],
 });
 pres.defineSlideMaster({
+  title: "PV Closing",
+  background: { color: HEX.lt2 },
+  objects: [
+    logoAt(W - M, 6.3, 0.85),
+    { placeholder: { options: { name: "title", type: "title", x: M, y: 0.9, w: CW, h: 1.2, fontSize: 40, bold: false, color: C.accent1, valign: "bottom", align: "left", margin: 0 }, text: "" } },
+  ],
+});
+pres.defineSlideMaster({
   title: "PV Title Only",
   background: { color: HEX.lt1 },
   objects: [titlePh(), ...logoObjs()],
@@ -122,24 +130,11 @@ function imgFit(file, maxW, maxH) {
   const s = Math.min(maxW / iw, maxH / ih);
   return { w: iw * s, h: ih * s };
 }
-// RBC Energy Lines (guide section 4): nested lines that come down the right edge, round the
-// shield-like corner and sweep left, rising gently to the right. Drawn as live shapes; colours from
-// the primary palette (the guide's outer light-blue line is approximated by Tint 1 at 45% transparency).
-function energyLines(slide, { x, yCorner, yLeft, r, gap }) {
-  const lines = [[HEX.dk2, 0], [HEX.accent2, 0], [HEX.lt1, 0], [HEX.accent1, 45]];
-  lines.forEach(([color, transparency], i) => {
-    const o = i * gap, X = x + o, yC = yCorner + o, yL = yLeft + o, rr = r + o;
-    slide.addShape(pres.shapes.CUSTOM_GEOMETRY, {
-      x: 0, y: 0, w: W, h: 7.5, objectName: "Energy line " + (i + 1),
-      fill: { type: "none" }, line: { color, width: 4.5, transparency },
-      points: [
-        { x: 0, y: yL },
-        { x: X - rr, y: yC, curve: { type: "cubic", x1: X * 0.45, y1: yL, x2: X - rr - 2.5, y2: yC } },
-        { x: X, y: yC - rr, curve: { type: "cubic", x1: X - rr * 0.45, y1: yC, x2: X, y2: yC - rr * 0.55 } },
-        { x: X, y: 0 },
-      ],
-    });
-  });
+// Cover art: overlapping circles bleeding off the top-right corner, in the primary palette.
+function coverArt(slide) {
+  slide.addShape(pres.shapes.OVAL, { x: 8.9, y: -2.6, w: 6.4, h: 6.4, fill: { color: C.accent1 }, line: { type: "none" }, objectName: "Cover circle large" });
+  slide.addShape(pres.shapes.OVAL, { x: 11.2, y: -1.3, w: 3.6, h: 3.6, fill: { color: C.text2 }, line: { type: "none" }, objectName: "Cover circle dark" });
+  slide.addShape(pres.shapes.OVAL, { x: 9.55, y: 2.55, w: 1.25, h: 1.25, fill: { color: C.accent2 }, line: { type: "none" }, objectName: "Cover circle yellow" });
 }
 const bullets = (items) => items.map((t, i) => ({ text: t, options: { bullet: true, breakLine: i < items.length - 1 } }));
 
@@ -153,10 +148,11 @@ async function build() {
   let s = pres.addSlide({ masterName: "PV Title", sectionTitle: "Opening" });
   s.addText("Product View", { placeholder: "title" });
   s.addText([
-    { text: "Customer reviews of the RBC Mobile app, sorted by feature and delivered to the team that owns it", options: { breakLine: true } },
-    { text: "Internal proposal · October 2026 · Kevin Tang", options: { fontSize: 16, color: C.text1 } },
+    { text: "Every customer heard. Every team knows what to fix next.", options: { breakLine: true } },
+    { text: "RBC Mobile app reviews, sorted by feature and sent to the team that owns it", options: { fontSize: 16, color: C.text1, breakLine: true } },
+    { text: "Internal proposal · November 2026 · Kevin Tang", options: { fontSize: 14, color: C.accent3 } },
   ], { placeholder: "subtitle" });
-  energyLines(s, { x: 12.05, yCorner: 5.45, yLeft: 5.95, r: 1.1, gap: 0.12 });
+  coverArt(s);
   s.addNotes(
 `TALK TRACK (about 30 s)
 I'm here to propose a project called Product View. It takes the reviews customers leave for the RBC Mobile app on Google Play, sorts them by the app feature they're about, and sends each team a weekly report on just the features it owns. I'll cover the need, what the product team asked for, how it works, and what it takes to run it at RBC.`);
@@ -169,12 +165,12 @@ I'm here to propose a project called Product View. It takes the reviews customer
     { text: "Customers rate the RBC Mobile app on Google Play and often explain why in a few lines.", options: { breakLine: true } },
     { text: "Each new review is posted on its own into a Slack channel.", options: { breakLine: true } },
     { text: "Nobody can see which features are hurting, which problems are growing, or how many customers each one affects.", options: { breakLine: true } },
-    { text: "In October 2024, 1,663 complaints arrived as 1,663 separate messages.", options: { bold: true } },
+    { text: "In August 2026 alone, 84 complaints arrived as 84 separate messages.", options: { bold: true } },
   ], { placeholder: "body" });
   const stats = [
     ["21,506", "written reviews by Canadian customers since 2011"],
     ["13,930", "of them rated 1 to 3 stars out of 5"],
-    ["7.4%", "written in French (1,335 reviews)"],
+    ["604", "complaints so far in 2026 (January to September)"],
   ];
   stats.forEach(([n, l], i) => {
     const y = 1.65 + i * 1.7;
@@ -184,11 +180,11 @@ I'm here to propose a project called Product View. It takes the reviews customer
   });
   s.addNotes(
 `TALK TRACK (about 1 min)
-When customers rate our app on Google Play, many of them write a few lines saying why. Today those reviews reach the Mobile team one at a time: each new review is posted on its own into a Slack channel. That's fine for reading one review, but it can't tell a team how its part of the app is doing: which features are hurting, which problems are growing, how many customers each one affects. And there are a lot of them: over twenty-one thousand written reviews from Canadian customers since 2011, nearly fourteen thousand of them 1 to 3 stars, and about one in fourteen in French. When things go wrong it gets worse: in October 2024, 1,663 complaints arrived in one month, as 1,663 separate messages.`);
+When customers rate our app on Google Play, many of them write a few lines saying why. Today those reviews reach the Mobile team one at a time: each new review is posted on its own into a Slack channel. That's fine for reading one review, but it can't tell a team how its part of the app is doing: which features are hurting, which problems are growing, how many customers each one affects. And there are a lot of them: over twenty-one thousand written reviews from Canadian customers since 2011 and nearly fourteen thousand of them 1 to 3 stars. And it keeps coming: 604 complaints so far this year, and in August alone, 84 complaints arrived as 84 separate messages.`);
 
-  // 3. What the product manager asked for
+  // 3. What the Mobile product team asked for
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "The need" });
-  s.addText("What the Mobile product manager asked for", { placeholder: "title" });
+  s.addText("What the Mobile product team asked for", { placeholder: "title" });
   card(s, M, 1.6, 4.6, 3.7, "Ask card", C.accent1);
   await iconCircle(s, fa.FaEnvelopeOpenText, M + 0.35, 1.9, 0.85, "Ask", C.background1, HEX.accent1);
   text(s, "A weekly email for each team, on just the features it owns", { x: M + 0.35, y: 2.95, w: 3.9, h: 1.4, fontSize: 22, bold: true, color: C.background1 });
@@ -211,9 +207,9 @@ When customers rate our app on Google Play, many of them write a few lines sayin
   band(s, "Inspired by RBC's push to put AI to work, Product View is a proposal to deliver exactly that.", 5.65, 0.75, "Inspiration band");
   s.addNotes(
 `TALK TRACK (about 1.5 min)
-The Mobile product manager asked for something simple: a weekly email for each team, covering only the features that team owns. What customers said, how much of it there was, and whether it's getting better or worse.
+The Mobile product team asked for something simple: a weekly email for each team, covering only the features that team owns. What customers said, how much of it there was, and whether it's getting better or worse.
 That helps everyone around the app. Analysts get a head start on their own reports: the numbers and the quotes. Feature owners get just their features, in their inbox, every week. Engineering can see which app release started a problem. Customer support sees what customers raise, in their own words. It doesn't replace analysts; it gives them better evidence.
-RBC's push to put AI to work inspired this project. Product View is my proposal to deliver what the product manager asked for.`);
+RBC's push to put AI to work inspired this project. Product View is my proposal to deliver what the product team asked for.`);
 
   // 4. Requirements
   pres.addSection({ title: "The proposal" });
@@ -245,11 +241,11 @@ RBC's push to put AI to work inspired this project. Product View is my proposal 
     }
     yy += n * step + teamGap;
   }
-  caption(s, "Made-up names, for illustration. Teams set the feature list; the tool never invents its own.", M, yy - 0.05, 8.1);
+  caption(s, "Teams set the feature list; the tool never invents its own.", M, yy - 0.05, 8.1);
   const musts = [
     ["Your features only", "Each owner sees just the features they own"],
     ["Public reviews only", "Only what customers posted on Google Play"],
-    ["Data stays inside RBC", "No outside AI services"],
+    ["Data stays inside RBC", "Runs in RBC's own cloud, Azure or AWS"],
     ["Numbers you can check", "Counts of real reviews, quotes that link back"],
     ["Runs by itself", "Every week, with nobody starting it"],
   ];
@@ -261,19 +257,18 @@ RBC's push to put AI to work inspired this project. Product View is my proposal 
   });
   s.addNotes(
 `TALK TRACK (about 1.5 min)
-Here's what it has to do. It starts from one list: the teams, the people in each team, and the specific app features each person owns. What you see is made up, to show the shape; the real list comes from our internal team directory and stays confidential. The teams set the list; the tool never invents its own features, so "change password or PIN" means the same thing every week.
-And it has to fit the bank: each owner sees only their own features; it reads only what customers have posted publicly on Google Play; the data stays inside RBC, with no outside AI services; every number is a count of real reviews and every quote links back to the review it came from; and it runs by itself every week.`);
+Here's what it has to do. It starts from one list: the teams, the people in each team, and the specific app features each person owns. The teams set the list; the tool never invents its own features, so "change password or PIN" means the same thing every week.
+And it has to fit the bank: each owner sees only their own features; it reads only what customers have posted publicly on Google Play; the data stays inside RBC's own cloud, Azure or AWS; every number is a count of real reviews and every quote links back to the review it came from; and it runs by itself every week.`);
 
   // 5. How it works
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "The proposal" });
   s.addText("How it works: from app store to inbox", { placeholder: "title" });
   const steps = [
     [fa.FaCloudDownloadAlt, "Collect", "Gathers every new Google Play review each week"],
-    [fa.FaLanguage, "Translate", "Turns French reviews into English, so one team can read them all"],
     [fa.FaTags, "Sort", "AI reads each review and matches it to the features on the list, like “change password or PIN”"],
     [fa.FaEnvelope, "Share", "Posts a page for each team on our wiki and emails each owner their report"],
   ];
-  const sw = 2.62, gap = (CW - 4 * sw) / 3;
+  const sw = 3.6, gap = (CW - steps.length * sw) / (steps.length - 1);
   for (let i = 0; i < steps.length; i++) {
     const [Ic, head, body] = steps[i];
     const x = M + i * (sw + gap), y = 1.75;
@@ -282,12 +277,12 @@ And it has to fit the bank: each owner sees only their own features; it reads on
     text(s, "Step " + (i + 1), { x: x + 0.3, y: y + 1.5, w: sw - 0.6, h: 0.3, fontSize: 12, color: C.accent3, bold: true });
     text(s, head, { x: x + 0.3, y: y + 1.85, w: sw - 0.6, h: 0.45, fontSize: 20, bold: true, color: C.text2 });
     text(s, body, { x: x + 0.3, y: y + 2.4, w: sw - 0.6, h: 1.2, fontSize: 15 });
-    if (i < 3) arrow(s, x + sw + gap / 2 - 0.17, y + 0.65, "Arrow " + (i + 1));
+    if (i < steps.length - 1) arrow(s, x + sw + gap / 2 - 0.17, y + 0.65, "Arrow " + (i + 1));
   }
   band(s, "It repeats every week on its own. Nobody has to start it.", 5.8, 0.6, "Weekly band");
   s.addNotes(
 `TALK TRACK (about 1 min)
-Here's the whole thing in four steps. Each week, it gathers every new review from Google Play. It translates the French ones into English, so one team can read them all. Then the AI reads each review and matches it to the features on the list, things as specific as "change password or PIN". A review can match several features, or none, and the ones that match none are still counted, so we can see if the list is missing something. Finally, it posts a page for each team on our internal wiki, Confluence, and emails each owner their own report. And it repeats every week without anyone starting it.`);
+Here's the whole thing in three steps. Each week, it gathers every new review from Google Play. Then the AI reads each review and matches it to the features on the list, things as specific as "change password or PIN". A review can match several features, or none, and the ones that match none are still counted, so we can see if the list is missing something. Finally, it posts a page for each team on our internal wiki, Confluence, and emails each owner their own report. And it repeats every week without anyone starting it.`);
 
   // 6. How a report is put together
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "The proposal" });
@@ -355,13 +350,13 @@ Here's what lands with each team. On the left, the team page: complaints by area
 On the right, one section of a personal email report: one feature, sixteen complaints in four weeks against a normal ten, nine of them from app version 4.66, so the team can see it started with that release, and then the customers' own words behind the number.
 Both are real examples from the demo. A working demo is deployed, and the Mobile product manager's feedback has been positive.`);
 
-  // 8. Running it on Azure
+  // 8. Running it in RBC's cloud: Azure or AWS
   pres.addSection({ title: "Running it" });
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "Running it" });
-  s.addText("Running it on Azure", { placeholder: "title" });
+  s.addText("Running it in RBC's cloud: Azure or AWS", { placeholder: "title" });
   const flow = [
     [fa.FaMobileAlt, "Google Play", "Public reviews"],
-    [fa.FaCloud, "RBC's Azure", "The weekly run"],
+    [fa.FaCloud, "RBC's cloud", "Azure or AWS"],
     [fa.FaUsers, "Our teams", "Wiki pages and emails"],
   ];
   const fw = 3.4, fgap = (CW - 3 * fw) / 2;
@@ -375,52 +370,55 @@ Both are real examples from the demo. A working demo is deployed, and the Mobile
     if (i < 2) arrow(s, x + fw + fgap / 2 - 0.17, y + 0.33, "Flow arrow " + (i + 1));
   }
   const svc = [
-    [fa.FaCalendarCheck, "Runs it every week", "Azure Container Apps (scheduled job)"],
-    [fa.FaRobot, "The AI that sorts reviews", "Microsoft Foundry (Azure OpenAI models)"],
-    [fa.FaDatabase, "Stores the reviews", "Azure Files"],
-    [fa.FaKey, "Keeps passwords safe", "Azure Key Vault"],
-    [fa.FaPaperPlane, "Sends the emails", "Azure Communication Services Email"],
-    [fa.FaHeartbeat, "Hosts and monitors it", "Azure Container Registry · Azure Monitor"],
+    [fa.FaCalendarCheck, "Runs it every week", "Container Apps job", "ECS scheduled task"],
+    [fa.FaRobot, "The AI that sorts reviews", "Microsoft Foundry", "Bedrock"],
+    [fa.FaDatabase, "Stores the reviews", "Files", "EFS"],
+    [fa.FaKey, "Keeps passwords safe", "Key Vault", "Secrets Manager"],
+    [fa.FaPaperPlane, "Sends the emails", "Communication Services", "SES"],
+    [fa.FaHeartbeat, "Hosts and monitors it", "Registry · Monitor", "ECR · CloudWatch"],
   ];
   const sw3 = (CW - 2 * 0.3) / 3, sh3 = 1.3;
   for (let i = 0; i < svc.length; i++) {
-    const [Ic, h, b] = svc[i];
+    const [Ic, h, az, aws] = svc[i];
     const x = M + (i % 3) * (sw3 + 0.3), y = 2.85 + Math.floor(i / 3) * (sh3 + 0.25);
     card(s, x, y, sw3, sh3, "Service card " + (i + 1));
     await iconCircle(s, Ic, x + 0.25, y + 0.3, 0.62, "Service " + (i + 1));
     text(s, h, { x: x + 1.05, y: y + 0.22, w: sw3 - 1.25, h: 0.45, fontSize: 15, bold: true, color: C.text2 });
-    text(s, b, { x: x + 1.05, y: y + 0.68, w: sw3 - 1.25, h: 0.5, fontSize: 12, color: C.accent3 });
+    s.addText([
+      { text: "Azure: ", options: { bold: true } }, { text: az, options: { breakLine: true } },
+      { text: "AWS: ", options: { bold: true } }, { text: aws },
+    ], { isTextBox: true, x: x + 1.05, y: y + 0.62, w: sw3 - 1.25, h: 0.6, fontSize: 12, color: C.accent3, margin: 0, valign: "top", objectName: "Service options " + (i + 1) });
   }
-  band(s, "Everything stays inside RBC's Azure environment. Team pages stay on our existing wiki.", 5.95, 0.6, "Azure band");
+  band(s, "Everything stays inside RBC's own cloud, whichever we choose. Team pages stay on our existing wiki.", 5.95, 0.6, "Cloud band");
   s.addNotes(
 `TALK TRACK (about 1.5 min)
-To run this properly it needs a home at RBC, and Azure fits it well. Reviews come in from Google Play, the weekly run happens inside RBC's Azure, and the results go out to our teams as wiki pages and emails.
-Six pieces of Azure do the work. Azure Container Apps runs it every week on a timer and only charges while it runs. Microsoft Foundry provides the AI that sorts reviews, inside our Azure environment rather than through an outside service. Azure Files keeps the reviews between runs. Key Vault keeps the passwords for the wiki and email safe. Azure Communication Services sends the emails. And Container Registry and Azure Monitor store the app and flag a run that fails.
-Everything stays inside RBC's Azure environment, and the team pages stay on the wiki we already use.
+To run this properly it needs a home at RBC, and it fits either of our clouds, Azure or AWS. Reviews come in from Google Play, the weekly run happens inside RBC's cloud, and the results go out to our teams as wiki pages and emails.
+Six pieces do the work, and each cloud has a ready-made service for every one. Something to run it every week on a timer, charging only while it runs: Azure Container Apps or Amazon ECS. The AI that sorts reviews, inside our own cloud rather than through an outside service: Microsoft Foundry or Amazon Bedrock. Storage that keeps the reviews between runs. A safe for the wiki and email passwords. An email service. And a place to store the app and flag a run that fails.
+Everything stays inside RBC's own cloud, whichever we choose, and the team pages stay on the wiki we already use.
 
-IF ASKED: Microsoft Foundry was formerly Azure AI Foundry; Microsoft states prompts and outputs are not used to train its models. If RBC staff email runs on Microsoft 365, sending from a shared mailbox may replace Communication Services; IT's call. The workload is small: one short weekly run over a few dozen new reviews.`);
+IF ASKED: the choice between Azure and AWS is the cloud team's; Product View ships as a standard container, so it moves between them without changes. Microsoft and Amazon both state prompts and outputs are not used to train their models. The workload is small: one short weekly run over a few dozen new reviews.`);
 
   // 9. What we need
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "Running it" });
   s.addText("What we need", { placeholder: "title" });
   const colW = (CW - 0.4) / 2;
-  card(s, M, 1.55, colW, 4.35, "Azure card");
-  await iconCircle(s, fa.FaCloud, M + 0.35, 1.8, 0.7, "Azure");
-  text(s, "On Azure", { x: M + 1.25, y: 1.8, w: colW - 1.5, h: 0.7, fontSize: 20, bold: true, color: C.text2, valign: "middle" });
+  card(s, M, 1.55, colW, 4.35, "Cloud card");
+  await iconCircle(s, fa.FaCloud, M + 0.35, 1.8, 0.7, "Cloud");
+  text(s, "In the cloud: Azure or AWS", { x: M + 1.25, y: 1.8, w: colW - 1.5, h: 0.7, fontSize: 20, bold: true, color: C.text2, valign: "middle" });
   s.addText(bullets([
-    "An Azure allocation for Product View, sized by our cloud team",
-    "Access to Azure OpenAI models through Microsoft Foundry",
+    "A cloud allocation for Product View, sized by our cloud team",
+    "Access to AI models through Microsoft Foundry or Amazon Bedrock",
     "The services on the previous slide",
     "Permission to send email to staff",
-  ]), { isTextBox: true, x: M + 0.4, y: 2.75, w: colW - 0.8, h: 3.0, fontSize: 16, color: C.text1, margin: 0, valign: "top", paraSpaceAfter: 12, objectName: "Azure list" });
+  ]), { isTextBox: true, x: M + 0.4, y: 2.75, w: colW - 0.8, h: 3.0, fontSize: 16, color: C.text1, margin: 0, valign: "top", paraSpaceAfter: 12, objectName: "Cloud list" });
   const px = M + colW + 0.4;
   card(s, px, 1.55, colW, 4.35, "People card");
   await iconCircle(s, fa.FaUserFriends, px + 0.35, 1.8, 0.7, "People");
   text(s, "People and approvals", { x: px + 1.25, y: 1.8, w: colW - 1.5, h: 0.7, fontSize: 20, bold: true, color: C.text2, valign: "middle" });
   const people = [
-    ["The real feature list, kept up to date", "Mobile product leadership"],
+    ["The feature list, kept up to date", "Mobile product leadership"],
     ["An analyst to check the first month's reports", "Mobile analyst team"],
-    ["Sign-off to use Azure AI on public reviews", "Compliance"],
+    ["Sign-off to use cloud AI on public reviews", "Compliance"],
     ["A space on our wiki", "Technology"],
   ];
   people.forEach(([h, o], i) => {
@@ -430,11 +428,11 @@ IF ASKED: Microsoft Foundry was formerly Azure AI Foundry; Microsoft states prom
   });
   band(s, "The workload is small: one short run a week, over a few dozen new reviews.", 6.15, 0.55, "Size band");
   s.addNotes(
-`DRAFT, CONFIRM WITH KEVIN: the people, owners and Azure items are drafted; Kevin sets the final asks.
+`DRAFT, CONFIRM WITH KEVIN: the people, owners and cloud items are drafted; Kevin sets the final asks.
 
 TALK TRACK (about 1.5 min)
-Here's what it takes. On Azure: an allocation for Product View, sized by our cloud team; access to Azure OpenAI models through Microsoft Foundry; the services on the previous slide; and permission to send email to staff.
-From people: the real list of teams, owners and features, and someone to keep it current, likely Mobile product leadership. An analyst to check the first month's reports, so quality is judged by the people who'll use them. Compliance sign-off to use Azure AI on public reviews. And a space on our wiki.
+Here's what it takes. In the cloud, Azure or AWS: an allocation for Product View, sized by our cloud team; access to AI models through Microsoft Foundry or Amazon Bedrock; the services on the previous slide; and permission to send email to staff.
+From people: the list of teams, owners and features, and someone to keep it current, likely Mobile product leadership. An analyst to check the first month's reports, so quality is judged by the people who'll use them. Compliance sign-off to use cloud AI on public reviews. And a space on our wiki.
 The workload is small: one short run a week over a few dozen new reviews.`);
 
   // 10. Next steps and the decision
@@ -442,9 +440,9 @@ The workload is small: one short run a week over a few dozen new reviews.`);
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "Next steps" });
   s.addText("Next steps", { placeholder: "title" });
   const next = [
-    ["Approve", "The project and an Azure allocation for a trial"],
-    ["Set up on Azure", "Move the demo onto RBC's Azure, connected to our wiki and email"],
-    ["Load the real list", "Our teams, owners and features"],
+    ["Approve", "The project and a cloud allocation for a trial"],
+    ["Set up in the cloud", "Move the demo onto RBC's Azure or AWS, connected to our wiki and email"],
+    ["Initialize", "Load the matrix"],
     ["Trial with the Mobile team", "A few app releases, with an analyst checking the first month"],
   ];
   const nw = (CW - 3 * 0.3) / 4, ny = 2.35;
@@ -458,13 +456,36 @@ The workload is small: one short run a week over a few dozen new reviews.`);
     text(s, b, { x: x + 0.3, y: ny + 1.35, w: nw - 0.6, h: 1.35, fontSize: 15 });
   });
   text(s, "Then, if the trial goes well: more teams.", { x: M, y: 5.4, w: CW, h: 0.35, fontSize: 14, color: C.accent3 });
-  band(s, "Today: approve Product View and an Azure allocation for a trial with the Mobile team.", 6.0, 0.7, "Decision band");
+  band(s, "Today: approve Product View and a cloud allocation for a trial with the Mobile team.", 6.0, 0.7, "Decision band");
   s.addNotes(
 `DRAFT, CONFIRM WITH KEVIN: the decision line is drafted.
 
 TALK TRACK (about 1 min)
-Four steps. First, approve the project and an Azure allocation for a trial. Second, set it up on RBC's Azure, connected to our wiki and email. Third, load the real list of teams, owners and features. Fourth, a trial with the Mobile team over a few app releases, with an analyst checking the first month. If the trial goes well, we extend it to more teams.
-So what I'm asking for today: approval for Product View, and an Azure allocation for a trial with the Mobile team.`);
+Four steps. First, approve the project and a cloud allocation for a trial. Second, set it up on RBC's Azure or AWS, connected to our wiki and email. Third, load the matrix to initialize it. Fourth, a trial with the Mobile team over a few app releases, with an analyst checking the first month. If the trial goes well, we extend it to more teams.
+So what I'm asking for today: approval for Product View, and a cloud allocation for a trial with the Mobile team.`);
+
+  // 11. Closing
+  s = pres.addSlide({ masterName: "PV Closing", sectionTitle: "Next steps" });
+  s.addText("Every customer heard, every week", { placeholder: "title" });
+  const close = [
+    [fa.FaTags, "Every review sorted", "Matched to the app features our teams own"],
+    [fa.FaEnvelopeOpenText, "Every team informed", "Its own report, in its inbox, every week"],
+    [fa.FaShieldAlt, "Inside RBC", "Runs on its own in our cloud, with numbers anyone can check"],
+  ];
+  const cw3 = (CW - 2 * 0.3) / 3;
+  for (let i = 0; i < close.length; i++) {
+    const [Ic, h, b] = close[i];
+    const x = M + i * (cw3 + 0.3), y = 2.45;
+    card(s, x, y, cw3, 2.15, "Closing card " + (i + 1), C.background1);
+    await iconCircle(s, Ic, x + 0.3, y + 0.3, 0.7, "Closing " + (i + 1));
+    text(s, h, { x: x + 1.2, y: y + 0.3, w: cw3 - 1.45, h: 0.7, fontSize: 19, bold: true, color: C.text2, valign: "middle" });
+    text(s, b, { x: x + 0.3, y: y + 1.2, w: cw3 - 0.6, h: 0.75, fontSize: 15 });
+  }
+  text(s, "The ask: approve Product View and a cloud allocation for a trial with the Mobile team.", { x: M, y: 4.95, w: 10.2, h: 0.5, fontSize: 18, bold: true, color: C.text2 });
+  text(s, "Thank you. Questions?", { x: M, y: 5.75, w: 6, h: 0.6, fontSize: 28, color: C.accent1 });
+  s.addNotes(
+`TALK TRACK (about 30 s)
+To sum up: Product View sorts every review by the app feature it's about, gives every team its own report in its inbox each week, and runs on its own inside RBC's cloud, with numbers anyone can check. What I'm asking for is approval and a cloud allocation for a trial with the Mobile team. Thank you; I'm happy to take questions.`);
 
   await pres.writeFile({ fileName: OUT });
   await applyTheme(OUT, THEME);
