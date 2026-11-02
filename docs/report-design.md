@@ -308,8 +308,10 @@ scored per topic.
 - The overview page and the analyst's all-topics view. Decided 2026-11-02
   (Kevin): both are revised to fit D18–D20, but only after the pipeline works
   end to end. Until then they stay as they are.
-- Which SMTP relay, sender address and mailing lists to use, and who may
-  receive review quotes by email.
+- Email delivery (D21). Deferred 2026-11-02 (Kevin): how the integration will
+  work is still being researched. The relay, sender, mailing lists and quotes
+  in email are settled then.
+- Topic descriptions are reviewed by Kevin (2026-11-02).
 - Where the containers run. Decided 2026-11-02 (Kevin): a portable container
   solution, deployable on corporate clouds with in-house model servers and
   in-house run environments. One image runs one cycle (`pv cycle`) and exits.

@@ -122,7 +122,8 @@ embedding model. Before go-live, and after any model change:
   a one-line summary, so quotes stay on Confluence).
 
 ### 7. One cycle command
-- `pv cycle`: fetch → build → match → report → publish → email, once.
+- `pv cycle`: fetch → build → match → report → publish → email, once. Email
+  is deferred (§3); until it lands the cycle ends at publish.
   - Exit 0 on success, non-zero on any failure.
   - Writes a one-line summary to stdout and a run record to the store.
 - **Idempotent per period:** re-running the same period republishes pages
@@ -183,9 +184,11 @@ Decided 2026-11-02 (Kevin):
 - **Order of work:** get the pipeline working end to end (steps 1–7) first.
   Revising the overview page for the new requirements comes later.
 
+- **Email (step 6):** deferred. How the integration will work is still being
+  researched, so `pv cycle` ends at publishing for now. The SMTP relay, sender,
+  mailing lists and whether quotes appear in email are settled with it.
+- **Topic descriptions:** Kevin reviews them.
+
 Still open:
-- SMTP relay, sender and mailing lists. Whether quotes may appear in email.
-  Until this is settled, development uses `--dry-run`.
-- Who reviews topic descriptions once the real matrix is in.
 - The member report as defined in D20 (one page per member, under their team
   page, covering only their topics). Kevin to confirm.
