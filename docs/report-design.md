@@ -303,8 +303,8 @@ scored per topic.
 - **Development matrix.** Decided 2026-11-02: the real `matrix.yaml` never
   enters this repo or its sessions. Development and demos use
   `matrix.sample.yaml`, which is a complete mock in the real format.
-- **Where the member report lives.** Assumed to be a Confluence page under its
-  team page, because the email carries a link. To confirm.
+- **Where the member report lives.** Confirmed 2026-11-02 (Kevin): a
+  Confluence page under its team page, in the D20 template.
 - The overview page and the analyst's all-topics view. Decided 2026-11-02
   (Kevin): both are revised to fit D18–D20, but only after the pipeline works
   end to end. Until then they stay as they are.

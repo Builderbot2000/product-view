@@ -188,7 +188,5 @@ Decided 2026-11-02 (Kevin):
   researched, so `pv cycle` ends at publishing for now. The SMTP relay, sender,
   mailing lists and whether quotes appear in email are settled with it.
 - **Topic descriptions:** Kevin reviews them.
-
-Still open:
-- The member report as defined in D20 (one page per member, under their team
-  page, covering only their topics). Kevin to confirm.
+- **Member report:** as defined in D20. One Confluence page per member, under
+  their team page, covering only their topics, all from one template.
