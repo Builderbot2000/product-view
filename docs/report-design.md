@@ -289,15 +289,29 @@ team analyst (the independent check the handoff has asked for since round 5),
 scored per topic.
 
 **Open (2026-10-22):**
-- **The matching method.** Candidates from parts already built: sentence
-  embeddings compared with each topic's description, and the local model
-  confirming matches. The embedding route's rule of no model call per review
-  was set for forming issues; whether it holds for matching is to be decided.
+- **The matching method.** Decided 2026-11-02 (Kevin): no model call per
+  review if it can be avoided. Settled the same day by trials
+  (trials/topic-trials.md, rounds 1–6 and T2):
+  - A classifier trained on model-written example complaints per topic takes
+    the clear units.
+  - Units with weak correlation (best topic below 0.6) go to a misc bin by a
+    fixed rule. Misc is not a topic, and reports show it only as a count.
+  - The local model decides the rest, one unit per call. About a third of
+    units reach it.
+  - Results: held-out precision 78%, recall 65%, false alarm 12%.
+  - Build plan: docs/production-plan.md.
+- **Development matrix.** Decided 2026-11-02: the real `matrix.yaml` never
+  enters this repo or its sessions. Development and demos use
+  `matrix.sample.yaml`, which is a complete mock in the real format.
 - **Where the member report lives.** Assumed to be a Confluence page under its
   team page, because the email carries a link. To confirm.
 - Whether the overview page and the analyst's all-topics view stay as they are.
 - Which SMTP relay, sender address and mailing lists to use, and who may
   receive review quotes by email.
-- Where the containers run (host, schedule owner) and how the scheduler is
-  built (a scheduler container, or host cron calling compose).
+- Where the containers run. Decided 2026-11-02 (Kevin): a portable container
+  solution, deployable on corporate clouds with in-house model servers and
+  in-house run environments. One image runs one cycle (`pv cycle`) and exits.
+  The host's scheduler starts it, and compose with a cron container is only the
+  local default. This amends D22's "a scheduler container". The plan is in
+  docs/production-plan.md §0. Still open: which environment comes first.
 - Who maintains the real matrix as teams and features change.
