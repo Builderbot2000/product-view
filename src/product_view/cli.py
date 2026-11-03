@@ -10,9 +10,8 @@ stage reading and writing through SQLite, so any one re-runs in isolation.
 Topics: `match` matches complaint reviews to the matrix's topics, and `matrix`
 checks the matrix file. They live in topics/.
 
-Report: `report` builds the periodic Confluence pages: team pages and member
-reports from the topic matches, or with --hub the earlier pages from the
-issues. It lives in render/.
+Report: `report` builds the periodic Confluence pages from the topic matches:
+the overview, team pages and member reports. It lives in render/.
 
 Cycle: `cycle` runs fetch, db build, translate, match, report and publish once,
 then exits, for a scheduler to start. It lives in cycle.py.

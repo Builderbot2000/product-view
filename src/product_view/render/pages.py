@@ -1,24 +1,20 @@
-"""The report's pages: a hub with every area, and one page per role (§5).
+"""Pieces every report page shares: attachments, tiles, lozenges, quotes, sentences.
 
-Both are periodic overviews (D15): every count is for the reporting period,
-set against "usual", the mean of the equal periods before it. Quotes come
-from the period too, so a reader sees what was said this time, not the
-standing medoid of a cluster spanning years.
+Every page is a periodic overview (D15): each count is for the reporting
+period, set against "usual", the mean of the equal periods before it. Quotes
+come from the period too, so a reader sees what was said this time.
 """
 
 from __future__ import annotations
 
 import re
-from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from ..publish.storage import Attachment, StoragePage
-from ..store import Store
 from . import blocks as b
 from . import svg
-from .issues import (MIN_CHANGE, OTHER, SIGNIFICANCE, SPARK_PERIODS, Issue, Quote,
-                     Role, Series, Stream, Taxonomy, by_change, by_volume)
+from .issues import MIN_CHANGE, SPARK_PERIODS, Issue, Quote, Series
 
 STARS = {1: "1★", 2: "2★", 3: "3★", 4: "4★", 5: "5★"}
 
@@ -29,6 +25,7 @@ class PageSpec:
     title: str
     page: StoragePage
     parent: str | None   # parent page's title; None for the root
+    replaces: tuple[str, ...] = ()   # earlier titles of this page, renamed in place
 
 
 def _slug(text: str) -> str:
@@ -54,16 +51,9 @@ class Canvas:
         # An explicit width: without one Confluence stretches it to the cell.
         return b.image(name, svg.spark_width(SPARK_PERIODS))
 
-    def dots(self, key: str, scores: list[int]) -> str:
-        name = f"dots-{_slug(key)}.svg"
-        self.files[name] = svg.dots(scores).encode("utf-8")
-        return b.image(name, svg.dots_width(len(scores)))
-
     def done(self, body: str) -> StoragePage:
         return StoragePage(body, [Attachment(n, d, "image/svg+xml") for n, d in self.files.items()])
 
-
-# --- shared pieces -----------------------------------------------------------
 
 LOZENGE = {"new": "NEW", "up": "↑ UP", "down": "↓ DOWN", "steady": "steady", "quiet": "quiet"}
 
@@ -87,10 +77,6 @@ def _period_ends(p) -> list[str]:
     return [_date(p.end - timedelta(days=p.days * k + 1)) for k in reversed(range(SPARK_PERIODS))]
 
 
-STAR_KEY = ("Each dot is one reviewer this period: "
-            + " ".join(b.colour("●", svg.STAR_COLOURS[n]) + f" {n}★" for n in range(1, 6)))
-
-
 def _quote(q: Quote, limit: int = 220) -> str:
     text = q.text if len(q.text) <= limit else q.text[:limit - 1] + "…"
     meta = f"{STARS.get(q.score, '')} · {_date(q.created)}"
@@ -101,48 +87,8 @@ def _quote(q: Quote, limit: int = 220) -> str:
     return f"<em>“{b.esc(text)}”</em> {b.muted(b.esc(meta))}"
 
 
-TABLE_QUOTES = 2     # quotes under each issue in a table row
-DETAIL_QUOTES = 8    # quotes per issue in a role page's "What users said"
-
-
-def _label(issue: Issue, quote: bool = True) -> str:
-    out = f"<strong>{b.esc(issue.label)}</strong>"
-    if quote:
-        for q in issue.recent_quotes(TABLE_QUOTES):
-            out += "<br />" + _quote(q, 160)
-    return out
-
-
 def _usual(x: float) -> str:
     return f"{x:.1f}" if x < 10 else f"{x:.0f}"
-
-
-def _issue_rows(issues: list[Issue], canvas: Canvas, taxonomy: Taxonomy | None = None,
-                quote: bool = True) -> list[list[str]]:
-    rows = []
-    for i in issues:
-        row = [_label(i, quote)]
-        if taxonomy is not None:
-            row.append(b.esc(taxonomy.area_name(i.area)))
-        row += [str(i.now), _usual(i.usual), _change_cell(i.change, i.polarity),
-                canvas.spark(f"{i.polarity[:3]}-{i.label}", i.series, i.polarity)]
-        rows.append(row)
-    return rows
-
-
-def _issue_table(issues: list[Issue], canvas: Canvas, taxonomy: Taxonomy | None = None,
-                 first: str = "Issue", quote: bool = True) -> str:
-    header = [first] + (["Area"] if taxonomy else []) + [
-        "This period", "Usual", "Change", f"Last {SPARK_PERIODS} periods"]
-    widths = [460] + ([150] if taxonomy else []) + [86, 70, 90, 140]
-    numeric = {1, 2} if not taxonomy else {2, 3}
-    return b.table(header, _issue_rows(issues, canvas, taxonomy, quote), widths, numeric)
-
-
-def _shown(issues: list[Issue]) -> tuple[list[Issue], int]:
-    """Issues worth a row: said this period, or usually are."""
-    shown = [i for i in issues if i.now > 0 or i.usual >= 1]
-    return by_volume(shown), len(issues) - len(shown)
 
 
 def _kpi(big: str, caption: str, note: str, change: str = "steady",
@@ -165,35 +111,7 @@ def _vs_usual(series: Series, unit: str = "") -> str:
     return f"usual {_usual(series.usual)}{unit} · {word}"
 
 
-def _period_pairs(neg: Stream, pos: Stream | None, store: Store, app_id: str) -> list:
-    p = neg.period
-    base_start = p.start - timedelta(days=p.days * p.baseline)
-    base_end = p.start - timedelta(days=1)
-    versions = ", ".join(f"{v} ({n})" for v, n in neg.versions_now.most_common(4))
-    pairs = [
-        ("Period", f"<strong>{b.esc(p.label())}</strong> ({p.days} days)"),
-        ("Usual", f"mean of the {p.baseline} periods before it, "
-                  f"{_date(base_start)} {base_start.year} – {_date(base_end)} {base_end.year}"),
-        ("Reviews", f"{neg.total.now} negative (1–3★), usual {_usual(neg.total.usual)}"
-                    + (f"; {pos.total.now} positive (4–5★), usual {_usual(pos.total.usual)}"
-                       if pos else "")),
-        ("App versions", b.esc(versions) + " " + b.muted("(negative reviews)")),
-    ]
-    meta = store.conn.execute(
-        "SELECT * FROM app_metadata ORDER BY fetched_at DESC LIMIT 1").fetchone()
-    if meta:
-        pairs.append(("Store rating", f"★ {meta['score']:.2f} from {meta['ratings']:,} ratings "
-                                      f"(latest version {b.esc(meta['version'] or '?')})"))
-    pairs.append(("App", f"<code>{b.esc(app_id)}</code>"))
-    return pairs
-
-
-# --- summaries: the numbers below, told in sentences -----------------------------
-
-def _span(neg: Stream) -> str:
-    p = neg.period
-    return f"between {_date(p.start)} and {_date(p.end - timedelta(days=1))}"
-
+# --- the numbers, told in sentences ---------------------------------------------
 
 def _and(items: list[str]) -> str:
     return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
@@ -216,7 +134,7 @@ def _name(issue: Issue) -> str:
 
 
 def _brief(issue: Issue) -> str:
-    """An issue in a list: its name and its count against usual."""
+    """A topic in a list: its name and its count against usual."""
     if issue.change == "new":
         return f"{_name(issue)} ({issue.now}, new)"
     return f"{_name(issue)} ({issue.now}, usually {_usual(issue.usual)})"
@@ -229,410 +147,3 @@ def _main_version(issue: Issue) -> str:
         return ""
     v, n = known[0]
     return f"Most of them were on v{b.esc(v)} ({n} of {issue.now}). "
-
-
-def _movers(issues: list[Issue], skip: Issue | None) -> str:
-    """'Also rising: … Easing off: …' for the issues that changed."""
-    moved = [i for i in by_change(issues) if i is not skip]
-    up = [_brief(i) for i in moved if i.change in ("new", "up")][:3]
-    down = [_brief(i) for i in moved if i.change == "down"][:3]
-    out = ""
-    if up:
-        out += f"Also rising: {_and(up)}. "
-    if down:
-        out += f"Easing off: {_and(down)}. "
-    return out
-
-
-def _spotlight(issue: Issue) -> str:
-    """The one issue to look at first, with a line of evidence."""
-    recent = issue.recent_quotes(1)
-    return (f"{_main_version(issue)}"
-            + (f"One reviewer put it this way: {_quote(recent[0], 180)}" if recent else ""))
-
-
-def _hub_summary(neg: Stream, pos: Stream | None, tx: Taxonomy,
-                 area_rows: list[tuple[str, Series]]) -> str:
-    issues = neg.of_kind("issue")
-    t = neg.total
-    first = (f"Here’s how the app did on the Play Store {_span(neg)}. "
-             f"{_n(t.now, 'reviewer')} left a negative review (1–3★), {_against(t)}")
-    if pos:
-        first += f", and {pos.total.now} left a positive one (4–5★), {_against(pos.total)}"
-    first += "."
-    worse = t.change in ("up", "new") or (pos and pos.total.change == "down")
-    better = t.change == "down" or (pos and pos.total.change in ("up", "new"))
-    if worse and not better:
-        first += " So, a rougher period than usual."
-    elif better and not worse:
-        first += " So, a better period than usual."
-    paras = [first]
-
-    # The headline: the area that rose most, else the busiest one.
-    rising = sorted([r for r in area_rows if r[1].change in ("up", "new")],
-                    key=lambda r: -(r[1].now - r[1].usual))
-    lead_issue = None
-    if rising or area_rows:
-        a, s = (rising or area_rows)[0]
-        in_area = [i for i in issues if i.area == a]
-        lead_issue = next(iter(by_change([i for i in in_area if i.change in ("up", "new")])),
-                          None) or next(iter(by_volume(in_area)), None)
-        opener = "The biggest story is" if rising else "Nothing rose beyond normal variation; the busiest area is"
-        text = (f"{opener} <strong>{b.esc(tx.area_name(a))}</strong>: "
-                f"{_n(s.now, 'negative review')}, {_against(s)}.")
-        if lead_issue:
-            text += f" Leading it is {_brief(lead_issue)}."
-        paras.append(text)
-    others = _movers(issues, lead_issue)
-    if others:
-        paras.append(others.strip())
-
-    switching = next((o for o in neg.of_kind("outcome") if "switching" in o.label.lower()), None)
-    if switching and switching.now:
-        paras.append(f"{_n(switching.now, 'reviewer')} said they’re switching banks, "
-                     f"{_against(switching.series)}.")
-    return "".join(f"<p>{p}</p>" for p in paras)
-
-
-def _role_summary(neg: Stream, pos: Stream | None, tx: Taxonomy, role: Role,
-                  issues: list[Issue], total: Series, hub_title: str) -> str:
-    area_names = _and([tx.area_name(a) for a in role.areas])
-    paras = [f"Here’s what Play Store reviewers said {_span(neg)} about "
-             f"<strong>{b.esc(area_names)}</strong>, the "
-             f"{'area' if len(role.areas) == 1 else 'areas'} you look after. "
-             f"You got {_n(total.now, 'negative review')}, {_against(total)}, "
-             f"out of {neg.total.now} across the whole app."]
-
-    moved = [i for i in by_change(issues) if i.change in ("new", "up")]
-    shown, _ = _shown(issues)
-    top = moved[0] if moved else next(iter(shown), None)
-    if top is None:
-        paras.append("No one raised a problem in your areas this period.")
-    else:
-        if moved:
-            lead = (f"The one to look at first is <strong>{_name(top)}</strong>: "
-                    f"{_n(top.now, 'review')}, {_against(top.series)}. ")
-        else:
-            lead = ("Nothing in your areas rose beyond normal variation. The issue you "
-                    f"heard most about is <strong>{_name(top)}</strong>: "
-                    f"{_n(top.now, 'review')}, {_against(top.series)}. ")
-        paras.append(lead + _spotlight(top))
-        busiest = next(iter(shown), None)
-        rest = _movers(issues, top)
-        if moved and busiest is not None and busiest is not top and busiest.change not in ("new", "up"):
-            rest += f"Your busiest issue overall is still {_brief(busiest)}. "
-        if rest:
-            paras.append(rest.strip())
-
-    if pos:
-        liked = by_volume([i for i in pos.issues if i.kind == "issue" and i.now
-                           and set(i.areas) & set(role.areas)])
-        if liked:
-            paras.append(f"On the bright side, {_n(liked[0].now, 'reviewer')} praised "
-                         f"{_name(liked[0])}.")
-    paras.append(f"{b.muted('Trends and quotes for every issue are below. For the whole app, see ')}"
-                 f"{b.page_link(hub_title, hub_title)}.")
-    return "".join(f"<p>{p}</p>" for p in paras)
-
-
-def _footer(neg: Stream, pos: Stream | None) -> str:
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    runs = neg.run["run_id"] + (f" and {pos.run['run_id']}" if pos else "")
-    return f"<p>{b.muted(b.esc(f'Generated by pv report at {stamp} from run {runs}.'))}</p>"
-
-
-def _method(neg: Stream) -> str:
-    p = neg.period
-    # Written for readers of the pages, who know the app but nothing about how
-    # the report is made: no tool names, file names or statistics terms.
-    months = round(p.days * p.baseline / 30.4)
-    min_chars = neg.min_chars
-    return b.expand("How these numbers are made", (
-        "<p>These pages are built from the reviews people post about the app on the "
-        "Google Play Store. Review totals count 1 to 3 stars as negative and 4 or 5 stars "
-        f"as positive. Very short reviews (under {min_chars} characters, such as “Good”) "
-        "are left out, reviews in French are translated into English automatically, and "
-        "reviews in other alphabets, such as Arabic or Chinese, are not included.</p>"
-        "<p>An AI language model reads each review and picks out every separate complaint "
-        "and every piece of praise it makes, in the reviewer’s own words. Points that "
-        "describe the same problem are grouped into one issue, which has a short name and "
-        "a one-sentence definition, and a point counts toward an issue only when it fits "
-        "that definition. A complaint counts even when it comes from a 4- or 5-star review. "
-        "Points that only voice a feeling, such as frustration, without naming a problem "
-        "are kept apart as general opinions. Once an issue exists, its name and definition "
-        "stay fixed, so it means the same thing from one report to the next and can be "
-        "followed over time; new issues are added only for what the existing ones don’t "
-        "cover. Each issue is filed under one product area, which is how each team’s page "
-        "shows only the areas it looks after. The grouping is automatic and can misplace "
-        "a point, so the quotes under each issue are there to check it against.</p>"
-        f"<p>Each report covers {p.days} days, ending on the date of the most recent "
-        f"review, and every count is set against <em>usual</em>: the average for the "
-        f"{p.baseline} periods of the same length before it, about {months} months in all. "
-        "Most issues come up in only a few reviews a period, so small moves such as "
-        "1 review to 3 are usually just chance. An issue is marked <em>UP</em> only when "
-        "its count is so far above usual that chance alone would explain it less than "
-        f"1 time in {round(1 / SIGNIFICANCE)}, and <em>DOWN</em> when it is as far below; "
-        f"an issue with fewer than {MIN_CHANGE} reviews is never marked either way. "
-        f"<em>NEW</em> marks an issue with at least {MIN_CHANGE} reviews this period and "
-        f"none in the {p.baseline} periods before it, and <em>STEADY</em> one within its "
-        "normal range.</p>"
-        f"<p>The small bar charts follow each issue over its last {SPARK_PERIODS} periods, "
-        "oldest on the left. Each is scaled to its own tallest bar, so it shows whether an "
-        "issue is growing or fading rather than how issues compare. One review can mention "
-        "several problems and count toward each, which is why issue counts add up to "
-        "more than the number of reviews. Quotes are reviewers’ own words, shortened when "
-        "very long, followed by the star rating, the date, the app version when the store "
-        "reports it, and how many people marked the review helpful (👍).</p>"))
-
-
-# --- hub -----------------------------------------------------------------------
-
-def _hub(store: Store, neg: Stream, pos: Stream | None, tx: Taxonomy, app_id: str,
-         title: str, role_titles: dict[str, str]) -> StoragePage:
-    c = Canvas()
-    issues = neg.of_kind("issue")
-    p = neg.period
-
-    # area chart, busiest first
-    area_ids = list(tx.areas) + ([OTHER] if any(i.area == OTHER for i in issues) else [])
-    area_rows = []
-    for a in area_ids:
-        s = neg.area_series(a)
-        if s.now or s.usual >= 0.5:
-            area_rows.append((a, s))
-    area_rows.sort(key=lambda r: (-r[1].now, -r[1].usual))
-    chart = c.add("areas.svg", svg.area_bars(
-        [{"name": tx.area_name(a), "now": s.now, "usual": s.usual, "change": s.change}
-         for a, s in area_rows],
-        "Negative reviews by area, this period",
-        f"{p.label()} · bar = this period, tick = usual"), 620)
-    ends = _period_ends(p)
-    panels = [{"name": "Negative (1–3★)", "values": neg.total.spark(),
-               "usual": neg.total.usual, "tone": b.tone(neg.total.change, "negative")}]
-    if pos:
-        panels.append({"name": "Positive (4–5★)", "values": pos.total.spark(),
-                       "usual": pos.total.usual, "tone": b.tone(pos.total.change, "positive")})
-    trend = c.add("trend.svg", svg.trend_panels(
-        panels, ends, f"Reviews per period, last {SPARK_PERIODS}",
-        f"{p.days}-day periods · dashed = usual · dot = this period"), 620)
-
-    roles = "".join(f"<li>{b.page_link(t, tx.roles[r].name)} "
-                    f"{b.muted(b.esc('· ' + ', '.join(tx.area_name(a) for a in tx.roles[r].areas)))}</li>"
-                    for r, t in role_titles.items())
-    intro = (_hub_summary(neg, pos, tx, area_rows)
-             + "<p>Each team has its own page with only its areas:</p>"
-             f"<ul>{roles}</ul>")
-    # issues over time (sits under the trend, filling the right column)
-    heat_rows = by_volume([i for i in issues if sum(i.series.spark())])[:20]
-    heat_html = (c.add("heatmap.svg", svg.heatmap(
-        [{"name": i.label, "values": i.series.spark()} for i in heat_rows], ends,
-        f"Negative reviews per issue, last {SPARK_PERIODS} periods",
-        "Busiest this period first · outlined column = this period"),
-        620)) if heat_rows else ""
-
-    # KPI tiles
-    tiles = [_kpi(str(neg.total.now), f"negative reviews in {p.days} days",
-                  _vs_usual(neg.total), neg.total.change, compact=True)]
-    moved = by_change(issues)
-    if moved:
-        top = moved[0]
-        tiles.append(_kpi(f"{top.now}", f"{LOZENGE[top.change]}: {top.label}",
-                          f"usual {_usual(top.usual)} per period · "
-                          f"{len(moved)} issue{'s' if len(moved) != 1 else ''} changed",
-                          top.change, compact=True))
-    else:
-        tiles.append(_kpi("0", "issues changed", "every issue is within normal variation", compact=True))
-    switching = next((o for o in neg.of_kind("outcome") if "switching" in o.label.lower()), None)
-    if switching:
-        tiles.append(_kpi(str(switching.now), "say they're switching banks",
-                          _vs_usual(switching.series), switching.change, compact=True))
-
-    header = b.section("two_equal",
-                       intro + "".join(tiles[:3]) + b.details(_period_pairs(neg, pos, store, app_id)),
-                       (heat_html + "<p />" if heat_html else "") + chart + "<p />" + trend)
-
-    # what changed
-    changed = by_change(issues + neg.of_kind("outcome"))
-    changed_html = "<h2>What changed this period</h2>" + (
-        f"<p>{b.muted('Issues whose count is significantly above or below usual (see Method). Everything else moved within normal variation.')}</p>"
-        + _issue_table(changed, c, tx)
-        if changed else b.info("<p>No issue moved beyond normal variation this period.</p>"))
-
-    # by area
-    area_html = "<h2>By area</h2>"
-    for a, s in area_rows:
-        in_area = [i for i in issues if i.area == a]
-        shown, quiet = _shown(in_area)
-        readers = [b.page_link(role_titles[r], tx.roles[r].name)
-                   for r in role_titles if a in tx.roles[r].areas]
-        area_html += (
-            f"<h3>{b.esc(tx.area_name(a))} {b.muted(f'· {s.now} reviews, usual {_usual(s.usual)}')}</h3>"
-            + (f"<p>{b.muted('Team page: ')}{' · '.join(readers)}</p>" if readers else "")
-            + _issue_table(shown, c)
-            + (f"<p>{b.muted(f'{quiet} more issue(s) had no reviews this period or before it.')}</p>"
-               if quiet else ""))
-
-    # uncategorized opinions: moods and outcomes, no single thing to fix
-    general = by_volume([i for i in neg.of_kind("outcome") + neg.of_kind("mood")
-                         if i.now or i.usual >= 1])
-    general_html = b.expand(
-        f"Uncategorized user opinions this period ({len(general)} groups)",
-        f"<p>{b.muted('Reviews that voice frustration without naming a specific problem, or say what users did about it, such as switching banks. Kept apart from the issues above because there is no single thing to fix.')}</p>"
-        + _issue_table(general, c, first="Opinion")) if general else ""
-
-    body = b.layout(header,
-                    b.section("single", changed_html + area_html + _likes(pos, c) + general_html
-                              + _method(neg) + _footer(neg, pos)))
-    return c.done(body)
-
-
-def _likes(pos: Stream | None, c: Canvas) -> str:
-    if pos is None:
-        return ""
-    likes = [i for i in pos.issues if i.now or i.usual >= 1]
-    if not likes:
-        return ""
-    return ("<h2>What users liked this period</h2>"
-            f"<p>{b.muted(f'{pos.total.now} positive (4–5★) reviews in all.')}</p>"
-            + _issue_table(by_volume(likes), c, first="Theme"))
-
-
-# --- role pages ------------------------------------------------------------------
-
-def _role(neg: Stream, pos: Stream | None, tx: Taxonomy, role: Role, hub_title: str) -> StoragePage:
-    c = Canvas()
-    p = neg.period
-    issues = neg.in_areas(role.areas)
-    total = Series(p)
-    for i in issues:
-        total.union(i.series)
-    area_names = ", ".join(tx.area_name(a) for a in role.areas)
-
-    intro = _role_summary(neg, pos, tx, role, issues, total, hub_title)
-    pairs = [("Period", f"{b.esc(p.label())} ({p.days} days)"),
-             ("Areas", b.esc(area_names)),
-             ("Reviews", f"{total.now} in these areas, usual {_usual(total.usual)} "
-                         f"{b.muted(f'(of {neg.total.now} negative reviews in all)')}")]
-    header = b.section("single", intro + b.details(pairs))
-
-    moved = by_change(issues)
-    shown, quiet = _shown(issues)
-    tiles = [_kpi(str(total.now), "reviews in your areas", _vs_usual(total), total.change)]
-    if moved:
-        top = moved[0]
-        tiles.append(_kpi(str(top.now), f"{LOZENGE[top.change]}: {top.label}",
-                          f"usual {_usual(top.usual)} · {len(moved)} changed", top.change))
-    else:
-        tiles.append(_kpi("0", "issues changed", "all within normal variation"))
-    # The busiest issue, unless the change tile already shows it.
-    lead = next((i for i in shown if not moved or i is not moved[0]), None)
-    if lead:
-        tiles.append(_kpi(str(lead.now), f"Most raised: {lead.label}",
-                          f"usual {_usual(lead.usual)} per period"))
-    kpis = b.section("three_equal", *tiles)
-
-    summary = ("<h2>Your issues this period</h2>"
-               f"<p>{b.muted('Busiest first. Details and this period’s quotes follow below.')}</p>"
-               + _issue_table(shown, c, tx if len(role.areas) > 1 else None, quote=False))
-    if "versions" in role.charts:
-        summary += _versions_chart(shown, c)
-
-    details = (f"<h2>What users said</h2><p>{b.muted(STAR_KEY)}</p>"
-               + "".join(_said(i, c) for i in shown))
-    if quiet:
-        details += f"<p>{b.muted(f'{quiet} more issue(s) in these areas had no reviews recently.')}</p>"
-
-    likes_html = _role_praise(pos, role, c, hub_title) if pos else ""
-    body = b.layout(header, kpis, b.section("single", summary + details + likes_html
-                                            + _method(neg) + _footer(neg, pos)))
-    return c.done(body)
-
-
-PRAISE_ELSEWHERE = 3   # app-wide praise themes named under a role's own
-
-
-def _role_praise(pos: Stream, role: Role, c: Canvas, hub_title: str) -> str:
-    """Praise in the role's areas in full, then the app's other praise in a line.
-
-    Most praise is general ("easy", "fast") and filed under no role's areas,
-    so the section is always shown: an empty one would read as praise not
-    being covered at all.
-    """
-    out = "<h2>What users praised</h2>"
-    if not pos.total.now:
-        return out + f"<p>{b.muted('No positive (4–5★) reviews this period.')}</p>"
-    out += f"<p>{b.muted(f'From the {pos.total.now} positive (4–5★) reviews this period.')}</p>"
-    themes = [i for i in pos.of_kind("issue") if i.now]
-    mine = by_volume([i for i in themes if set(i.areas) & set(role.areas)])
-    elsewhere = by_volume([i for i in themes if all(i is not m for m in mine)])
-    hub = b.page_link(hub_title, hub_title)
-    if mine:
-        out += "".join(_said(i, c) for i in mine)
-    else:
-        out += "<p>No praise specific to your areas this period.</p>"
-    if elsewhere:
-        top = elsewhere[:PRAISE_ELSEWHERE]
-        text = (f"{'Elsewhere in the app' if mine else 'Across the app'}, users most praised "
-                f"{_and([f'{_name(i)} ({i.now})' for i in top])}.")
-        recent = top[0].recent_quotes(1)
-        if recent:
-            text += f" One reviewer put it this way: {_quote(recent[0], 180)}"
-        out += f"<p>{text}</p><p>{b.muted('All praise themes are on ')}{hub}.</p>"
-    elif not mine:
-        out += f"<p>{b.muted('For the app as a whole, see ')}{hub}.</p>"
-    return out
-
-
-def _said(i: Issue, c: Canvas) -> str:
-    """One issue in full: counts, versions, trend, and many of the period's quotes."""
-    versions = ", ".join(f"{v} ({n})" for v, n in i.versions_now.most_common(4))
-    facts = (f"{i.now} this period · usual {_usual(i.usual)} · {len(i.all_time):,} all time"
-             + (f" · versions {versions}" if versions else ""))
-    quotes = i.recent_quotes(DETAIL_QUOTES)
-    if quotes:
-        lead = (f"{_n(i.now, 'reviewer')} said this; "
-                + ("here they all are:" if len(quotes) == i.now
-                   else f"the {len(quotes)} most liked and newest:"))
-        said = (f"<p>{c.dots(f'{i.polarity[:3]}-{i.label}', [q.score for q in i.quotes_now.values()])}</p>"
-                f"<p>{b.muted(lead)}</p><ul>"
-                + "".join(f"<li>{_quote(q)}</li>" for q in quotes) + "</ul>")
-    else:
-        said = f"<p>{b.muted('No reviews this period. Typical wording: ')}<em>“{b.esc(i.quote[:200])}”</em></p>"
-    return (f"<h3>{b.esc(i.label)} {_lozenge(i.change, i.polarity)}</h3>"
-            f"<p>{b.muted(b.esc(facts))}</p>"
-            f"<p>{c.spark(f'{i.polarity[:3]}-{i.label}', i.series, i.polarity)}</p>" + said)
-
-
-def _version_key(v: str) -> tuple:
-    return tuple(int(x) if x.isdigit() else 0 for x in v.split("."))
-
-
-def _versions_chart(shown: list[Issue], c: Canvas) -> str:
-    """This period's issues split by app version: the newest versions that
-    carry the most reviews get a colour each, the rest are "other"."""
-    rows = [i for i in shown if i.now]
-    if not rows:
-        return ""
-    totals = Counter()
-    for i in rows:
-        totals.update(i.versions_now)
-    named = sorted([v for v, _ in totals.most_common() if v != "unknown"][:len(svg.VERSION_COLOURS)],
-                   key=_version_key, reverse=True)
-    chart = svg.version_bars([{"name": i.label, "counts": dict(i.versions_now)} for i in rows],
-                             named, "Reviews this period by app version",
-                             "Each bar is one issue; a version that carries one issue is a likely regression")
-    return "<h3>By app version</h3>" + c.add("versions.svg", chart, svg.version_width())
-
-
-# --- all pages ---------------------------------------------------------------------
-
-def build_all(store: Store, neg: Stream, pos: Stream | None, tx: Taxonomy, app_id: str,
-              title: str | None = None, app_name: str | None = None) -> list[PageSpec]:
-    hub_title = title or f"Product View @ {app_name or app_id}"
-    role_titles = {r: role.name for r, role in tx.roles.items()}
-    specs = [PageSpec("hub", hub_title,
-                      _hub(store, neg, pos, tx, app_id, hub_title, role_titles), None)]
-    for r, role in tx.roles.items():
-        specs.append(PageSpec(f"role-{r}", role_titles[r],
-                              _role(neg, pos, tx, role, hub_title), hub_title))
-    return specs

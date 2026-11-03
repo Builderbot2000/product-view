@@ -241,15 +241,18 @@ kevintangcyberium.atlassian.net, space `MFS` (no dedicated space yet;
 `pv publish` can't create one):
 - "TITLE-TAG probe title" (98532): probe 1 (HTML route).
 - "PV probe 2: native macros" (294964): probe 2 (storage route).
-- "Product View @ RBC Mobile" (294942): **the hub page**, built by
+- "Product View @ RBC Mobile" (294942): **the overview page**, built by
   `pv report --publish --space MFS`. Its attachments list still holds charts
   from earlier versions (priority map, monthly sparklines); they are
   unreferenced and harmless.
-- Under it, the role pages, titled by role name alone: "UI & design"
-  (295149), "Sign-in & security" (295174), "Payments" (131429),
-  "Engineering / QA" (65919), "Support / CX" (65956).
-  Pages are matched by title, so renaming one means renaming the live page
-  first, or the next publish creates a new page beside it.
+- Under it, the team pages. Until 2026-11-03 they were role pages: "UI &
+  design" (295149), "Sign-in & security" (295174), "Payments" (131429),
+  "Engineering / QA" (65919), "Support / CX" (65956). `report.replaces` in
+  config.yaml renames each to its team on publish (UI & design becomes
+  Accounts & settings, Payments becomes Payments & transfers, Engineering / QA
+  becomes App platform), keeping the page and its history. Pages are matched
+  by title, so a page renamed by hand must be renamed in the mapping too.
+- Under each team page, its members' reports, "Name · Team".
 
 Per-row SVG sparklines in table cells render well, given an explicit
 `ac:width` (without one Confluence stretches them to the cell).
@@ -270,7 +273,9 @@ the whole application runs in containers, reports reach people by email, and
 collection runs on a schedule.
 
 D18–D20 are built, D22 as far as one cycle command (`pv cycle`); D21 (email)
-is deferred. Status and build choices: docs/production-plan.md, top. The
+is deferred. Decided 2026-11-03 (Kevin): the overview is one page that is
+also the analysts' all-topics view, and the role pages become the team pages
+(renamed in place on publish, `report.replaces`). Status and build choices: docs/production-plan.md, top. The
 Project.md §0 "Requirements change" block
 lists what each one supersedes.
 

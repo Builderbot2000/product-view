@@ -77,17 +77,37 @@ def push(space: str, title: str, page: storage.StoragePage, *,
     return 0
 
 
-def publish_tree(space: str, pages: list[tuple[str, storage.StoragePage, str | None]],
-                 root_parent_id: str | None = None) -> None:
-    """Publish (title, page, parent title) in order; a parent in the list must
-    come before its children. A parent not in the list is looked up in the
-    space by title (the overview page, above team pages), else the page goes
-    under root_parent_id. New pages are created under their parent; an
+def _take_over(client: Client, space: str, title: str, old_titles) -> None:
+    """Rename the first existing page among `old_titles` to `title`, unless a
+    page with `title` exists already. Its history and place in the tree stay."""
+    if not old_titles:
+        return
+    sid = client.space_id(space)
+    if client.find_page(sid, title):
+        return
+    for old in old_titles:
+        found = client.find_page(sid, old)
+        if found:
+            current = client._request("GET", f"/api/v2/pages/{found['id']}",
+                                      params={"body-format": "storage"})
+            client.update_page(found["id"], title, current["body"]["storage"]["value"],
+                               message=f"renamed from {old!r}")
+            print(f"renamed: {old!r} -> {title!r}")
+            return
+
+
+def publish_tree(space: str, pages: list[tuple], root_parent_id: str | None = None) -> None:
+    """Publish (title, page, parent title[, earlier titles]) in order; a parent
+    in the list must come before its children. A parent not in the list is
+    looked up in the space by title, else the page goes under root_parent_id.
+    A page with earlier titles takes over the first of them that exists, so
+    its history carries on. New pages are created under their parent; an
     existing page keeps its place in the tree. Storage pages, so full width.
     Raises ConfluenceError."""
     client = Client.from_env()
     ids: dict[str, str] = {}
-    for title, page, parent in pages:
+    for title, page, parent, *rest in pages:
+        _take_over(client, space, title, rest[0] if rest else ())
         if parent and parent not in ids:
             found = client.find_page(client.space_id(space), parent)
             if found is None:

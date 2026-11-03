@@ -85,9 +85,18 @@ embed:
 report:
   period_days: 28          # the reporting period, ending on the newest review's day
   baseline_periods: 3      # "usual" = mean of this many equal periods before it (demo standard D17; 6 with a 12-month window)
-  curation: curation.yaml  # areas and roles
-  app_name: RBC Mobile     # hub title: "Product View @ <app_name>"; null: the app id
-  overview: null           # team pages go under this page; null: the hub title
+  curation: curation.yaml  # product areas, for `pv issues`
+  app_name: RBC Mobile     # overview title: "Product View @ <app_name>"; null: the app id
+  overview: null           # the overview page's title; null: "Product View @ <app_name>"
+  # Team pages that take over an earlier page on publish: the first title found is
+  # renamed to the team page, keeping its history and place. These are the demo
+  # site's role pages from before the matrix (team ids from matrix.sample.yaml).
+  replaces:
+    sign-in-security: ["Sign-in & security"]
+    payments: ["Product features", "Payments"]
+    accounts-settings: ["UI & design"]
+    app-platform: ["Engineering / QA"]
+    support-cx: ["Support / CX"]
 
 # `pv publish` target. Credentials are NOT here: CONFLUENCE_BASE_URL,
 # CONFLUENCE_USER and ATLASSIAN_TOKEN come from the environment or .env.

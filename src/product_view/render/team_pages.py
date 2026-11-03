@@ -39,43 +39,47 @@ def _owners(team: Team, topic_id: str) -> list[Member]:
     return [m for m in team.members if topic_id in m.topics]
 
 
-def _span(r: TopicReport) -> str:
+def span(r: TopicReport) -> str:
     p = r.period
     return f"between {_date(p.start)} and {_date(p.end - timedelta(days=1))}"
 
 
-def _topic_rows(r: TopicReport, ids: list[str], canvas: Canvas,
-                owners: Team | None = None) -> list[list[str]]:
+def owner_links(team: Team):
+    """An Owner column: the team members who own the topic, linked to their reports."""
+    return "Owner", lambda tid: ", ".join(b.page_link(member_title(team, m), m.name)
+                                          for m in _owners(team, tid))
+
+
+def topic_table(r: TopicReport, ids: list[str], canvas: Canvas, column=None,
+                quotes: int = 0) -> str:
+    """A row per topic: name and description (and up to `quotes` of this
+    period's quotes), an optional (header, cell function) column, then this
+    period, usual, change and the trend."""
     rows = []
     for tid in ids:
         i = r.topics[tid]
-        row = [f"<strong>{b.esc(i.label)}</strong><br />"
-               + b.muted(b.esc(r.matrix.topics[tid].description))]
-        if owners is not None:
-            row.append(", ".join(b.page_link(member_title(owners, m), m.name)
-                                 for m in _owners(owners, tid)))
+        first = (f"<strong>{b.esc(i.label)}</strong><br />"
+                 + b.muted(b.esc(r.matrix.topics[tid].description)))
+        for q in i.recent_quotes(quotes):
+            first += "<br />" + _quote(q, 160)
+        row = [first] + ([column[1](tid)] if column else [])
         row += [str(i.now), _usual(i.usual), _change_cell(i.change, i.polarity),
                 canvas.spark(f"topic-{tid}", i.series, i.polarity)]
         rows.append(row)
-    return rows
-
-
-def _topic_table(r: TopicReport, ids: list[str], canvas: Canvas,
-                 owners: Team | None = None) -> str:
-    header = ["Topic"] + (["Owner"] if owners else []) + [
+    header = ["Topic"] + ([column[0]] if column else []) + [
         "This period", "Usual", "Change", f"Last {SPARK_PERIODS} periods"]
-    widths = [440] + ([170] if owners else []) + [86, 70, 90, 140]
-    numeric = {2, 3} if owners else {1, 2}
-    return b.table(header, _topic_rows(r, ids, canvas, owners), widths, numeric)
+    widths = [440] + ([170] if column else []) + [86, 70, 90, 140]
+    numeric = {2, 3} if column else {1, 2}
+    return b.table(header, rows, widths, numeric)
 
 
-def _ordered(r: TopicReport, ids) -> list[str]:
+def ordered(r: TopicReport, ids) -> list[str]:
     """Busiest this period first, then by usual level; ties keep list order."""
     pos = {t: n for n, t in enumerate(ids)}
     return sorted(ids, key=lambda t: (-r.topics[t].now, -r.topics[t].usual, pos[t]))
 
 
-def _period_pairs(r: TopicReport, extra: list[tuple[str, str]]) -> list[tuple[str, str]]:
+def period_pairs(r: TopicReport, extra: list[tuple[str, str]]) -> list[tuple[str, str]]:
     p = r.period
     base_start = p.start - timedelta(days=p.days * p.baseline)
     base_end = p.start - timedelta(days=1)
@@ -87,7 +91,7 @@ def _period_pairs(r: TopicReport, extra: list[tuple[str, str]]) -> list[tuple[st
                                f"usual {_usual(r.total.usual)}")]
 
 
-def _movers(issues: list[Issue], skip: Issue | None) -> str:
+def movers(issues: list[Issue], skip: Issue | None) -> str:
     moved = [i for i in by_change(issues) if i is not skip]
     up = [_brief(i) for i in moved if i.change in ("new", "up")][:3]
     down = [_brief(i) for i in moved if i.change == "down"][:3]
@@ -99,7 +103,7 @@ def _movers(issues: list[Issue], skip: Issue | None) -> str:
     return out.strip()
 
 
-def _lead(issues: list[Issue], whose: str) -> tuple[str, Issue | None]:
+def lead_paragraph(issues: list[Issue], whose: str) -> tuple[str, Issue | None]:
     """The one topic to look at first, and a paragraph on it."""
     moved = [i for i in by_change(issues) if i.change in ("new", "up")]
     busiest = next(iter(by_volume([i for i in issues if i.now])), None)
@@ -151,18 +155,18 @@ def _topic_detail(r: TopicReport, tid: str, canvas: Canvas) -> str:
             f"<p>{canvas.spark(f'topic-{tid}', i.series, i.polarity)}</p>" + said)
 
 
-def _no_topic(r: TopicReport) -> str:
+def no_topic(r: TopicReport, examples: int = NO_TOPIC_EXAMPLES) -> str:
     s = r.no_topic
     out = (f"<h2>Did not fit a topic: {_n(s.now, 'review')}</h2>"
            f"<p>{b.muted(f'Negative reviews this period that match none of the topics any team owns, across the whole app (usual {_usual(s.usual)}). Most are general complaints that name no feature, but a problem that keeps turning up here may need a topic of its own.')}</p>")
-    examples = r.no_topic_now[:NO_TOPIC_EXAMPLES]
-    if examples:
-        out += ("<p>" + b.muted(f"The {len(examples)} most liked and newest:") + "</p><ul>"
-                + "".join(f"<li>{_quote(q)}</li>" for q in examples) + "</ul>")
+    shown = r.no_topic_now[:examples]
+    if shown:
+        out += ("<p>" + b.muted(f"The {len(shown)} most liked and newest:") + "</p><ul>"
+                + "".join(f"<li>{_quote(q)}</li>" for q in shown) + "</ul>")
     return out
 
 
-def _method(r: TopicReport) -> str:
+def method(r: TopicReport) -> str:
     p = r.period
     months = round(p.days * p.baseline / 30.4)
     return b.expand("How these numbers are made", (
@@ -202,7 +206,7 @@ def _method(r: TopicReport) -> str:
         "people marked the review helpful (👍).</p>"))
 
 
-def _footer(r: TopicReport) -> str:
+def footer(r: TopicReport) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     text = f"Generated at {stamp} from run {r.run['run_id']}."
     if r.matrix.is_sample:
@@ -217,13 +221,13 @@ def team_page(r: TopicReport, team: Team, overview: str | None):
     ids = list(team.topics)
     issues = r.of(ids)
     mine = r.union(ids)
-    first = (f"Here’s what Play Store reviewers said {_span(r)} about the "
+    first = (f"Here’s what Play Store reviewers said {span(r)} about the "
              f"{_n(len(ids), 'topic')} <strong>{b.esc(team.name)}</strong> follows. "
              f"{_n(mine.now, 'negative review')} touched at least one of them, "
              f"{_against(mine)}, out of {r.total.now} across the whole app.")
-    lead, top = _lead(issues, "your topics")
+    lead, top = lead_paragraph(issues, "your topics")
     paras = [first, lead]
-    if others := _movers(issues, top):
+    if others := movers(issues, top):
         paras.append(others)
     members = "".join(f"<li>{b.page_link(member_title(team, m), m.name)} "
                       f"{b.muted(b.esc('· ' + ', '.join(r.matrix.topics[t].name for t in m.topics)))}</li>"
@@ -232,17 +236,17 @@ def team_page(r: TopicReport, team: Team, overview: str | None):
              + "<p>Each member has a report with only their topics:</p>" + f"<ul>{members}</ul>")
     if overview:
         intro += f"<p>{b.muted('For the whole app, see ')}{b.page_link(overview, overview)}.</p>"
-    pairs = _period_pairs(r, [("Reviews", f"{mine.now} on these topics, usual {_usual(mine.usual)}")])
+    pairs = period_pairs(r, [("Reviews", f"{mine.now} on these topics, usual {_usual(mine.usual)}")])
 
     tiles = _tiles(r, issues, mine, "reviews on your topics")
     tiles.append(_kpi(str(r.no_topic.now), "did not fit any topic",
                       f"across the app · usual {_usual(r.no_topic.usual)}"))
     table = ("<h2>Your topics this period</h2>"
              f"<p>{b.muted('Busiest first. Each member’s report has the quotes behind these numbers.')}</p>"
-             + _topic_table(r, _ordered(r, ids), c, owners=team))
+             + topic_table(r, ordered(r, ids), c, owner_links(team)))
     body = b.layout(b.section("single", intro + b.details(pairs)),
                     b.section("three_equal", *tiles),
-                    b.section("single", table + _no_topic(r) + _method(r) + _footer(r)))
+                    b.section("single", table + no_topic(r) + method(r) + footer(r)))
     return c.done(body)
 
 
@@ -254,43 +258,50 @@ def member_page(r: TopicReport, team: Team, member: Member):
     issues = r.of(ids)
     mine = r.union(ids)
     names = _and([r.matrix.topics[t].name for t in ids])
-    first = (f"Here’s what Play Store reviewers said {_span(r)} about "
+    first = (f"Here’s what Play Store reviewers said {span(r)} about "
              f"<strong>{b.esc(names)}</strong>, the {'topic' if len(ids) == 1 else 'topics'} "
              f"you own. {_n(mine.now, 'negative review')} touched "
              f"{'it' if len(ids) == 1 else 'at least one of them'}, {_against(mine)}, "
              f"out of {r.total.now} across the whole app.")
-    lead, top = _lead(issues, "your topics")
+    lead, top = lead_paragraph(issues, "your topics")
     paras = [first, lead]
-    if others := _movers(issues, top):
+    if others := movers(issues, top):
         paras.append(others)
     paras.append(b.muted("Trends and quotes for each topic are below. For the whole team, see ")
                  + b.page_link(team_title(team), team.name) + ".")
-    pairs = _period_pairs(r, [("Your topics", b.esc(names)),
+    pairs = period_pairs(r, [("Your topics", b.esc(names)),
                               ("Reviews", f"{mine.now} on your topics, usual {_usual(mine.usual)}")])
     tiles = _tiles(r, issues, mine, "reviews on your topics")
     busiest = next((i for i in by_volume(issues) if i.now and i is not top), None)
     if busiest:
         tiles.append(_kpi(str(busiest.now), f"Also raised: {busiest.label}",
                           f"usual {_usual(busiest.usual)} per period"))
-    order = _ordered(r, ids)
+    order = ordered(r, ids)
     table = ("<h2>Your topics this period</h2>"
              f"<p>{b.muted('Busiest first. Details and this period’s quotes follow below.')}</p>"
-             + _topic_table(r, order, c))
+             + topic_table(r, order, c))
     details = "<h2>What users said</h2>" + "".join(_topic_detail(r, t, c) for t in order)
     body = b.layout(b.section("single", "".join(f"<p>{p}</p>" for p in paras) + b.details(pairs)),
                     b.section("three_equal" if len(tiles) == 3 else "two_equal", *tiles),
-                    b.section("single", table + details + _method(r) + _footer(r)))
+                    b.section("single", table + details + method(r) + footer(r)))
     return c.done(body)
 
 
 # --- all pages -------------------------------------------------------------------
 
-def build_all(store: Store, r: TopicReport, overview: str | None) -> list[PageSpec]:
-    """Team pages under the overview, each followed by its members' reports."""
-    specs = []
+def build_all(store: Store, r: TopicReport, overview: str, app_id: str,
+              replaces: dict[str, list[str]] | None = None) -> list[PageSpec]:
+    """The overview, then each team page under it followed by its members'
+    reports. A team page takes over the first existing page among its
+    `replaces` titles (the earlier role pages), keeping its history."""
+    from .overview import overview_page
+
+    replaces = replaces or {}
+    specs = [PageSpec("overview", overview, overview_page(store, r, overview, app_id), None)]
     for team in r.matrix.teams.values():
         title = team_title(team)
-        specs.append(PageSpec(f"team-{team.id}", title, team_page(r, team, overview), overview))
+        specs.append(PageSpec(f"team-{team.id}", title, team_page(r, team, overview), overview,
+                              tuple(t for t in replaces.get(team.id, []) if t != title)))
         for m in team.members:
             specs.append(PageSpec(f"member-{team.id}-{_slug(m.name)}", member_title(team, m),
                                   member_page(r, team, m), title))

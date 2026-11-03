@@ -1,15 +1,15 @@
 # Product View
 
 Match Google Play Store reviews to the app features each team follows, and
-publish a page per team and a report per team member to Confluence. See
+publish an overview, a page per team and a report per team member to Confluence. See
 [project.md](docs/Project.md) for the full plan and
 [production-plan.md](docs/production-plan.md) for the service being built.
 
 Reviews are scraped into a JSONL archive, loaded into SQLite and translated.
 Complaints are then matched to a fixed list of topics from a team -> member ->
 topic matrix (`matrix.yaml`, see [matrix.sample.yaml](matrix.sample.yaml)),
-and `pv report` turns the matches into a Confluence page per team and a
-report per member. `pv cycle` does all of it once and exits, for a scheduler
+and `pv report` turns the matches into a Confluence page tree: an overview of
+every team and topic, a page per team, and a report per member. `pv cycle` does all of it once and exits, for a scheduler
 to start.
 
 ```bash
@@ -19,18 +19,16 @@ pv matrix                   # check the matrix file, and who owns what
 ```
 
 The earlier route, which formed its own issues instead of using a fixed topic
-list, is still here (`pv run`, `pv issues`, `pv report --hub`): the overview
-page comes from it until it is revised for the matrix.
+list, is still here for reference (`pv run`, `pv issues`); no page uses it.
 
 ## Demo
 
 [Product View @ RBC Mobile](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/294942)
-is the hub page built by `pv report --publish --space MFS` on the demo
-Confluence site. The role pages (UI & design, Sign-in & security, Payments,
-Engineering / QA, Support / CX) sit under it. The live pages still come from
-the earlier clustering; the next `pv report --publish` after the first issue
-build replaces them (the Payments page becomes Product features). Viewing it requires access to
-that site.
+is the overview page built by `pv report --publish --space MFS` on the demo
+Confluence site. The team pages sit under it (the earlier role pages, renamed
+and rebuilt by `report.replaces`), and each member's report under their team
+page. Teams, people and topics are the sample matrix. Viewing it requires
+access to that site.
 
 ## Setup
 
@@ -122,7 +120,7 @@ matching.
 ```bash
 pv matrix                   # check the matrix against its rules, list who owns what
 pv match                    # match the reports' window: a new run in data/topics.db
-pv report                   # team pages and member reports -> out/report/
+pv report                   # overview, team pages and member reports -> out/report/
 pv report --publish --space MFS
 ```
 
@@ -376,7 +374,7 @@ src/product_view/
 │   ├── prompts.py      # the validated prompts
 │   ├── codebook.py     # issues.db: issues, points, raw scores, runs
 │   └── pipeline.py     # distill, score, cluster, name, screen, select, file
-├── render/             # pv report: team and member pages (team_pages.py), the earlier hub; SVG charts
+├── render/             # pv report: overview, team and member pages; SVG charts
 └── publish/            # pv publish: Confluence REST
 ```
 

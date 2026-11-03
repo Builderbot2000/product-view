@@ -93,7 +93,8 @@ DEFAULTS: dict[str, Any] = {
         "baseline_periods": 6,
         "curation": "curation.yaml",
         "app_name": None,    # in page titles; None: the app id
-        "overview": None,    # team pages go under this page; None: the hub's title
+        "overview": None,    # the overview page's title; None: "Product View @ <app_name>"
+        "replaces": {},      # team id -> earlier page titles the team page takes over
     },
     # Where `pv publish` puts the page. Credentials are not here: they come
     # from the environment (see publish/confluence.py).
@@ -161,7 +162,8 @@ def _merge(base: dict, user: dict, prefix: str, source: Path) -> None:
             known = ", ".join(f"{prefix}{k}" for k in base)
             raise ConfigError(f"{source}: unknown key {dotted!r} (expected one of: {known})")
         # Mappings whose keys are data, not schema.
-        if isinstance(base[key], dict) and dotted not in ("llm.models", "llm.options", "llm.prices"):
+        if isinstance(base[key], dict) and dotted not in ("llm.models", "llm.options", "llm.prices",
+                                                            "report.replaces"):
             if not isinstance(value, dict):
                 raise ConfigError(f"{source}: {dotted!r} must be a mapping")
             _merge(base[key], value, prefix=f"{dotted}.", source=source)
