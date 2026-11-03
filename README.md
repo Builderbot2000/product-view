@@ -1,20 +1,26 @@
 # Product View
 
-Group Google Play Store reviews into product issues with a language model,
-and publish them to Confluence. See [project.md](docs/Project.md) for the full plan.
+Match Google Play Store reviews to the app features each team follows, and
+publish a page per team and a report per team member to Confluence. See
+[project.md](docs/Project.md) for the full plan and
+[production-plan.md](docs/production-plan.md) for the service being built.
 
-Reviews are scraped into a JSONL archive, loaded into SQLite and translated;
-a language model then picks out what each review complains about or praises
-and groups those points into issues, kept in a codebook so each issue means
-the same thing from one run to the next. `pv report` turns the issues into
-periodic Confluence pages.
+Reviews are scraped into a JSONL archive, loaded into SQLite and translated.
+Complaints are then matched to a fixed list of topics from a team -> member ->
+topic matrix (`matrix.yaml`, see [matrix.sample.yaml](matrix.sample.yaml)),
+and `pv report` turns the matches into a Confluence page per team and a
+report per member. `pv cycle` does all of it once and exits, for a scheduler
+to start.
 
 ```bash
-pv run            # rebuild reviews.db, translate, bring the issues up to date
-pv run --fetch    # same, after topping up the archive from the Play Store
-pv issues show --detail
-pv report --publish --space MFS
+pv cycle                    # fetch, build, translate, match, report, publish; then exit
+pv cycle --no-fetch --no-publish   # the same on the archive as it is, pages to out/report
+pv matrix                   # check the matrix file, and who owns what
 ```
+
+The earlier route, which formed its own issues instead of using a fixed topic
+list, is still here (`pv run`, `pv issues`, `pv report --hub`): the overview
+page comes from it until it is revised for the matrix.
 
 ## Demo
 
@@ -105,7 +111,51 @@ pv info
 pv export
 ```
 
-### Grouping reviews into issues
+### Matching reviews to topics
+
+Topics, teams and members come from the matrix: `$PV_MATRIX` if set, else
+`matrix.yaml` (the real one: confidential, gitignored, never committed), else
+`matrix.sample.yaml` (invented content in the same format). How to write a
+topic's description is in the sample's header; the description is part of the
+matching.
+
+```bash
+pv matrix                   # check the matrix against its rules, list who owns what
+pv match                    # match the reports' window: a new run in data/topics.db
+pv report                   # team pages and member reports -> out/report/
+pv report --publish --space MFS
+```
+
+`pv match` takes the 1-3 star reviews in the reports' window (the reporting
+period and the periods its trend and "usual" need) and matches them to the
+topics (method M in [topic-trials.md](trials/topic-trials.md), validated at
+precision 78%, recall 65%, false alarm 12% on a held-out sample):
+
+1. Each review is split into units, one complaint each.
+2. The model writes about 12 example complaints per topic from its name and
+   description. A classifier trained on them puts each unit against every topic.
+3. A clear match is taken as it is, a unit that matches nothing well is left
+   without a topic, and the model decides the rest from up to 5 candidate
+   topics, reading the whole review. About a third of units reach the model.
+
+Every model answer and embedding is cached, so a weekly run pays only for new
+reviews. Changing a topic's name or description re-matches everything.
+
+Embeddings run in-process by default (`embed.backend: local`, CPU). With an
+Ollama server that has `qwen3-embedding:0.6b`, `embed.backend: ollama` is much
+faster on a GPU and gives the same vectors.
+
+### One cycle, for a scheduler
+
+`pv cycle` runs fetch -> db build -> translate -> match -> report -> publish once
+and exits: 0 on success, 1 when a step fails, 3 when another cycle holds the
+lock (`data/pv-cycle.lock`). It prints a one-line summary and records the
+cycle in `data/topics.db`. Nothing is published unless every earlier step
+succeeded. It publishes when `confluence.space` is set, else it only writes
+the pages. `PV_LOG_JSON=1` makes log lines JSON. Email to members (D21) is
+not built yet.
+
+### Grouping reviews into issues (the earlier route)
 
 Each stage reads and writes through SQLite, so any one re-runs in isolation.
 `pv run` chains them all.
@@ -197,6 +247,7 @@ re-scores the new points against them.
 | `data/reviews.db` | Deleted and rebuilt from `data/raw/` on every `pv db build` / `pv run` |
 | `data/cache.db` | Translations and every model answer. Kept across rebuilds; delete it only to force a redo |
 | `data/issues.db` | **The issue codebook.** Issues, the points each review made, and their raw scores. Kept: an issue's identity across runs is the point. Delete it only to start the issues over |
+| `data/topics.db` | Every matching run and what it matched (units, routes, matches), and every `pv cycle`. Kept; reports read the latest run |
 
 ### Always fetch all locales (the default)
 
@@ -301,6 +352,8 @@ src/       the pv package, below
 src/product_view/
 ├── cli.py              # argument parsing; fetch / export / info / langs
 ├── commands.py         # db build / translate / issues / run
+├── cycle.py            # pv cycle: one full cycle, a lock, a run record, exit codes
+├── matrix.py           # the team -> member -> topic matrix: load, validate, hash
 ├── config.py           # config.yaml: defaults, validation, flag precedence
 ├── models.py           # Review — the contract between ingestion and the rest
 ├── archive.py          # JSONL archive + resume state
@@ -313,12 +366,17 @@ src/product_view/
 │   └── translate.py    # MarianMT fr→en, cached
 ├── embed/
 │   └── encoder.py      # all-MiniLM-L6-v2, L2-normalized (clusters points in the issue stage)
+├── topics/             # pv match: method M
+│   ├── units.py        # reviews -> complaint units
+│   ├── embed.py        # MiniLM and Qwen3 embeddings, cached; local or Ollama
+│   ├── method.py       # example complaints, classifier, gate, model step
+│   └── store.py        # topics.db: runs, units, matches
 ├── issues/
-│   ├── llm.py          # model connectors: ollama, openai; cached, parallel
+│   ├── llm.py          # model connectors: ollama, openai-compatible; cached, parallel
 │   ├── prompts.py      # the validated prompts
 │   ├── codebook.py     # issues.db: issues, points, raw scores, runs
 │   └── pipeline.py     # distill, score, cluster, name, screen, select, file
-├── render/             # pv report: Confluence storage format + SVG charts
+├── render/             # pv report: team and member pages (team_pages.py), the earlier hub; SVG charts
 └── publish/            # pv publish: Confluence REST
 ```
 

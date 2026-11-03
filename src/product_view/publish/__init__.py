@@ -79,13 +79,21 @@ def push(space: str, title: str, page: storage.StoragePage, *,
 
 def publish_tree(space: str, pages: list[tuple[str, storage.StoragePage, str | None]],
                  root_parent_id: str | None = None) -> None:
-    """Publish (title, page, parent title) in order; a parent must come
-    before its children. New pages are created under their parent; an
+    """Publish (title, page, parent title) in order; a parent in the list must
+    come before its children. A parent not in the list is looked up in the
+    space by title (the overview page, above team pages), else the page goes
+    under root_parent_id. New pages are created under their parent; an
     existing page keeps its place in the tree. Storage pages, so full width.
     Raises ConfluenceError."""
     client = Client.from_env()
     ids: dict[str, str] = {}
     for title, page, parent in pages:
+        if parent and parent not in ids:
+            found = client.find_page(client.space_id(space), parent)
+            if found is None:
+                log.warning("parent page %r not found in space %s; publishing %r under %s",
+                            parent, space, title, root_parent_id or "the space root")
+            ids[parent] = found["id"] if found else root_parent_id
         parent_id = ids[parent] if parent else root_parent_id
         ids[title] = _publish(client, space, title, page, parent_id, full_width=True)["id"]
 

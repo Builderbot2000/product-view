@@ -269,7 +269,9 @@ and each member owns several topics. Three operational needs come with it:
 the whole application runs in containers, reports reach people by email, and
 collection runs on a schedule.
 
-None of D18–D22 is built yet. The Project.md §0 "Requirements change" block
+D18–D20 are built, D22 as far as one cycle command (`pv cycle`); D21 (email)
+is deferred. Status and build choices: docs/production-plan.md, top. The
+Project.md §0 "Requirements change" block
 lists what each one supersedes.
 
 | # | Decision | Why |

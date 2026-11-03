@@ -13,7 +13,7 @@
 #          name         shown in reports
 #          description  one sentence on what the topic covers, written the
 #                       way a user would describe the feature; used for
-#                       matching and shown beside the name
+#                       matching and shown beside the name (see below)
 # teams:   who reads which topics.
 #          name          shown in reports; one Confluence page per team
 #          mailing_list  the team's list address (optional)
@@ -23,7 +23,20 @@
 #
 # Rules: every topic a member lists must exist under topics; every topic is
 # owned by at least one member; a topic may be owned by several members, in
-# the same team or in different teams.
+# the same team or in different teams. `pv matrix` checks a file against them.
+#
+# Writing descriptions. Reviews are matched to topics by what the description
+# says, so the description is part of the matching, not a label:
+#   - Name the forms the feature takes in reviews, in users' words: "a code by
+#     text or call, or approving the sign-in on another device", not "2FA".
+#     A form the description leaves out is often missed.
+#   - One feature per topic. Two features in one description split its matches
+#     unpredictably; make two topics instead.
+#   - No overlap with neighbouring topics. Where two could be confused, say
+#     which side of the line this one covers.
+#   - Describe the feature, not one problem with it: "sending e-Transfers,
+#     adding recipients, limits", not "e-Transfers failing".
+# Changing a description re-matches every review on the next run.
 
 topics:
   change-password-pin:     {name: "Change password or PIN",

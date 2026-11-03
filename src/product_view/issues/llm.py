@@ -8,9 +8,20 @@ change.
 
 - `ollama`: a local model served by Ollama (no key; review text stays on the
   machine). Calls run one at a time: a laptop GPU gains nothing from more.
-- `openai`: the OpenAI Chat Completions API with structured outputs. The key
-  comes from OPENAI_API_KEY (environment or `.env`), never from config.
-  Calls run in parallel up to `max_workers`.
+- `openai`: any OpenAI-compatible Chat Completions endpoint: OpenAI itself,
+  or an in-house server (vLLM, TGI, LiteLLM, Azure OpenAI, a gateway) named by
+  `base_url`. The key comes from PV_LLM_API_KEY, else OPENAI_API_KEY
+  (environment or `.env`), never from config; an in-house server without
+  keys needs neither. Calls run in parallel up to `max_workers`.
+
+Hosts set the endpoint without editing config: PV_LLM_BASE_URL overrides
+`base_url`, and for Ollama the default address follows OLLAMA_HOST.
+
+Structured answers ask for `response_format: json_schema`. A server that
+refuses it (HTTP 400 naming the response format) is asked again in JSON mode
+with the schema in the prompt, for the rest of the run. JSON mode does not
+enforce the schema, so every answer is checked against it and asked for once
+more if it does not fit.
 
 Two tiers, as in LLooM: `fast` for the high-volume calls (distill, score,
 breadth, area) and `strong` for writing concepts (synthesize).
@@ -52,6 +63,8 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 ENV_OPENAI_KEY = "OPENAI_API_KEY"
+ENV_KEY = "PV_LLM_API_KEY"
+ENV_BASE_URL = "PV_LLM_BASE_URL"
 OPENAI_URL = "https://api.openai.com/v1"
 RETRY_STATUS = {408, 409, 429, 500, 502, 503, 504}
 BATCH_DISCOUNT = 0.5           # the Batch API's price, as a share of the live price
@@ -75,6 +88,27 @@ def arr(item: dict) -> dict:
 
 def enum(*values: str) -> dict:
     return {"type": "string", "enum": list(values)}
+
+
+def fits(value: Any, schema: dict) -> bool:
+    """Whether a reply matches the subset of JSON schema that obj/arr/enum build."""
+    kind = schema.get("type")
+    if kind == "object":
+        return (isinstance(value, dict)
+                and all(k in value for k in schema.get("required", []))
+                and all(fits(value[k], s) for k, s in schema.get("properties", {}).items()
+                        if k in value))
+    if kind == "array":
+        return isinstance(value, list) and all(fits(v, schema.get("items", {})) for v in value)
+    if kind == "string":
+        return isinstance(value, str) and ("enum" not in schema or value in schema["enum"])
+    if kind == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if kind == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if kind == "boolean":
+        return isinstance(value, bool)
+    return True
 
 
 class Req(NamedTuple):
@@ -144,16 +178,21 @@ class LLM:
         self.seconds = 0.0
         self.tokens_in = self.tokens_out = 0
         self.spent = 0.0          # USD at the configured prices
-        if cfg.provider == "openai":
-            from ..publish.confluence import load_dotenv
+        self.json_mode = False    # set once a server refuses json_schema
+        from ..publish.confluence import load_dotenv
 
-            load_dotenv()
-            self._key = os.environ.get(ENV_OPENAI_KEY)
-            self._base = (cfg.base_url or OPENAI_URL).rstrip("/")
+        load_dotenv()
+        base_url = os.environ.get(ENV_BASE_URL) or cfg.base_url
+        self._base = None
+        if cfg.provider == "openai":
+            self._key = os.environ.get(ENV_KEY) or os.environ.get(ENV_OPENAI_KEY)
+            self._base = (base_url or OPENAI_URL).rstrip("/")
             self._url = self._base + "/chat/completions"
         else:
             self._key = None
-            self._url = (cfg.base_url or "http://127.0.0.1:11434").rstrip("/") + "/api/chat"
+            host = os.environ.get("OLLAMA_HOST", "127.0.0.1:11434")
+            default = host if "://" in host else f"http://{host}"
+            self._url = (base_url or default).rstrip("/") + "/api/chat"
 
     def model(self, tier: str) -> str:
         return self.cfg.strong if tier == "strong" else self.cfg.fast
@@ -170,9 +209,9 @@ class LLM:
 
     def check(self) -> None:
         """Fail early, before a long run, when the provider can't be used."""
-        if self.cfg.provider == "openai" and not self._key:
-            raise LLMError(f"llm.provider is openai but {ENV_OPENAI_KEY} is not set "
-                           "(set it in the environment or in .env)")
+        if self.cfg.provider == "openai" and not self._key and self._base == OPENAI_URL:
+            raise LLMError(f"llm.provider is openai but neither {ENV_KEY} nor {ENV_OPENAI_KEY} "
+                           "is set (set one in the environment or in .env)")
         missing = sorted({self.cfg.fast, self.cfg.strong} - set(self.cfg.prices))
         if self.cfg.budget_usd is not None and self.cfg.provider == "openai" and missing:
             raise LLMError(f"llm.budget_usd is set but llm.prices has no price for {', '.join(missing)}")
@@ -235,14 +274,25 @@ class LLM:
                 self.hits += 1
             return out
         self._within_budget()
-        t0 = time.time()
-        out, usage = self._request(model, system, user, schema)
-        self._charge(model, usage)
-        with self._lock:
-            self.seconds += time.time() - t0
-            self.calls += 1
+        for attempt in range(2):
+            t0 = time.time()
+            out, usage = self._request(model, system, user, schema)
+            self._charge(model, usage)
+            with self._lock:
+                self.seconds += time.time() - t0
+                self.calls += 1
+            if schema is None or fits(out, schema):
+                break
+            if attempt:
+                raise LLMError(f"{self.cfg.provider} {model}: the reply does not fit the "
+                               f"requested shape twice running: {json.dumps(out)[:200]}")
+            log.warning("llm reply does not fit the schema, asking once more")
         self._store(key, model, out)
         return out
+
+    def complete(self, user: str, tier: str = "fast") -> str:
+        """A plain-text answer to one user message, cached like chat()."""
+        return self.chat("", user, None, tier)["text"]
 
     def run(self, reqs: list[Req], label: str = "", every: int = 200) -> list[dict]:
         """Many calls, answers in input order. With batching on, the uncached ones go
@@ -272,13 +322,22 @@ class LLM:
         with ThreadPoolExecutor(self.cfg.max_workers) as pool:
             return list(pool.map(run, items))
 
-    def _openai_body(self, model: str, system: str, user: str, schema: dict) -> dict:
-        body: dict[str, Any] = {
-            "model": model,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "response_format": {"type": "json_schema",
-                                "json_schema": {"name": "answer", "schema": schema, "strict": True}},
-        }
+    @staticmethod
+    def _messages(system: str, user: str) -> list[dict]:
+        """An empty system prompt is left out, not sent empty."""
+        return ([{"role": "system", "content": system}] if system else []) + [
+            {"role": "user", "content": user}]
+
+    def _openai_body(self, model: str, system: str, user: str, schema: dict | None) -> dict:
+        body: dict[str, Any] = {"model": model, "messages": self._messages(system, user)}
+        if schema is not None and self.json_mode:
+            body["messages"][-1]["content"] += (
+                "\n\nAnswer with a JSON object only, matching this JSON schema:\n"
+                + json.dumps(schema))
+            body["response_format"] = {"type": "json_object"}
+        elif schema is not None:
+            body["response_format"] = {"type": "json_schema", "json_schema": {
+                "name": "answer", "schema": schema, "strict": True}}
         if self.cfg.temperature is not None:
             body["temperature"] = self.cfg.temperature
         if self.cfg.seed is not None:
@@ -286,19 +345,25 @@ class LLM:
         body.update(self.cfg.options)
         return body
 
-    def _request(self, model: str, system: str, user: str, schema: dict) -> tuple[dict, dict]:
-        """One live call: (answer, {"in": tokens, "out": tokens})."""
+    def _request(self, model: str, system: str, user: str,
+                 schema: dict | None) -> tuple[dict, dict]:
+        """One live call: (answer, {"in": tokens, "out": tokens}). Without a
+        schema the answer is the reply's text, as {"text": ...}."""
         if self.cfg.provider == "ollama":
             options = {k: v for k, v in (("temperature", self.cfg.temperature),
                                          ("seed", self.cfg.seed)) if v is not None}
             body: dict[str, Any] = {
-                "model": model, "format": schema, "stream": False, "think": False, "options": options,
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+                "model": model, "stream": False, "think": False, "options": options,
+                "messages": self._messages(system, user)}
+            if schema is not None:
+                body["format"] = schema
             body.update(self.cfg.options)
             headers = {"Content-Type": "application/json"}
         else:
             body = self._openai_body(model, system, user, schema)
-            headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self._key}"}
+            headers = {"Content-Type": "application/json"}
+            if self._key:
+                headers["Authorization"] = f"Bearer {self._key}"
 
         for attempt in range(self.cfg.retries + 1):
             req = urllib.request.Request(self._url, json.dumps(body).encode(), headers)
@@ -312,9 +377,17 @@ class LLM:
                     text = data["choices"][0]["message"]["content"]
                     u = data.get("usage") or {}
                     usage = {"in": u.get("prompt_tokens"), "out": u.get("completion_tokens")}
-                return json.loads(text), usage
+                return (json.loads(text) if schema is not None else {"text": text}), usage
             except urllib.error.HTTPError as exc:
                 detail = exc.read().decode("utf-8", "replace")[:300]
+                if (exc.code == 400 and schema is not None and not self.json_mode
+                        and self.cfg.provider == "openai"
+                        and ("response_format" in detail or "json_schema" in detail)):
+                    log.warning("%s refuses json_schema; using JSON mode for this run", self._url)
+                    with self._lock:
+                        self.json_mode = True
+                    body = self._openai_body(model, system, user, schema)
+                    continue
                 if exc.code not in RETRY_STATUS or attempt == self.cfg.retries:
                     raise LLMError(f"{self.cfg.provider} {model}: HTTP {exc.code}: {detail}") from None
             except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:

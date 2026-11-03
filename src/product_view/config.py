@@ -79,6 +79,12 @@ DEFAULTS: dict[str, Any] = {
         "prices": {},            # model -> [input, output] USD per 1M tokens
         "budget_usd": None,      # stop before spending past this; None: no limit
     },
+    # Embeddings for topic matching (topics/embed.py). The model is fixed by the
+    # method; this only says where it runs.
+    "embed": {
+        "backend": "local",      # local (in this process, CPU) | ollama (the same model, served)
+        "base_url": None,        # ollama: None follows OLLAMA_HOST, else 127.0.0.1:11434
+    },
     # `pv report`: a periodic overview, not all of history (report-design.md
     # D15). The period ends on the newest review's day; the baseline is the
     # mean of that many equal periods before it.
@@ -87,6 +93,7 @@ DEFAULTS: dict[str, Any] = {
         "baseline_periods": 6,
         "curation": "curation.yaml",
         "app_name": None,    # in page titles; None: the app id
+        "overview": None,    # team pages go under this page; None: the hub's title
     },
     # Where `pv publish` puts the page. Credentials are not here: they come
     # from the environment (see publish/confluence.py).

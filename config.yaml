@@ -43,16 +43,24 @@ issues:
   overlap_cost: 1.0        # selection: cost of each repeated match
   concept_cost: 2.0        # selection: cost of each issue kept
 
-# The language model behind `pv issues`. API keys are NOT here: an openai
-# provider reads OPENAI_API_KEY from the environment or .env.
+# The language model behind `pv match` and `pv issues`. API keys are NOT here:
+# an openai provider reads PV_LLM_API_KEY (else OPENAI_API_KEY) from the
+# environment or .env. PV_LLM_BASE_URL overrides base_url, and Ollama's default
+# address follows OLLAMA_HOST.
 llm:
-  provider: ollama         # ollama (local) | openai
+  provider: ollama         # ollama (local) | openai (OpenAI, or any compatible server)
   models:
     fast: qwen3.5:9b       # distill, score, breadth, area: most of the calls
     strong: qwen3.5:9b     # naming issues
   max_workers: 1           # parallel calls; keep 1 for a local GPU
   temperature: 0.0         # null: leave it out (some API models only accept the default)
   seed: 0
+  # For an in-house server with an OpenAI-compatible API (vLLM, TGI, LiteLLM,
+  # Azure OpenAI, a gateway):
+  #   provider: openai
+  #   base_url: https://llm.internal.example/v1
+  #   models: {fast: qwen3.5:9b, strong: qwen3.5:9b}   # the server's name for the model
+  #   max_workers: 4
   # For OpenAI, replace the block above with something like:
   #   provider: openai
   #   models: {fast: gpt-5.4-nano, strong: gpt-5.4-mini}
@@ -66,6 +74,12 @@ llm:
   #   budget_usd: 20                     # stop before spending past this; the cache keeps progress
   # `pv issues --estimate` prints the calls, tokens and cost of a run before it starts.
 
+# Where `pv match` embeds reviews. The model is fixed by the matching method;
+# only where it runs is configurable.
+embed:
+  backend: local           # local (in this process, CPU) | ollama (the same model, served; faster on a GPU)
+  base_url: null           # ollama: null follows OLLAMA_HOST, else 127.0.0.1:11434
+
 # `pv report`: a periodic overview. Negative reviews run at ~55-80 a month,
 # so a period much shorter than 4 weeks leaves most issues at 0-3 reviews.
 report:
@@ -73,6 +87,7 @@ report:
   baseline_periods: 3      # "usual" = mean of this many equal periods before it (demo standard D17; 6 with a 12-month window)
   curation: curation.yaml  # areas and roles
   app_name: RBC Mobile     # hub title: "Product View @ <app_name>"; null: the app id
+  overview: null           # team pages go under this page; null: the hub title
 
 # `pv publish` target. Credentials are NOT here: CONFLUENCE_BASE_URL,
 # CONFLUENCE_USER and ATLASSIAN_TOKEN come from the environment or .env.

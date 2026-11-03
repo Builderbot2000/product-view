@@ -5,6 +5,34 @@ Written 2026-11-02, after topic matching passed its held-out test
 and a service that a team can deploy and leave running. Decisions D18–D22 are in
 report-design.md §9. This plan says how to build them.
 
+**Status, 2026-11-03.** Steps 1, 2, 3, 5 and 7 are built: `pv matrix`,
+`pv match`, `pv report` (team pages and member reports; `--hub` for the
+earlier pages) and `pv cycle`. Step 4 (acceptance check) waits until a host is
+chosen, step 6 (email) is deferred, step 8 has only the existing compose
+file, and step 9 is not started. Choices made while building, beyond what the
+plan says:
+- **Period and cadence.** A cycle is meant to run weekly, but the reporting
+  period stays 28 days with 3 baseline periods (`report:` in config.yaml).
+  Weekly counts per topic would be mostly 0–2 and nothing could ever read as
+  a change. A weekly cycle re-reports the latest 28 days.
+- **Window.** Each run matches every period the reports show (12 periods of
+  28 days, about 11 months), not the 4-month windows the trials used. Self-
+  training sees more units as a result. Step 4 should confirm the method
+  holds at that size.
+- **Store.** One `units` table (every unit, with its route: sure, model or
+  misc) stands in for the planned `misc` table, and runs, units and matches
+  live in `data/topics.db`, kept across rebuilds. Model answers and
+  embeddings are cached in `cache.db`.
+- **"No topic".** Counted as complaint reviews with no topic at all, from
+  units routed to misc and units the model gave no topic, so both kinds of
+  gap show.
+- **Page titles.** A team page is titled with the team's name. A member
+  report is titled "Name · Team", since titles must be unique in a space and
+  one person can sit in two teams. Team pages go under the overview page
+  (`report.overview`, default: the hub's title).
+- **Descriptions.** The sample's descriptions are left as validated. The
+  guidance for writing them is in the sample's header, for Kevin's review.
+
 ## 0. Target: portable across corporate clouds
 
 Kevin, 2026-11-02: Product View ships as **a portable, containerized solution**

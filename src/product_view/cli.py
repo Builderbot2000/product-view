@@ -7,8 +7,15 @@ Pipeline: `db build`, `translate`, `issues` (and `issues show`) -- each a
 stage reading and writing through SQLite, so any one re-runs in isolation.
 `run` chains them over a freshly rebuilt reviews.db. Those live in commands.py.
 
-Report: `report` builds the periodic Confluence pages from the issues. It lives
-in render/.
+Topics: `match` matches complaint reviews to the matrix's topics, and `matrix`
+checks the matrix file. They live in topics/.
+
+Report: `report` builds the periodic Confluence pages: team pages and member
+reports from the topic matches, or with --hub the earlier pages from the
+issues. It lives in render/.
+
+Cycle: `cycle` runs fetch, db build, translate, match, report and publish once,
+then exits, for a scheduler to start. It lives in cycle.py.
 
 Publish: `publish` creates or updates a Confluence page from an HTML file over
 REST. It lives in publish/.
@@ -22,6 +29,7 @@ import argparse
 import csv
 import json
 import logging
+import os
 import sys
 import time
 from collections import Counter
@@ -29,7 +37,7 @@ from pathlib import Path
 
 from .archive import CSV_COLUMNS
 
-from . import commands, config, publish, render
+from . import commands, config, cycle, publish, render, topics
 from .archive import ReviewArchive, corpus_known_ids, dataset_slug, iter_corpus
 from .ingest.play_store import (
     DEFAULT_LANGS,
@@ -272,7 +280,9 @@ def build_parser() -> argparse.ArgumentParser:
     # The pipeline stages live in commands.py so this file stays parsing and
     # presentation for the ingest stage.
     commands.add_parsers(sub, common, add_fetch_options)
+    topics.add_parsers(sub, common)
     render.add_parser(sub, common)
+    cycle.add_parser(sub, common, add_fetch_options)
     publish.add_parser(sub)
     return parser
 
@@ -308,6 +318,9 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(levelname)s %(name)s: %(message)s",
     )
+    if os.environ.get("PV_LOG_JSON") == "1":   # for a platform's log collector
+        for handler in logging.getLogger().handlers:
+            handler.setFormatter(cycle.JsonFormatter())
     # Loading the embedding model logs every HTTP request it makes to the model hub.
     logging.getLogger("httpx").setLevel(logging.WARNING)
     try:
