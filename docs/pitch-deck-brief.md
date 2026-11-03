@@ -90,7 +90,7 @@ know this project, and they won't read code.
 > and no tech vocabulary, in the appendix too: "sort reviews by feature", not
 > tag or match; "our internal wiki", not Confluence (name it once in the talk
 > track); "the AI runs on our own computer", not local model; "runs by itself
-> every week", not containers or a scheduler; "four weeks", not period.
+> every period", not containers or a scheduler; "period", not week or four weeks (revised 2026-11-03: the run frequency isn't fixed yet).
 > Technical names (Ollama, Qwen, SMTP, embeddings, YAML) go only in speaker
 > notes, for questions. Mark anything not yet built as planned on the slide
 > itself. The generator is `docs/deck/build_deck.js`.

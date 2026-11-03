@@ -155,7 +155,7 @@ async function build() {
   coverArt(s);
   s.addNotes(
 `TALK TRACK (about 30 s)
-I'm here to propose a project called Product View. It takes the reviews customers leave for the RBC Mobile app on Google Play, sorts them by the app feature they're about, and sends each team a weekly report on just the features it owns. I'll cover the need, what the product team asked for, how it works, and what it takes to run it at RBC.`);
+I'm here to propose a project called Product View. It takes the reviews customers leave for the RBC Mobile app on Google Play, sorts them by the app feature they're about, and sends each team a report every period on just the features it owns. I'll cover the need, what the product team asked for, how it works, and what it takes to run it at RBC.`);
 
   // 2. The need
   pres.addSection({ title: "The need" });
@@ -180,18 +180,18 @@ I'm here to propose a project called Product View. It takes the reviews customer
   });
   s.addNotes(
 `TALK TRACK (about 1 min)
-When customers rate our app on Google Play, many of them write a few lines saying why. Today those reviews reach the Mobile team one at a time: each new review is posted on its own into a Slack channel. That's fine for reading one review, but it can't tell a team how its part of the app is doing: which features are hurting, which problems are growing, how many customers each one affects. And there are a lot of them: over twenty-one thousand written reviews from Canadian customers since 2011 and nearly fourteen thousand of them 1 to 3 stars. And it keeps coming: 604 complaints so far this year, and in August alone, 84 complaints arrived as 84 separate messages.`);
+When customers rate our app on Google Play, many of them write a few lines saying why. Today those reviews reach the Mobile team one at a time: each new review is posted on its own into a Slack channel. That's fine for reading one review, but it can't tell a team how its part of the app is doing: which features are hurting, which problems are growing, how many customers each one affects. And there are a lot of them: over twenty-one thousand written reviews from Canadian customers since 2011 and nearly fourteen thousand of them rated 1 to 3 stars. They keep coming, too: 604 complaints so far this year, and in August alone, 84 complaints arrived as 84 separate messages.`);
 
   // 3. What the Mobile product team asked for
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "The need" });
   s.addText("What the Mobile product team asked for", { placeholder: "title" });
   card(s, M, 1.6, 4.6, 3.7, "Ask card", C.accent1);
   await iconCircle(s, fa.FaEnvelopeOpenText, M + 0.35, 1.9, 0.85, "Ask", C.background1, HEX.accent1);
-  text(s, "A weekly email for each team, on just the features it owns", { x: M + 0.35, y: 2.95, w: 3.9, h: 1.4, fontSize: 22, bold: true, color: C.background1 });
+  text(s, "An email each period for each team, on just the features it owns", { x: M + 0.35, y: 2.95, w: 3.9, h: 1.4, fontSize: 22, bold: true, color: C.background1 });
   text(s, "What customers said, how much, and whether it's getting better or worse", { x: M + 0.35, y: 4.35, w: 3.9, h: 0.8, fontSize: 15, color: C.background1 });
   const gets = [
     [fa.FaSearch, "Analysts", "A head start: the numbers and quotes for their own reports"],
-    [fa.FaClipboardList, "Feature owners", "Just their features, in their inbox, every week"],
+    [fa.FaClipboardList, "Feature owners", "Just their features, in their inbox, every period"],
     [fa.FaCodeBranch, "Engineering", "Which app release started a problem"],
     [fa.FaHeadset, "Customer support", "What customers raise, in their own words"],
   ];
@@ -204,10 +204,10 @@ When customers rate our app on Google Play, many of them write a few lines sayin
     text(s, h, { x: x + 1.1, y: y + 0.3, w: gw - 1.35, h: 0.6, fontSize: 17, bold: true, color: C.text2, valign: "middle" });
     text(s, b, { x: x + 0.3, y: y + 1.0, w: gw - 0.6, h: 0.65, fontSize: 14 });
   }
-  band(s, "Inspired by RBC's push to put AI to work, Product View is a proposal to deliver exactly that.", 5.65, 0.75, "Inspiration band");
+  band(s, "Product View answers that ask, inspired by RBC's push to put AI to work.", 5.65, 0.75, "Inspiration band");
   s.addNotes(
 `TALK TRACK (about 1 min)
-The Mobile product team asked for something simple: a weekly email for each team, covering only the features that team owns. What customers said, how much, and whether it's getting better or worse.
+The Mobile product team asked for something simple: an email each period for each team, covering only the features that team owns. What customers said, how much, and whether it's getting better or worse.
 That helps everyone around the app: analysts get a head start on their reports, feature owners get just their features, engineering sees which release started a problem, and support hears customers in their own words.
 RBC's push to put AI to work inspired this project. Product View is my proposal to deliver what the product team asked for.`);
 
@@ -247,7 +247,7 @@ RBC's push to put AI to work inspired this project. Product View is my proposal 
     ["Public reviews only", "Only what customers posted on Google Play"],
     ["Data stays inside RBC", "Runs in RBC's own cloud, Azure or AWS"],
     ["Numbers you can check", "Counts of real reviews, quotes that link back"],
-    ["Runs by itself", "Every week, with nobody starting it"],
+    ["Runs by itself", "Every period, with nobody starting it"],
   ];
   musts.forEach(([h, b], i) => {
     const y = 1.55 + i * 0.98, x = 9.15;
@@ -257,14 +257,14 @@ RBC's push to put AI to work inspired this project. Product View is my proposal 
   });
   s.addNotes(
 `TALK TRACK (about 1 min)
-Here's what it has to do. It starts from one list: the teams, the people in each team, and the specific app features each person owns. The teams set the list; the tool never invents its own features, so "change password or PIN" means the same thing every week.
-And it has to fit the bank: each owner sees only their own features; it reads only what customers have posted publicly on Google Play; the data stays inside RBC's own cloud, Azure or AWS; every number is a count of real reviews and every quote links back to the review it came from; and it runs by itself every week.`);
+Here's what it has to do. It starts from one list: the teams, the people in each team, and the specific app features each person owns. The teams set the list; the tool never invents its own features, so "change password or PIN" means the same thing in every report.
+And it has to fit the bank: each owner sees only their own features; it reads only what customers have posted publicly on Google Play; the data stays inside RBC's own cloud, Azure or AWS; every number is a count of real reviews and every quote links back to the review it came from; and it runs by itself every period.`);
 
   // 5. How it works
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "The proposal" });
   s.addText("How it works: from app store to inbox", { placeholder: "title" });
   const steps = [
-    [fa.FaCloudDownloadAlt, "Collect", "Gathers every new Google Play review each week"],
+    [fa.FaCloudDownloadAlt, "Collect", "Gathers every new Google Play review each period"],
     [fa.FaTags, "Sort", "AI reads each review and matches it to the features on the list, like “change password or PIN”"],
     [fa.FaEnvelope, "Share", "Posts a page for each team on our wiki and emails each owner their report"],
   ];
@@ -279,18 +279,18 @@ And it has to fit the bank: each owner sees only their own features; it reads on
     text(s, body, { x: x + 0.3, y: y + 2.4, w: sw - 0.6, h: 1.2, fontSize: 15 });
     if (i < steps.length - 1) arrow(s, x + sw + gap / 2 - 0.17, y + 0.65, "Arrow " + (i + 1));
   }
-  band(s, "It repeats every week on its own. Nobody has to start it.", 5.8, 0.6, "Weekly band");
+  band(s, "It repeats every period on its own. Nobody has to start it.", 5.8, 0.6, "Repeat band");
   s.addNotes(
 `TALK TRACK (about 1 min)
-Here's the whole thing in three steps. Each week, it gathers every new review from Google Play. Then the AI reads each review and matches it to the features on the list, things as specific as "change password or PIN". A review can match several features, or none, and the ones that match none are still counted, so we can see if the list is missing something. Finally, it posts a page for each team on our internal wiki, Confluence, and emails each owner their own report. And it repeats every week without anyone starting it.`);
+Here's the whole thing in three steps. Each period, it gathers every new review from Google Play. Then the AI reads each review and matches it to the features on the list, things as specific as "change password or PIN". A review can match several features, or none, and the ones that match none are still counted, so we can see if the list is missing something. Finally, it posts a page for each team on our internal wiki, Confluence, and emails each owner their own report. And it repeats every period without anyone starting it.`);
 
   // 6. How a report is put together
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "The proposal" });
   s.addText("How each report is put together", { placeholder: "title" });
-  text(s, "For every feature, every week", { x: M, y: 1.55, w: 6.6, h: 0.45, fontSize: 20, bold: true, color: C.text2 });
+  text(s, "For every feature, every period", { x: M, y: 1.55, w: 6.6, h: 0.45, fontSize: 20, bold: true, color: C.text2 });
   const recipe = [
-    ["Count", "How many customers complained about it in the last four weeks"],
-    ["Compare", "Against a normal four weeks, so rising and new problems stand out"],
+    ["Count", "How many customers complained about it in the latest period"],
+    ["Compare", "Against a normal period, so rising and new problems stand out"],
     ["Trace", "Which app versions the complaints came from"],
     ["Show", "Customers' own words, with star rating, date and app version"],
   ];
@@ -309,12 +309,12 @@ Here's the whole thing in three steps. Each week, it gathers every new review fr
     "The AI only decides which feature a review is about",
     "Every number is a plain count of real reviews",
     "Every quote links back to the review it came from",
-    "The feature list stays the same, so trends mean the same thing week after week",
+    "The feature list stays the same, so trends mean the same thing from one period to the next",
   ]), { isTextBox: true, x: tx + 0.4, y: 2.9, w: tw - 0.8, h: 3.4, fontSize: 16, color: C.text1, margin: 0, valign: "top", paraSpaceAfter: 12, objectName: "Trust list" });
   s.addNotes(
 `TALK TRACK (about 1 min)
-Once reviews are sorted, building a report is plain arithmetic. For every feature, every week: count how many customers complained about it in the last four weeks; compare that with a normal four weeks, so anything rising or new stands out; trace which app versions the complaints came from, so a bad release shows up; and show customers' own words, with the star rating, date and version.
-That's why the numbers can be trusted. The AI has one narrow job, deciding which feature a review is about. Every number is a count of real reviews, and every quote links back to the review it came from, so anyone can check it. And because the feature list stays the same, a trend means the same thing from one week to the next.`);
+Once reviews are sorted, building a report is plain arithmetic. For every feature, every period: count how many customers complained about it in the latest period; compare that with a normal period, so anything rising or new stands out; trace which app versions the complaints came from, so a bad release shows up; and show customers' own words, with the star rating, date and version.
+That's why the numbers can be trusted. The AI has one narrow job, deciding which feature a review is about. Every number is a count of real reviews, and every quote links back to the review it came from, so anyone can check it. And because the feature list stays the same, a trend means the same thing from one period to the next.`);
 
   // 7. What teams receive
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "The proposal" });
@@ -322,16 +322,16 @@ That's why the numbers can be trusted. The AI has one narrow job, deciding which
   const lw = 6.1;
   text(s, "Team page: the big picture", { x: M, y: 1.5, w: lw, h: 0.4, fontSize: 18, bold: true, color: C.text2 });
   const ar = imgFit(path.join(ASSETS, "hub-areas.png"), lw, 3.4);
-  s.addImage({ path: path.join(ASSETS, "hub-areas.png"), x: M, y: 2.05, w: ar.w, h: ar.h, altText: "Chart from the demo: complaints by product area in the latest four weeks against normal, with the areas that rose flagged", objectName: "Team page chart" });
-  caption(s, "Complaints by product area, latest four weeks vs. normal. Red = up.", M, 2.05 + ar.h + 0.1, lw);
+  s.addImage({ path: path.join(ASSETS, "hub-areas.png"), x: M, y: 2.05, w: ar.w, h: ar.h, altText: "Chart from the demo: complaints by product area in the latest period against normal, with the areas that rose flagged", objectName: "Team page chart" });
+  caption(s, "Complaints by product area, latest period vs. normal. Red = up.", M, 2.05 + ar.h + 0.1, lw);
   const ex = M + lw + 0.4, exw = W - M - ex;
   text(s, "Personal email: your features", { x: ex, y: 1.5, w: exw, h: 0.4, fontSize: 18, bold: true, color: C.text2 });
   card(s, ex, 2.05, exw, 3.55, "Example card", C.background1);
   outline(s, ex, 2.05, exw, 3.55, "Example card");
   text(s, "Can't confirm a new phone as a trusted device", { x: ex + 0.3, y: 2.25, w: exw - 2.6, h: 0.75, fontSize: 16, bold: true, color: C.text2 });
   const sp = imgFit(path.join(ASSETS, "spark-2fa.png"), 1.9, 0.45);
-  s.addImage({ path: path.join(ASSETS, "spark-2fa.png"), x: ex + exw - 0.3 - sp.w, y: 2.3, w: sp.w, h: sp.h, altText: "Complaints in each of the last 12 four-week periods; the dark bar is the latest", objectName: "Feature sparkline" });
-  text(s, "16 complaints in four weeks · normally 10 · 9 from version 4.66", { x: ex + 0.3, y: 3.05, w: exw - 0.6, h: 0.35, fontSize: 13 });
+  s.addImage({ path: path.join(ASSETS, "spark-2fa.png"), x: ex + exw - 0.3 - sp.w, y: 2.3, w: sp.w, h: sp.h, altText: "Complaints in each of the last 12 periods; the dark bar is the latest", objectName: "Feature sparkline" });
+  text(s, "16 complaints this period · normally 10 · 9 from version 4.66", { x: ex + 0.3, y: 3.05, w: exw - 0.6, h: 0.35, fontSize: 13 });
   const quotes = [
     ["“Setting a primary device requires ID verification that fails constantly, so I am still unable to make this the primary device”", "2★ · Sep 2 · v4.66"],
     ["“I just changed my phone and I want to add my new device to the trusted devices”", "1★ · Sep 8 · v4.66"],
@@ -369,7 +369,7 @@ A working demo is deployed and the Mobile product manager's feedback has been po
     if (i < 2) arrow(s, x + fw + fgap / 2 - 0.17, y + 0.33, "Flow arrow " + (i + 1));
   }
   const svc = [
-    [fa.FaCalendarCheck, "Runs it every week", "Container Apps job", "ECS scheduled task"],
+    [fa.FaCalendarCheck, "Runs it on schedule", "Container Apps job", "ECS scheduled task"],
     [fa.FaRobot, "The AI that sorts reviews", "Microsoft Foundry", "Bedrock"],
     [fa.FaDatabase, "Stores the reviews", "Files", "EFS"],
     [fa.FaKey, "Keeps passwords safe", "Key Vault", "Secrets Manager"],
@@ -391,11 +391,11 @@ A working demo is deployed and the Mobile product manager's feedback has been po
   band(s, "Everything stays inside RBC's own cloud, whichever we choose. Team pages stay on our existing wiki.", 5.95, 0.6, "Cloud band");
   s.addNotes(
 `TALK TRACK (about 1 min)
-To run this properly it needs a home at RBC, and it fits either of our clouds, Azure or AWS. Reviews come in from Google Play, the weekly run happens inside RBC's cloud, and the results go out as wiki pages and emails.
-Each cloud has a ready-made service for every piece: a weekly timer, the AI that sorts reviews (Microsoft Foundry or Amazon Bedrock, inside our cloud rather than an outside service), storage, a safe for passwords, email, and monitoring.
+To run this properly it needs a home at RBC, and it fits either of our clouds, Azure or AWS. Reviews come in from Google Play, each run happens inside RBC's cloud, and the results go out as wiki pages and emails.
+Each cloud has a ready-made service for every piece: a timer that starts each run, the AI that sorts reviews (Microsoft Foundry or Amazon Bedrock, inside our cloud rather than an outside service), storage, a safe for passwords, email, and monitoring.
 Everything stays inside RBC's own cloud, whichever we choose, and the team pages stay on the wiki we already use.
 
-IF ASKED: the choice between Azure and AWS is the cloud team's; Product View ships as a standard container, so it moves between them without changes. Microsoft and Amazon both state prompts and outputs are not used to train their models. The workload is small: one short weekly run over a few dozen new reviews.`);
+IF ASKED: the choice between Azure and AWS is the cloud team's; Product View ships as a standard container, so it moves between them without changes. Microsoft and Amazon both state prompts and outputs are not used to train their models. The workload is small: one short run each period, over the reviews posted since the last one.`);
 
   // 9. What we need
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "Running it" });
@@ -425,14 +425,14 @@ IF ASKED: the choice between Azure and AWS is the cloud team's; Product View shi
     text(s, h, { x: px + 0.4, y, w: colW - 0.8, h: 0.4, fontSize: 15, bold: true, color: C.text1 });
     text(s, o + " (to confirm)", { x: px + 0.4, y: y + 0.36, w: colW - 0.8, h: 0.3, fontSize: 12, color: C.accent3 });
   });
-  band(s, "The workload is small: one short run a week, over a few dozen new reviews.", 6.15, 0.55, "Size band");
+  band(s, "The workload is small: one short run each period, over the reviews posted since the last one.", 6.15, 0.55, "Size band");
   s.addNotes(
 `DRAFT, CONFIRM WITH KEVIN: the people, owners and cloud items are drafted; Kevin sets the final asks.
 
 TALK TRACK (about 1 min)
 Here's what it takes. In the cloud: an allocation sized by our cloud team, access to its AI models, the services on the previous slide, and permission to email staff.
 From people: someone to keep the feature list current, an analyst to check the first month's reports, Compliance sign-off to use cloud AI on public reviews, and a space on our wiki.
-The workload is small: one short run a week over a few dozen new reviews.`);
+The workload is small: one short run each period, over the reviews posted since the last one.`);
 
   // 10. Next steps and the decision
   pres.addSection({ title: "Next steps" });
@@ -441,7 +441,7 @@ The workload is small: one short run a week over a few dozen new reviews.`);
   const next = [
     ["Approve", "The project and a cloud allocation for a trial"],
     ["Set up in the cloud", "Move the demo onto RBC's Azure or AWS, connected to our wiki and email"],
-    ["Initialize", "Load the matrix"],
+    ["Load the feature list", "The teams, the owners and the features each one owns"],
     ["Trial with the Mobile team", "A few app releases, with an analyst checking the first month"],
   ];
   const nw = (CW - 3 * 0.3) / 4, ny = 2.35;
@@ -460,15 +460,15 @@ The workload is small: one short run a week over a few dozen new reviews.`);
 `DRAFT, CONFIRM WITH KEVIN: the decision line is drafted.
 
 TALK TRACK (about 1 min)
-Four steps. First, approve the project and a cloud allocation for a trial. Second, set it up on RBC's Azure or AWS, connected to our wiki and email. Third, load the matrix to initialize it. Fourth, a trial with the Mobile team over a few app releases, with an analyst checking the first month. If the trial goes well, we extend it to more teams.
+Four steps. First, approve the project and a cloud allocation for a trial. Second, set it up on RBC's Azure or AWS, connected to our wiki and email. Third, load the feature list: the teams, the owners and the features each one owns. Fourth, a trial with the Mobile team over a few app releases, with an analyst checking the first month. If the trial goes well, we extend it to more teams.
 So what I'm asking for today: approval for Product View, and a cloud allocation for a trial with the Mobile team.`);
 
   // 11. Closing
   s = pres.addSlide({ masterName: "PV Closing", sectionTitle: "Next steps" });
-  s.addText("Every customer heard, every week", { placeholder: "title" });
+  s.addText("Every customer heard. Every team knows what to fix next.", { placeholder: "title" });
   const close = [
     [fa.FaTags, "Every review sorted", "Matched to the app features our teams own"],
-    [fa.FaEnvelopeOpenText, "Every team informed", "Its own report, in its inbox, every week"],
+    [fa.FaEnvelopeOpenText, "Every team informed", "Its own report, in its inbox, every period"],
     [fa.FaShieldAlt, "Inside RBC", "Runs on its own in our cloud, with numbers anyone can check"],
   ];
   const cw3 = (CW - 2 * 0.3) / 3;
@@ -484,7 +484,7 @@ So what I'm asking for today: approval for Product View, and a cloud allocation 
   text(s, "Next: see it working in a live demo", { x: M, y: 5.75, w: 9, h: 0.6, fontSize: 28, color: C.accent1 });
   s.addNotes(
 `TALK TRACK (about 30 s)
-To sum up: Product View sorts every review by the app feature it's about, gives every team its own report in its inbox each week, and runs on its own inside RBC's cloud, with numbers anyone can check. What I'm asking for is approval and a cloud allocation for a trial with the Mobile team. Now let me show you the working demo; I'll take questions after.
+To sum up: Product View sorts every review by the app feature it's about, gives every team its own report in its inbox each period, and runs on its own inside RBC's cloud, with numbers anyone can check. What I'm asking for is approval and a cloud allocation for a trial with the Mobile team. Now let me show you the working demo; I'll take questions after.
 
 TIMING: the slides run about 10 minutes, leaving the rest of the 30-minute meeting for the demo and questions.`);
 
