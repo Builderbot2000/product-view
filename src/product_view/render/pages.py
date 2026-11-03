@@ -25,7 +25,6 @@ class PageSpec:
     title: str
     page: StoragePage
     parent: str | None   # parent page's title; None for the root
-    replaces: tuple[str, ...] = ()   # earlier titles of this page, renamed in place
 
 
 def _slug(text: str) -> str:

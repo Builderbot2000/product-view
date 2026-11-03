@@ -88,15 +88,6 @@ report:
   curation: curation.yaml  # product areas, for `pv issues`
   app_name: RBC Mobile     # overview title: "Product View @ <app_name>"; null: the app id
   overview: null           # the overview page's title; null: "Product View @ <app_name>"
-  # Team pages that take over an earlier page on publish: the first title found is
-  # renamed to the team page, keeping its history and place. These are the demo
-  # site's role pages from before the matrix (team ids from matrix.sample.yaml).
-  replaces:
-    sign-in-security: ["Sign-in & security"]
-    payments: ["Product features", "Payments"]
-    accounts-settings: ["UI & design"]
-    app-platform: ["Engineering / QA"]
-    support-cx: ["Support / CX"]
 
 # `pv publish` target. Credentials are NOT here: CONFLUENCE_BASE_URL,
 # CONFLUENCE_USER and ATLASSIAN_TOKEN come from the environment or .env.

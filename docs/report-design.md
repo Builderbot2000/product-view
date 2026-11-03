@@ -245,14 +245,14 @@ kevintangcyberium.atlassian.net, space `MFS` (no dedicated space yet;
   `pv report --publish --space MFS`. Its attachments list still holds charts
   from earlier versions (priority map, monthly sparklines); they are
   unreferenced and harmless.
-- Under it, the team pages. Until 2026-11-03 they were role pages: "UI &
-  design" (295149), "Sign-in & security" (295174), "Payments" (131429),
-  "Engineering / QA" (65919), "Support / CX" (65956). `report.replaces` in
-  config.yaml renames each to its team on publish (UI & design becomes
-  Accounts & settings, Payments becomes Payments & transfers, Engineering / QA
-  becomes App platform), keeping the page and its history. Pages are matched
-  by title, so a page renamed by hand must be renamed in the mapping too.
-- Under each team page, its members' reports, "Name · Team".
+- Under it, one page per team in the sample matrix, created 2026-11-03, and
+  under each team page its members' reports, "Name · Team". Publishing moves
+  a page back under its intended parent if it was moved.
+- Also under it, the five earlier role pages, retired and waiting to be
+  archived by hand: "UI & design" (295149), "Sign-in & security (role page)"
+  (295174), "Payments" (131429), "Engineering / QA" (65919), "Support / CX
+  (role page)" (65956). Each holds its last role version, from 2026-10-14.
+  Every publish lists them as no longer in the matrix.
 
 Per-row SVG sparklines in table cells render well, given an explicit
 `ac:width` (without one Confluence stretches them to the cell).
@@ -274,8 +274,9 @@ collection runs on a schedule.
 
 D18–D20 are built, D22 as far as one cycle command (`pv cycle`); D21 (email)
 is deferred. Decided 2026-11-03 (Kevin): the overview is one page that is
-also the analysts' all-topics view, and the role pages become the team pages
-(renamed in place on publish, `report.replaces`). Status and build choices: docs/production-plan.md, top. The
+also the analysts' all-topics view. Team pages are not paired with the old
+role pages: every team page comes from one template, since the number of
+teams in the real matrix is unknown, and the role pages are retired by hand. Status and build choices: docs/production-plan.md, top. The
 Project.md §0 "Requirements change" block
 lists what each one supersedes.
 

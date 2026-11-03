@@ -272,36 +272,35 @@ def member_page(r: TopicReport, team: Team, member: Member):
     pairs = period_pairs(r, [("Your topics", b.esc(names)),
                               ("Reviews", f"{mine.now} on your topics, usual {_usual(mine.usual)}")])
     tiles = _tiles(r, issues, mine, "reviews on your topics")
+    # Always three tiles, so every member report has the same shape.
     busiest = next((i for i in by_volume(issues) if i.now and i is not top), None)
     if busiest:
         tiles.append(_kpi(str(busiest.now), f"Also raised: {busiest.label}",
                           f"usual {_usual(busiest.usual)} per period"))
+    else:
+        tiles.append(_kpi("0", "other topics raised", "no other topic of yours had reviews"))
     order = ordered(r, ids)
     table = ("<h2>Your topics this period</h2>"
              f"<p>{b.muted('Busiest first. Details and this period’s quotes follow below.')}</p>"
              + topic_table(r, order, c))
     details = "<h2>What users said</h2>" + "".join(_topic_detail(r, t, c) for t in order)
     body = b.layout(b.section("single", "".join(f"<p>{p}</p>" for p in paras) + b.details(pairs)),
-                    b.section("three_equal" if len(tiles) == 3 else "two_equal", *tiles),
+                    b.section("three_equal", *tiles),
                     b.section("single", table + details + method(r) + footer(r)))
     return c.done(body)
 
 
 # --- all pages -------------------------------------------------------------------
 
-def build_all(store: Store, r: TopicReport, overview: str, app_id: str,
-              replaces: dict[str, list[str]] | None = None) -> list[PageSpec]:
+def build_all(store: Store, r: TopicReport, overview: str, app_id: str) -> list[PageSpec]:
     """The overview, then each team page under it followed by its members'
-    reports. A team page takes over the first existing page among its
-    `replaces` titles (the earlier role pages), keeping its history."""
+    reports: the same templates for every team and member in the matrix."""
     from .overview import overview_page
 
-    replaces = replaces or {}
     specs = [PageSpec("overview", overview, overview_page(store, r, overview, app_id), None)]
     for team in r.matrix.teams.values():
         title = team_title(team)
-        specs.append(PageSpec(f"team-{team.id}", title, team_page(r, team, overview), overview,
-                              tuple(t for t in replaces.get(team.id, []) if t != title)))
+        specs.append(PageSpec(f"team-{team.id}", title, team_page(r, team, overview), overview))
         for m in team.members:
             specs.append(PageSpec(f"member-{team.id}-{_slug(m.name)}", member_title(team, m),
                                   member_page(r, team, m), title))

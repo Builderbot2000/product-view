@@ -57,6 +57,9 @@ def _publish(client: Client, space: str, title: str, page: storage.StoragePage,
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     result, created = client.upsert_page(
         space, title, page.body, parent_id=parent_id, message=f"pv publish {stamp}")
+    if not created and parent_id and str(result.get("parentId")) != str(parent_id):
+        client.move(result["id"], parent_id)    # the tree follows the matrix
+        print(f"moved: {title!r} under page {parent_id}")
     uploaded, unchanged = client.sync_attachments(result["id"], page.attachments)
     if full_width:
         client.set_full_width(result["id"])
@@ -77,37 +80,22 @@ def push(space: str, title: str, page: storage.StoragePage, *,
     return 0
 
 
-def _take_over(client: Client, space: str, title: str, old_titles) -> None:
-    """Rename the first existing page among `old_titles` to `title`, unless a
-    page with `title` exists already. Its history and place in the tree stay."""
-    if not old_titles:
-        return
-    sid = client.space_id(space)
-    if client.find_page(sid, title):
-        return
-    for old in old_titles:
-        found = client.find_page(sid, old)
-        if found:
-            current = client._request("GET", f"/api/v2/pages/{found['id']}",
-                                      params={"body-format": "storage"})
-            client.update_page(found["id"], title, current["body"]["storage"]["value"],
-                               message=f"renamed from {old!r}")
-            print(f"renamed: {old!r} -> {title!r}")
-            return
+def publish_tree(space: str, pages: list[tuple[str, storage.StoragePage, str | None]],
+                 root_parent_id: str | None = None, below: str | None = None) -> list[str]:
+    """Publish (title, page, parent title) in order; a parent in the list must
+    come before its children. A parent not in the list is looked up in the
+    space by title, else the page goes under root_parent_id. New pages are
+    created under their parent, and an existing page under another parent is
+    moved there, so the tree follows the list. A page with no parent and no
+    root_parent_id keeps its place. Storage pages, so full width.
 
-
-def publish_tree(space: str, pages: list[tuple], root_parent_id: str | None = None) -> None:
-    """Publish (title, page, parent title[, earlier titles]) in order; a parent
-    in the list must come before its children. A parent not in the list is
-    looked up in the space by title, else the page goes under root_parent_id.
-    A page with earlier titles takes over the first of them that exists, so
-    its history carries on. New pages are created under their parent; an
-    existing page keeps its place in the tree. Storage pages, so full width.
+    With `below` (a published title), returns the titles of pages beneath it
+    that this publish did not produce: pages left by teams or members no
+    longer in the matrix. They are reported, never deleted.
     Raises ConfluenceError."""
     client = Client.from_env()
     ids: dict[str, str] = {}
-    for title, page, parent, *rest in pages:
-        _take_over(client, space, title, rest[0] if rest else ())
+    for title, page, parent in pages:
         if parent and parent not in ids:
             found = client.find_page(client.space_id(space), parent)
             if found is None:
@@ -116,6 +104,10 @@ def publish_tree(space: str, pages: list[tuple], root_parent_id: str | None = No
             ids[parent] = found["id"] if found else root_parent_id
         parent_id = ids[parent] if parent else root_parent_id
         ids[title] = _publish(client, space, title, page, parent_id, full_width=True)["id"]
+    if below is None:
+        return []
+    published = {t for t, _, _ in pages}
+    return [t for t in client.descendants(ids[below]) if t not in published]
 
 
 def cmd_publish(args: argparse.Namespace) -> int:

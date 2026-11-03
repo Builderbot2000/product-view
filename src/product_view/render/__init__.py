@@ -11,9 +11,10 @@ topic matrix, one page tree per report:
 Pages are Confluence storage format plus SVG charts (D1, D2), written to one
 folder per page under --out, and with --publish pushed straight to
 Confluence, parents before children. Titles are stable, so each run is a new
-version of the same pages and the page history is the archive. A team page
-listed under `report.replaces` takes over an earlier page (the role pages,
-before the matrix) by renaming it, so its history carries on.
+version of the same pages and the page history is the archive. Every team
+page comes from one template, however many teams the matrix has; pages under
+the overview that no team or member in the matrix produces any more are
+listed after publishing, never deleted.
 """
 
 from __future__ import annotations
@@ -39,12 +40,6 @@ def _team_pages(args: argparse.Namespace) -> list[PageSpec] | int:
     matrix = load_matrix(args)
     if matrix is None:
         return 2
-    replaces = config.get(args.config, "report.replaces") or {}
-    unknown = sorted(set(replaces) - set(matrix.teams))
-    if unknown:
-        print(f"report: report.replaces names teams not in the matrix: {', '.join(unknown)}",
-              file=sys.stderr)
-        return 2
     with Store(Path(args.data_dir) / "reviews.db") as store:
         report = topics.load(store, topic_db(args), matrix, args.period_days,
                              args.baseline_periods, args.min_chars)
@@ -58,7 +53,7 @@ def _team_pages(args: argparse.Namespace) -> list[PageSpec] | int:
         if report.short_window:
             print(f"report: warning: run {report.run['run_id']} matched a shorter window than "
                   "the trend shows; older periods will read low", file=sys.stderr)
-        return team_pages.build_all(store, report, overview_title(args), args.app_id, replaces)
+        return team_pages.build_all(store, report, overview_title(args), args.app_id)
 
 
 def write(built: list[PageSpec], out: Path) -> None:
@@ -82,11 +77,16 @@ def publish(args: argparse.Namespace, built: list[PageSpec]) -> int:
     from ..publish import ConfluenceError, publish_tree
 
     try:
-        publish_tree(args.space, [(s.title, s.page, s.parent, s.replaces) for s in built],
-                     root_parent_id=args.parent_id)
+        stale = publish_tree(args.space, [(s.title, s.page, s.parent) for s in built],
+                             root_parent_id=args.parent_id, below=built[0].title)
     except ConfluenceError as exc:
         print(f"report: {exc}", file=sys.stderr)
         return 1
+    if stale:
+        print(f"report: {len(stale)} page(s) under {built[0].title!r} are not in the matrix any "
+              "more (a team or member removed or renamed). Archive or delete them by hand:")
+        for title in stale:
+            print(f"  {title}")
     return 0
 
 

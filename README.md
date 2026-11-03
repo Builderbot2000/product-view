@@ -25,10 +25,11 @@ list, is still here for reference (`pv run`, `pv issues`); no page uses it.
 
 [Product View @ RBC Mobile](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/294942)
 is the overview page built by `pv report --publish --space MFS` on the demo
-Confluence site. The team pages sit under it (the earlier role pages, renamed
-and rebuilt by `report.replaces`), and each member's report under their team
-page. Teams, people and topics are the sample matrix. Viewing it requires
-access to that site.
+Confluence site. A page per team sits under it, and each member's report under
+their team page, all from one template whatever the number of teams. Teams,
+people and topics are the sample matrix. Pages left under the overview by
+teams or members no longer in the matrix are listed after publishing, for
+archiving by hand. Viewing it requires access to that site.
 
 ## Setup
 

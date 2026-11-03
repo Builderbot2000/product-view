@@ -23,7 +23,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import unquote, urlencode
 from urllib.request import Request, urlopen
 
 from .storage import Attachment
@@ -117,6 +117,30 @@ class Client:
             "space-id": space_id, "title": title, "status": "current"})
         results = res.get("results", [])
         return results[0] if results else None
+
+    def move(self, page_id: str, parent_id: str) -> None:
+        """Make a page the last child of another page (v1: v2 has no move)."""
+        self._request("PUT", f"/rest/api/content/{page_id}/move/append/{parent_id}")
+
+    def children(self, page_id: str) -> list[dict]:
+        """A page's direct child pages, every page of results."""
+        out, params = [], {"limit": 250}
+        while True:
+            res = self._request("GET", f"/api/v2/pages/{page_id}/children", params=params)
+            out += res.get("results", [])
+            nxt = (res.get("_links") or {}).get("next")
+            if not nxt or "cursor=" not in nxt:
+                return out
+            params = {"limit": 250,
+                      "cursor": unquote(nxt.split("cursor=", 1)[1].split("&", 1)[0])}
+
+    def descendants(self, page_id: str) -> list[str]:
+        """Titles of every page below this one, depth first."""
+        titles = []
+        for child in self.children(page_id):
+            titles.append(child["title"])
+            titles += self.descendants(child["id"])
+        return titles
 
     def create_page(self, space_id: str, title: str, body: str,
                     parent_id: str | None = None) -> dict:

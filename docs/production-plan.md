@@ -29,9 +29,12 @@ plan says:
 - **Overview (2026-11-03, Kevin).** One page, also the analysts' view: app
   totals and trend, what changed, every team's topics with 2 quotes each,
   and "did not fit a topic" with 10 examples. It replaces the hub in place.
-  The role pages become the team pages (`report.replaces`), the hub and role
-  page code and `--hub` are gone, and `curation.yaml` keeps only the areas
-  `pv issues` uses.
+  Team pages are not paired with the old role pages: every team page and
+  every member report comes from one template, however many teams the matrix
+  has. A publish moves pages to the parent the matrix gives them, and lists
+  pages under the overview that no team or member produces any more (never
+  deleting them). The hub and role page code and `--hub` are gone, and
+  `curation.yaml` keeps only the areas `pv issues` uses.
 - **Page titles.** A team page is titled with the team's name. A member
   report is titled "Name · Team", since titles must be unique in a space and
   one person can sit in two teams. Team pages go under the overview page
