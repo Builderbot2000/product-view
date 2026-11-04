@@ -22,6 +22,18 @@ from ..store import Store
 from .issues import SPARK_PERIODS, Issue, Period, Quote, Series
 
 
+# Quote rank, lowest shown first. A match the classifier was sure of is wrong
+# far less often than one the model decided (2026-11-04 sample: about 1 in 22
+# against 8 in 40), and a piece of a few words ("Nope, sign out") shows little
+# even when it is right. Counts never depend on this, only which quotes show.
+QUOTE_RANK = {"sure": 0, "model": 1}
+SHORT_QUOTE_WORDS = 5          # fewer words than this: shown only when nothing better is
+
+
+def quote_rank(how: str, text: str) -> int:
+    return 2 if len(text.split()) < SHORT_QUOTE_WORDS else QUOTE_RANK.get(how, 1)
+
+
 def periods_shown(baseline: int) -> int:
     """Periods a report shows: its trend, and the baseline behind "usual"."""
     return max(SPARK_PERIODS, baseline + 1)
@@ -91,10 +103,16 @@ def load(store: Store, topic_db: Path, matrix: Matrix, days: int, baseline: int,
         issue.series.add(created, rid)
         issue.all_time.add(rid)
         on_topic.add(rid)
-        if period.bucket(created) == 0 and rid not in issue.quotes_now:
-            issue.quotes_now[rid] = Quote(quote[(rid, m["seq"])], r["score"],
-                                          r["thumbs_up"] or 0, created, r["app_version"])
-            issue.versions_now[r["app_version"] or "unknown"] += 1
+        if period.bucket(created) == 0:
+            # One quote per review and topic: the review's surest-fitting piece.
+            text = quote[(rid, m["seq"])]
+            rank = quote_rank(m["how"], text)
+            held = issue.quotes_now.get(rid)
+            if held is None:
+                issue.versions_now[r["app_version"] or "unknown"] += 1
+            if held is None or rank < held.rank:
+                issue.quotes_now[rid] = Quote(text, r["score"], r["thumbs_up"] or 0, created,
+                                              r["app_version"], rank)
 
     seen = {u["review_id"] for u in units}
     total, no_topic = Series(period), Series(period)

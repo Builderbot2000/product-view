@@ -155,6 +155,7 @@ class Quote:
     thumbs: int
     created: datetime
     version: str | None
+    rank: int = 0                 # lower shows first: how surely the quote fits its topic
 
 
 @dataclass
@@ -187,9 +188,9 @@ class Issue:
         return " ".join(self.typical.split())
 
     def recent_quotes(self, n: int = 3) -> list[Quote]:
-        """This period's quotes, most thumbs-up first, then newest."""
+        """This period's quotes: surest fit first (`rank`), then most thumbs-up, then newest."""
         return sorted(self.quotes_now.values(),
-                      key=lambda q: (-q.thumbs, -q.created.timestamp()))[:n]
+                      key=lambda q: (q.rank, -q.thumbs, -q.created.timestamp()))[:n]
 
 
 # --- orderings (D12) --------------------------------------------------------

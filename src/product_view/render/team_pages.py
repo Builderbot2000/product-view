@@ -145,7 +145,7 @@ def _topic_detail(r: TopicReport, tid: str, canvas: Canvas) -> str:
     quotes = i.recent_quotes(MEMBER_QUOTES)
     if quotes:
         lead = ("What they said:" if len(quotes) == i.now
-                else f"The {len(quotes)} most liked and newest of {i.now}:")
+                else f"{len(quotes)} of {i.now}, the clearest first:")
         said = (f"<p>{b.muted(lead)}</p><ul>"
                 + "".join(f"<li>{_quote(q)}</li>" for q in quotes) + "</ul>")
     else:
@@ -201,7 +201,9 @@ def method(r: TopicReport) -> str:
         f"<p>The small bar charts follow each topic over its last {SPARK_PERIODS} periods, "
         "oldest on the left. Each is scaled to its own tallest bar, so it shows whether a "
         "topic is growing or fading rather than how topics compare. Quotes are the part of "
-        "the review that matched the topic, in the reviewer’s own words, followed by the "
+        "the review that matched the topic, in the reviewer’s own words. The clearest "
+        "matches come first, then the most liked and newest; very short ones only when "
+        "there is nothing else. Each is followed by the "
         "star rating, the date, the app version when the store reports it, and how many "
         "people marked the review helpful (👍).</p>"))
 
