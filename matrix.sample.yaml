@@ -44,15 +44,15 @@ topics:
   biometric-sign-in:       {name: "Fingerprint and face sign-in",
                             description: "signing in with fingerprint or face recognition, setting it up, it not being offered"}
   two-step-verification:   {name: "Two-step verification codes",
-                            description: "the one-time code sent by text message or call at sign-in, codes not arriving or expiring"}
+                            description: "2FA, two-factor or two-step verification: the second step to confirm it is you, at sign-in or before sending money, by a one-time code by text message or call, or by a notification sent to another device to approve; codes or approvals not arriving, expiring or failing"}
   trusted-device:          {name: "Trusted device and ID check",
-                            description: "making a new phone a trusted device, the ID photo and selfie check that goes with it"}
+                            description: "making a new or replacement phone a trusted device, and the identity check that goes with it: photos of a driver's licence or passport and a selfie, being asked to verify your identity again, the app not recognising or remembering the phone"}
   remember-me:             {name: "Remember my card number",
                             description: "the app saving the card number or username between sign-ins"}
   session-timeout:         {name: "Session timeout and sign-out",
                             description: "being signed out too soon, staying signed in, finding the sign-out button"}
   etransfer-send:          {name: "Send an Interac e-Transfer",
-                            description: "sending money by e-Transfer, adding recipients, limits, security questions"}
+                            description: "sending money by e-Transfer, adding recipients, daily limits, security questions, tapping the card and entering its PIN to send"}
   etransfer-receive:       {name: "Receive an Interac e-Transfer",
                             description: "accepting or depositing an incoming e-Transfer, autodeposit"}
   bill-payments:           {name: "Pay bills",
@@ -60,7 +60,7 @@ topics:
   credit-card-payment:     {name: "Credit card payment and due date",
                             description: "paying the credit card, seeing the payment due date and minimum payment"}
   mobile-cheque-deposit:   {name: "Mobile cheque deposit",
-                            description: "depositing a cheque by taking a photo of it"}
+                            description: "depositing a cheque by taking a photo of the cheque, deposit holds and limits (not photos of ID, which are the identity check)"}
   balances-transactions:   {name: "Balances and transactions",
                             description: "seeing account balances, pending and past transactions, searching them"}
   statements-documents:    {name: "Statements and documents",
@@ -68,21 +68,21 @@ topics:
   more-settings-menu:      {name: "More / settings menu",
                             description: "the More tab and settings screens, finding options in them"}
   alerts-notifications:    {name: "Alerts and notifications",
-                            description: "push notifications and account alerts, setting them up, too many or too few"}
+                            description: "push notifications and alerts about account activity, purchases and balances, setting them up, too many or too few (not sign-in or payment approvals, which are two-step verification)"}
   profile-contact-details: {name: "Profile and contact details",
                             description: "updating address, phone number, email and other personal details"}
   app-crash-launch:        {name: "App crashes or won't open",
                             description: "the app closing on its own, freezing, or not opening at all"}
   technical-error:         {name: "\"Technical difficulties\" error",
-                            description: "generic error messages such as technical difficulties, try again later"}
+                            description: "a generic error message the app shows, such as \"technical difficulties, try again later\" or \"something went wrong\" (not complaints about technical problems in general)"}
   connectivity:            {name: "Connection errors",
                             description: "the app saying there is no connection, failing on mobile data or Wi-Fi"}
   forced-update:           {name: "Forced update prompt",
                             description: "being told to update the app before using it, update loops"}
   device-support:          {name: "Device and OS support",
-                            description: "phones, tablets and operating system versions the app does or does not run on"}
+                            description: "phones, tablets, watches and operating system versions the app does or does not run on: \"not compatible with this device\", Android or iOS versions, custom or rooted Android, the USB debugging check"}
   customer-support:        {name: "Getting help from support",
-                            description: "calling or chatting with support, wait times, problems support could not solve"}
+                            description: "customer service by phone, chat, the virtual assistant, branches or help pages: wait times, unhelpful answers, problems support could not solve"}
 
 teams:
   sign-in-security:

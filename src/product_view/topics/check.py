@@ -26,6 +26,11 @@ Scores, per review and topic pair, as in the trials (trials/topics/match.py):
 Pass: precision >= 70%, recall >= 60%, false alarm <= 25%, on both windows.
 The method itself scored 84 / 67 / 13 on t1 and 78 / 65 / 12 on t2.
 
+`--matrix FILE` scores that file's topic descriptions instead of the frozen
+ones, for working on descriptions: it must have the same 22 topic ids, since
+the keys are written against them. t1 is the window the demo reports come
+from, so judge description changes on t2.
+
 Exit 0 on a pass, 1 on a fail or an error. Each run is written to
 <data_dir>/checks/<time>.json.
 """
@@ -108,6 +113,15 @@ def score(got: dict[str, set[str]], want: dict[str, set[str]]) -> Score:
                  no_topic_reviews=len(none))
 
 
+def _detail(window: str, got: dict, want: dict, text: dict) -> None:
+    """Every keyed review the matching got wrong: topics missed and topics added."""
+    for rid in sorted(want):
+        g, k = got.get(rid, set()), want[rid]
+        if g != k:
+            print(f"    {rid[:8]} missed {sorted(k - g) or '-'} added {sorted(g - k) or '-'} | "
+                  f"{' '.join(text[rid].split())[:160]}")
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     from ..commands import open_llm
     from ..issues.llm import LLMError
@@ -115,9 +129,24 @@ def cmd_check(args: argparse.Namespace) -> int:
     from .embed import EmbedError
 
     tmap = topics()
+    if args.matrix:
+        from .. import matrix as mx
+
+        try:
+            cand = mx.load(args.matrix).topics
+        except mx.MatrixError as exc:
+            print(f"check-matching: {exc}", file=sys.stderr)
+            return 2
+        if set(cand) != set(tmap):
+            print(f"check-matching: {args.matrix} must have the keys' {len(tmap)} topic ids; "
+                  f"missing {sorted(set(tmap) - set(cand))}, extra {sorted(set(cand) - set(tmap))}",
+                  file=sys.stderr)
+            return 2
+        tmap = {t: cand[t] for t in tmap}
     windows = args.window or list(WINDOWS)
     llm, emb = open_llm(args), open_embedder(args)
     record = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+              "topics": args.matrix or "frozen",
               "chat_model": llm.describe(), "embed_model": emb.describe(), "windows": {}}
     ok = True
     try:
@@ -128,6 +157,8 @@ def cmd_check(args: argparse.Namespace) -> int:
             got: dict[str, set[str]] = {}
             for i, t, _ in routed.matches:
                 got.setdefault(units[i].review_id, set()).add(cols[t].id)
+            if args.detail:
+                _detail(w, got, key(w, set(tmap)), dict(reviews(w)))
             s = score(got, key(w, set(tmap)))
             ok &= s.passed
             mp, mr, mf = METHOD[w]
@@ -163,4 +194,8 @@ def add_parser(sub, common) -> None:
     common(p)
     p.add_argument("--window", action="append", choices=list(WINDOWS),
                    help="check only this window (repeatable; default: both)")
+    p.add_argument("--matrix", help="score this file's topic descriptions instead of the "
+                                    "frozen ones (same topic ids)")
+    p.add_argument("--detail", action="store_true",
+                   help="list every keyed review the matching got wrong")
     p.set_defaults(func=cmd_check)

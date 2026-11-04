@@ -52,7 +52,7 @@ def _summary(r: TopicReport, team_rows: list) -> str:
         lead = (next(iter(by_change([i for i in issues if i.change in ("up", "new")])), None)
                 or next(iter(by_volume([i for i in issues if i.now])), None))
         opener = ("The biggest story is" if rising
-                  else "Nothing rose beyond normal variation; the busiest team is")
+                  else "No team’s total moved beyond normal variation; the busiest is")
         text = (f"{opener} <strong>{b.esc(team.name)}</strong>: "
                 f"{_n(s.now, 'negative review')} on its topics, {_against(s)}.")
         if lead:

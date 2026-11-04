@@ -97,7 +97,8 @@ def movers(issues: list[Issue], skip: Issue | None) -> str:
     down = [_brief(i) for i in moved if i.change == "down"][:3]
     out = ""
     if up:
-        out += f"Also rising: {_and(up)}. "
+        also = "Also rising" if skip is not None and skip.change in ("new", "up") else "Rising"
+        out += f"{also}: {_and(up)}. "
     if down:
         out += f"Easing off: {_and(down)}. "
     return out.strip()

@@ -348,3 +348,38 @@ leaves out a common form of the feature (app approvals) loses those
 complaints to a neighbouring topic. The real matrix's descriptions should be
 written with that in mind (each topic's common forms named), and checked
 against a month of matches when first deployed.
+
+## D1: revising the sample's descriptions (2026-11-04)
+
+The 2026-11-04 review of the demo pages found wrong quotes that came from
+descriptions: sign-in approvals filed under alerts, an ID photo under cheque
+deposit, vague "technical problems" under the error topic. Kevin: fix the
+descriptions by hand, as production would. Method, thresholds and models
+unchanged; scored with `pv check-matching --matrix matrix.sample.yaml --detail`.
+
+Round 1 rewrote eight descriptions from the error patterns on both keys,
+following the writing guide in the sample's header: two-step-verification
+(approvals on another device, the second step before sending money),
+trusted-device (identity checks, the phone not remembered), etransfer-send
+(card tap and PIN), mobile-cheque-deposit (not ID photos), alerts-notifications
+(not sign-in or payment approvals), technical-error (a message shown, not
+technical problems in general), device-support ("not compatible", watches,
+custom Android, USB debugging), customer-support (branches, assistant, help
+pages, unhelpful answers). Round 2 added the words users write for the
+second step ("2FA", "two-factor", "two-step"): short mentions such as
+"2FA does not work" had fallen just under the misc cutoff.
+
+| | t1 P / R / false alarm | t2 P / R / false alarm | keyed reviews wrong (t1, t2) |
+|---|---|---|---|
+| frozen descriptions | 84 / 67 / 13 | 80 / 66 / 12 | 41, 59 |
+| round 1 | 90 / 70 / 3 | 83 / 71 / 12 | 32, 48 |
+| round 2 (kept) | 89 / 69 / 3 | 83 / 71 / 8 | 33, 45 |
+
+Stopped after round 2: it moved little over round 1, and further rounds would
+fit the two keys. Caveat: round 2 was written after reading t2's errors, so
+t2 is no longer unseen; a fresh key would be needed for an unbiased number.
+What still goes wrong is mostly the known kind: short sign-in security
+mentions in misc, the ID check before an e-transfer, and approvals the
+model still files under alerts when two-step is not among its options. The
+acceptance check keeps scoring the frozen descriptions, so its baseline is
+unchanged.
