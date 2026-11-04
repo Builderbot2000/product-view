@@ -5,12 +5,28 @@ Written 2026-11-02, after topic matching passed its held-out test
 and a service that a team can deploy and leave running. Decisions D18–D22 are in
 report-design.md §9. This plan says how to build them.
 
-**Status, 2026-11-03.** Steps 1, 2, 3, 5 and 7 are built: `pv matrix`,
-`pv match`, `pv report` (team pages and member reports; `--hub` for the
-earlier pages) and `pv cycle`. Step 4 (acceptance check) waits until a host is
-chosen, step 6 (email) is deferred, step 8 has only the existing compose
-file, and step 9 is not started. Choices made while building, beyond what the
-plan says:
+**Status, 2026-11-04.** Steps 1–5, 7 and 8 are built: `pv matrix`,
+`pv match`, `pv check-matching`, `pv report` (overview, team pages and member
+reports) and `pv cycle`, in a rebuilt image. Step 6 (email) is deferred: until
+it lands, each member's report page stands in for their email. Step 9 is not
+started. The Kubernetes and job-service examples in step 8 wait for a host.
+- **Acceptance check (step 4).** The fixtures ship in the package
+  (`topics/acceptance/`): both whole windows (294 and 204 complaint reviews),
+  not just the 240 keyed reviews, because self-training learns from every unit
+  in the window; scoring reads only the keyed ones. The 22 topics the keys were
+  written for are frozen with them, so the check never depends on the deployed
+  matrix. First run, 2026-11-04, qwen3.5:9b with CPU embeddings: t1 84 / 67 / 13
+  (the trial's exact numbers), t2 80 / 66 / 12 (trial: 78 / 65 / 12). Pass.
+- **Image (step 8).** Pinned `requirements.lock`, non-root, read-only root
+  filesystem verified (writes only to `/app/data`, `/cache`, `/tmp`); built
+  pages go to `data/report` inside the volume. `BAKE_MODELS=1` bakes opus-mt
+  too, not just the matching models: the cycle's translate step would
+  otherwise need a download on an air-gapped host the first time a French
+  review arrives. Tested in the container: matrix, model download and
+  embedding, building and publishing all pages. Not yet tested in the
+  container: a matching run, which needs a model server the container can
+  reach (the local Ollama listens on 127.0.0.1 only).
+Choices made while building, beyond what the plan says:
 - **Period and cadence.** A cycle is meant to run weekly, but the reporting
   period stays 28 days with 3 baseline periods (`report:` in config.yaml).
   Weekly counts per topic would be mostly 0–2 and nothing could ever read as

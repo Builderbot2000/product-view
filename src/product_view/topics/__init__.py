@@ -51,15 +51,41 @@ def open_embedder(args: argparse.Namespace):
     return Embedder(Path(args.data_dir) / "cache.db", sec["backend"], sec["base_url"])
 
 
+def match_reviews(reviews: list[tuple[str, str]], topic_map: dict, llm, emb):
+    """Method M on (review_id, text) pairs: the units, how each was routed and
+    matched, and the topics in column order. `pv match` and `pv check-matching`
+    both run this, so the check tests exactly what the pipeline does."""
+    import numpy as np
+
+    from . import method, units as um
+
+    t0 = time.time()
+    text = dict(reviews)
+    units = um.build(reviews, emb.minilm)
+    print(f"  {len(units)} units", flush=True)
+    topics = list(topic_map.values())
+    ex = method.examples(topic_map, llm)
+    U = emb.qwen([u.text for u in units], method.INSTRUCTION)
+    sets = [emb.qwen(ex[t.id], method.INSTRUCTION) for t in topics]
+    neg = np.vstack([emb.qwen(ex[method.NULL], method.INSTRUCTION),
+                     emb.qwen(ex[method.OFFLIST], method.INSTRUCTION)])
+    P = (method.probabilities(U, sets, neg) if len(units)
+         else np.zeros((0, len(topics))))
+    routed = method.gate(P)
+    n = {k: routed.route.count(k) for k in ("sure", "model", "misc")}
+    print(f"  {n['sure']} sure, {n['misc']} misc, {n['model']} for the model "
+          f"({emb.computed} texts embedded, {time.time() - t0:.0f}s)", flush=True)
+    method.ask(llm, P, routed, topics, [u.text for u in units],
+               [text[u.review_id] for u in units], label="model")
+    return units, routed, topics
+
+
 def run_match(args: argparse.Namespace, matrix: mx.Matrix,
               since: datetime | None = None, until: datetime | None = None) -> str:
     """One matching run over the window; returns its run id. Raises on failure,
     after marking the run failed."""
-    import numpy as np
-
     from ..commands import open_llm
     from ..render.topics import periods_shown
-    from . import method, units as um
     from .store import TopicStore
 
     report = config.get(args.config, "report")
@@ -77,28 +103,12 @@ def run_match(args: argparse.Namespace, matrix: mx.Matrix,
                  window_start=start.isoformat(), window_end=end.isoformat(), reviews=len(rows))
         try:
             llm.check()
-            t0 = time.time()
             print(f"matching {len(rows)} complaint reviews, {start:%Y-%m-%d} to "
                   f"{end - timedelta(days=1):%Y-%m-%d}, against {len(matrix.topics)} topics "
                   f"({matrix.path}{', sample content' if matrix.is_sample else ''})", flush=True)
-            text = {r["review_id"]: r["content_en"] for r in rows}
-            units = um.build([(r["review_id"], r["content_en"]) for r in rows], emb.minilm)
-            print(f"  {len(units)} units", flush=True)
-
-            topics = list(matrix.topics.values())
-            ex = method.examples(matrix.topics, llm)
-            U = emb.qwen([u.text for u in units], method.INSTRUCTION)
-            sets = [emb.qwen(ex[t.id], method.INSTRUCTION) for t in topics]
-            neg = np.vstack([emb.qwen(ex[method.NULL], method.INSTRUCTION),
-                             emb.qwen(ex[method.OFFLIST], method.INSTRUCTION)])
-            P = (method.probabilities(U, sets, neg) if len(units)
-                 else np.zeros((0, len(topics))))
-            routed = method.gate(P)
+            units, routed, topics = match_reviews(
+                [(r["review_id"], r["content_en"]) for r in rows], matrix.topics, llm, emb)
             n = {k: routed.route.count(k) for k in ("sure", "model", "misc")}
-            print(f"  {n['sure']} sure, {n['misc']} misc, {n['model']} for the model "
-                  f"({emb.computed} texts embedded, {time.time() - t0:.0f}s)", flush=True)
-            method.ask(llm, P, routed, topics, [u.text for u in units],
-                       [text[u.review_id] for u in units], label="model")
 
             unit_rows = [(u.review_id, u.seq, routed.route[i], topics[int(routed.best[i])].id,
                           round(float(routed.p1[i]), 4), u.text, u.quote)
@@ -182,3 +192,6 @@ def add_parsers(sub, common) -> None:
     p = sub.add_parser("matrix", help="check the team, member and topic matrix")
     p.add_argument("--matrix", help="matrix file")
     p.set_defaults(func=cmd_matrix)
+
+    from . import check
+    check.add_parser(sub, common)

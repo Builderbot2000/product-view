@@ -5,3 +5,8 @@ out/
 *.pyc
 *.egg-info/
 .env
+trials/
+docs/
+spike/
+proofread/
+matrix.yaml

@@ -100,7 +100,7 @@ and the next steps, written so a fresh session can start building.
 ## 3. Confluence building blocks (all confirmed by probe 2)
 
 Probe 2 source: [trials/confluence/build_confluence_probe_native.py](../trials/confluence/build_confluence_probe_native.py).
-Live page: MFS / "PV probe 2: native macros" (page 294964).
+The live probe page was deleted on 2026-11-04; the builder above recreates it.
 
 | Use | Storage element |
 |---|---|
@@ -239,20 +239,17 @@ percentages** (14.1 means 14.1%). Don't multiply by 100.
 
 kevintangcyberium.atlassian.net, space `MFS` (no dedicated space yet;
 `pv publish` can't create one):
-- "TITLE-TAG probe title" (98532): probe 1 (HTML route).
-- "PV probe 2: native macros" (294964): probe 2 (storage route).
-- "Product View @ RBC Mobile" (294942): **the overview page**, built by
-  `pv report --publish --space MFS`. Its attachments list still holds charts
-  from earlier versions (priority map, monthly sparklines); they are
-  unreferenced and harmless.
-- Under it, one page per team in the sample matrix, created 2026-11-03, and
-  under each team page its members' reports, "Name · Team". Publishing moves
-  a page back under its intended parent if it was moved.
-- Also under it, the five earlier role pages, retired and waiting to be
-  archived by hand: "UI & design" (295149), "Sign-in & security (role page)"
-  (295174), "Payments" (131429), "Engineering / QA" (65919), "Support / CX
-  (role page)" (65956). Each holds its last role version, from 2026-10-14.
-  Every publish lists them as no longer in the matrix.
+- Wiped 2026-11-04 (Kevin): every earlier Product View page (the overview,
+  team pages, member reports, the retired role pages) and the probe pages
+  went to the space trash, and the pages were rebuilt from scratch. The
+  probes' findings are recorded here and in §3; their builders stay in
+  trials/confluence/.
+- "Product View @ RBC Mobile": **the overview page**, under the space home,
+  built by `pv cycle --space MFS --parent-id 98427`.
+- Under it, one page per team in the sample matrix, and under each team page
+  its members' reports, "Name · Team". Publishing moves a page back under its
+  intended parent if it was moved. Until email lands (D21), a member's report
+  page is what they would be sent.
 
 Per-row SVG sparklines in table cells render well, given an explicit
 `ac:width` (without one Confluence stretches them to the cell).

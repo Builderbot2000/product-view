@@ -67,48 +67,28 @@ pausing for a few minutes is the download, not a hang.
 ### Or run it in a container
 
 ```bash
-docker compose build
-docker compose run --rm pv run                 # full pipeline
-docker compose run --rm pv issues show
+docker compose build                           # --build-arg BAKE_MODELS=1: weights inside, for air-gapped hosts
+docker compose run --rm pv                     # one cycle (pv cycle)
+docker compose run --rm pv check-matching      # acceptance check for the configured models
+docker compose run --rm pv cycle --no-fetch --space MFS
 ```
 
-CPU-only torch on Linux. `./data` and `./config.yaml` are mounted from the host,
-and the models go in a named volume (`models`), so rebuilding the image never
-touches the corpus or downloads models again. Verified on Docker Desktop for
-Windows (before the issue stage replaced clustering). The image has no local
-model, so in a container use `llm.provider: openai`, with the key in `.env`.
+One image that runs one cycle and exits; the host's scheduler decides when
+(docs/production-plan.md §0). CPU-only torch, pinned dependencies
+(`requirements.lock`), a non-root user, and a read-only root filesystem: it
+writes only to `/app/data` (the one persistent volume: archive, databases,
+lock, built pages), `/cache` (model weights, about 1.6 GB, downloaded on first
+use unless baked in) and `/tmp`. Configuration comes from mounts and the
+environment only (the Dockerfile's header lists them): `config.yaml` as a mount,
+the real matrix as a mount with `PV_MATRIX` pointing at it, secrets as
+environment variables, `HTTPS_PROXY` and a CA bundle for corporate proxies,
+`HF_ENDPOINT` for an in-house model mirror.
 
-## Configuration
-
-Settings live in [config.yaml](config.yaml): app id and country, the data
-directory, fetch tuning, the minimum review length, the issue stage's
-settings and the language model (`llm:`). Precedence is **command-line flag >
-config.yaml > built-in default**. Use `pv --config other.yaml <command>` to point
-somewhere else. Unknown keys are an error, so a typo can't silently fall back
-to a default.
-
-## Usage
-
-Defaults target RBC Mobile (`com.rbc.mobile.android`, `ca`, all locales) via
-config.yaml. Override per run with `--app-id`, `--country`, or
-`--no-all-langs --lang en,fr`.
-
-```bash
-# Top up with the newest reviews (stops once it reaches what you already have)
-pv fetch
-
-# Deep backfill — continues from where the last run stopped
-pv fetch --max-reviews 20000 --resume
-
-# Which locales hold reviews you haven't fetched?
-pv langs
-
-# What's on disk
-pv info
-
-# CSV for spreadsheet use
-pv export
-```
+By default the container uses the Ollama on this machine at port 11600
+(`PV_OLLAMA_HOST` changes it; Ollama must listen beyond 127.0.0.1, e.g.
+`OLLAMA_HOST=0.0.0.0:11600`). `--profile ollama` runs Ollama in a container
+instead, and `--profile scheduler` runs a cycle every `PV_EVERY_HOURS` (default
+168) for hosts with no scheduler of their own.
 
 ### Matching reviews to topics
 
@@ -144,6 +124,23 @@ Embeddings run in-process by default (`embed.backend: local`, CPU). With an
 Ollama server that has `qwen3-embedding:0.6b`, `embed.backend: ollama` is much
 faster on a GPU and gives the same vectors.
 
+### Acceptance check for a deployment
+
+```bash
+pv check-matching                  # both windows; exit 0 on a pass, 1 on a fail
+pv check-matching --window t1      # one window
+```
+
+Runs the configured chat and embedding models through the same matching code
+as `pv match` on two fixed windows that ship with the package
+(`src/product_view/topics/acceptance/`): the development window (294 complaint
+reviews) and the held-out one (204), each with an answer key for 120 drawn
+reviews, against the 22 topics the keys were written for (not the deployed
+matrix). Pass: precision at least 70%, recall at least 60%, false alarm at most
+25%, on both. Run it before go-live and after any model change; each run is
+recorded in `data/checks/`. The fixtures are rebuilt from the trial data by
+`trials/topics/fixture.py`.
+
 ### One cycle, for a scheduler
 
 `pv cycle` runs fetch -> db build -> translate -> match -> report -> publish once
@@ -152,7 +149,7 @@ lock (`data/pv-cycle.lock`). It prints a one-line summary and records the
 cycle in `data/topics.db`. Nothing is published unless every earlier step
 succeeded. It publishes when `confluence.space` is set, else it only writes
 the pages. `PV_LOG_JSON=1` makes log lines JSON. Email to members (D21) is
-not built yet.
+deferred; until it lands, each member's report page is what they are sent to.
 
 ### Grouping reviews into issues (the earlier route)
 

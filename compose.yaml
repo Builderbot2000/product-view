@@ -1,20 +1,66 @@
+# Product View on one machine: local use and the demo. Production hosts run the
+# same image under their own scheduler (docs/production-plan.md §0, step 8).
+#
+#   docker compose build                              # add --build-arg BAKE_MODELS=1 for air-gapped
+#   docker compose run --rm pv                        # one cycle: fetch, match, report, publish
+#   docker compose run --rm pv check-matching         # acceptance check for the configured models
+#   docker compose run --rm pv cycle --no-fetch --no-publish --out data/report
+#
+#   docker compose --profile ollama up -d ollama      # a model server in a container
+#   docker compose --profile scheduler up -d          # a cycle every PV_EVERY_HOURS (default 168)
+#
+# The chat model: by default the Ollama already running on this machine
+# (port 11600; set PV_OLLAMA_HOST to change it). With the ollama profile, set
+# PV_OLLAMA_HOST=ollama:11434. For an in-house OpenAI-compatible server, set
+# PV_LLM_BASE_URL and PV_LLM_API_KEY and `llm.provider: openai` in config.yaml.
+
+x-pv: &pv
+  build: .
+  image: product-view
+  # Credentials (Confluence, model server) at run time only; .dockerignore keeps
+  # .env out of the image.
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    OLLAMA_HOST: ${PV_OLLAMA_HOST:-host.docker.internal:11600}
+  extra_hosts:
+    - host.docker.internal:host-gateway
+  read_only: true                 # writes go to the volumes and /tmp only
+  tmpfs:
+    - /tmp
+  volumes:
+    # Archive, databases, lock and built pages, shared with the host so a `pv`
+    # run on either side sees the same corpus. Not both at once: one cycle per volume.
+    - ./data:/app/data
+    - ./config.yaml:/app/config.yaml:ro
+    # The real matrix, if present: mount it and point PV_MATRIX at it, e.g.
+    # - ./matrix.yaml:/run/secrets/matrix.yaml:ro   (and PV_MATRIX=/run/secrets/matrix.yaml)
+    # Model weights, downloaded on first use (about 1.6 GB). A baked image fills
+    # this volume from its own copy the first time.
+    - pv-models:/cache
+
 services:
   pv:
-    build: .
-    image: product-view
-    # Confluence credentials and OPENAI_API_KEY. Passed at run time, never baked
-    # into the image (.dockerignore excludes .env).
-    env_file:
-      - path: .env
-        required: false
+    <<: *pv
+
+  scheduler:
+    <<: *pv
+    profiles: [scheduler]
+    # For hosts with no scheduler of their own: one cycle, then wait. A failed
+    # cycle is logged and the next one still runs.
+    entrypoint: ["sh", "-c", "while :; do pv cycle --out data/report; sleep $$(( $${PV_EVERY_HOURS:-168} * 3600 )); done"]
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama
+    profiles: [ollama]
+    ports:
+      - "${PV_OLLAMA_PORT:-11600}:11434"
     volumes:
-      # Archive and databases, shared with the host so `pv` runs on either
-      # side see the same corpus. Don't run both at once against one database.
-      - ./data:/app/data
-      # Edit config on the host without rebuilding the image.
-      - ./config.yaml:/app/config.yaml:ro
-      # all-MiniLM-L6-v2 + opus-mt-fr-en, ~390 MB, downloaded on first use.
-      - models:/cache
+      - ollama:/root/.ollama
+    # First time: docker compose exec ollama ollama pull qwen3.5:9b
 
 volumes:
-  models:
+  pv-models:
+  ollama:
