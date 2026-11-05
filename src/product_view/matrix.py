@@ -8,14 +8,18 @@ Loading validates the D19 rules and fails with every problem listed at once,
 since the file is edited by hand (or by an assistant) and one round of fixes
 should be enough. The hash covers only what changes the matching (topic ids,
 names and descriptions), so moving a member between teams never re-matches.
+
+`pv matrix` checks the file and prints who owns what.
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -170,3 +174,41 @@ def load(path: str | Path | None = None) -> Matrix:
     if problems:
         raise MatrixError(f"{path}: {len(problems)} problem(s):\n  " + "\n  ".join(problems))
     return Matrix(path, topics, teams)
+
+
+# --- command line ---------------------------------------------------------------
+
+def add_option(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--matrix", help=f"matrix file (default: ${ENV_PATH}, else {REAL}, "
+                                    f"else {SAMPLE})")
+
+
+def load_for(args: argparse.Namespace) -> Matrix | None:
+    """The matrix a command names, or None after printing its problems."""
+    try:
+        return load(getattr(args, "matrix", None))
+    except MatrixError as exc:
+        print(f"matrix: {exc}", file=sys.stderr)
+        return None
+
+
+def cmd_matrix(args: argparse.Namespace) -> int:
+    matrix = load_for(args)
+    if matrix is None:
+        return 2
+    print(f"{matrix.path}: {len(matrix.topics)} topics, {len(matrix.teams)} teams, "
+          f"{sum(len(t.members) for t in matrix.teams.values())} members; topic hash "
+          f"{matrix.topic_hash}" + (" (sample content)" if matrix.is_sample else ""))
+    for team in matrix.teams.values():
+        print(f"\n{team.name}" +(f"  <{team.mailing_list}>" if team.mailing_list else ""))
+        for m in team.members:
+            print(f"  {m.name} <{m.email}>")
+            for t in m.topics:
+                print(f"    {matrix.topics[t].name}")
+    return 0
+
+
+def add_parser(sub) -> None:
+    p = sub.add_parser("matrix", help="check the team, member and topic matrix")
+    add_option(p)
+    p.set_defaults(func=cmd_matrix)

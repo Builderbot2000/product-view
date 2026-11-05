@@ -57,6 +57,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, NamedTuple, TypeVar
 
+from .config import load_dotenv
+
 log = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -179,8 +181,6 @@ class LLM:
         self.tokens_in = self.tokens_out = 0
         self.spent = 0.0          # USD at the configured prices
         self.json_mode = False    # set once a server refuses json_schema
-        from ..publish.confluence import load_dotenv
-
         load_dotenv()
         base_url = os.environ.get(ENV_BASE_URL) or cfg.base_url
         self._base = None

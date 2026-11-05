@@ -2,12 +2,10 @@
 
 The window is the reports' window: every period a report shows, which is the
 reporting period and the periods before it that its trend and "usual" need
-(render/topics.py). It ends on the day of the newest review. Each run
+(periods.py). It ends on the day of the newest review. Each run
 re-matches the whole window and stores the result as a new run in topics.db.
 Cost is in the model calls, and those are cached, so a weekly run pays only
 for units it has not seen before.
-
-`pv matrix` checks the matrix file and prints who owns what.
 """
 
 from __future__ import annotations
@@ -20,13 +18,12 @@ from pathlib import Path
 
 from .. import config
 from .. import matrix as mx
-from ..store import Store
-
-STREAM = "negative"   # complaints only (report-design.md D17): 1-3 star reviews
-
-
-def topic_db(args: argparse.Namespace) -> Path:
-    return Path(args.data_dir) / "topics.db"
+from ..llm import LLM, LLMConfig, LLMError
+from ..periods import periods_shown
+from ..store import COMPLAINTS, Store
+from . import method, units as um
+from .embed import Embedder, EmbedError
+from .store import TopicStore, topics_db
 
 
 def window(store: Store, period_days: int, periods: int) -> tuple[datetime, datetime]:
@@ -44,9 +41,12 @@ def _dt(text: str) -> datetime:
     return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
-def open_embedder(args: argparse.Namespace):
-    from .embed import Embedder
+def open_llm(args: argparse.Namespace) -> LLM:
+    return LLM(LLMConfig.from_config(config.get(args.config, "llm")),
+               Path(args.data_dir) / "cache.db")
 
+
+def open_embedder(args: argparse.Namespace) -> Embedder:
     sec = config.get(args.config, "embed")
     return Embedder(Path(args.data_dir) / "cache.db", sec["backend"], sec["base_url"])
 
@@ -56,8 +56,6 @@ def match_reviews(reviews: list[tuple[str, str]], topic_map: dict, llm, emb):
     matched, and the topics in column order. `pv match` and `pv check-matching`
     both run this, so the check tests exactly what the pipeline does."""
     import numpy as np
-
-    from . import method, units as um
 
     t0 = time.time()
     text = dict(reviews)
@@ -84,19 +82,16 @@ def run_match(args: argparse.Namespace, matrix: mx.Matrix,
               since: datetime | None = None, until: datetime | None = None) -> str:
     """One matching run over the window; returns its run id. Raises on failure,
     after marking the run failed."""
-    from ..commands import open_llm
-    from ..render.topics import periods_shown
-    from .store import TopicStore
-
     report = config.get(args.config, "report")
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     llm = open_llm(args)
     emb = open_embedder(args)
-    with Store(Path(args.data_dir) / "reviews.db") as store, TopicStore(topic_db(args)) as ts:
+    with (Store(Path(args.data_dir) / "reviews.db") as store,
+          TopicStore(topics_db(args.data_dir)) as ts):
         start, end = window(store, report["period_days"],
                             periods_shown(report["baseline_periods"]))
         start, end = since or start, until or end
-        rows = [r for r in store.stream(STREAM, min_chars=args.min_chars)
+        rows = [r for r in store.stream(COMPLAINTS, min_chars=args.min_chars)
                 if r["created_at"] and start <= _dt(r["created_at"]) < end]
         ts.start(run_id, matrix=str(matrix.path), topic_hash=matrix.topic_hash,
                  chat_model=llm.describe(), embed_model=emb.describe(),
@@ -132,26 +127,12 @@ def run_match(args: argparse.Namespace, matrix: mx.Matrix,
     return run_id
 
 
-def load_matrix(args: argparse.Namespace) -> mx.Matrix | None:
-    try:
-        return mx.load(getattr(args, "matrix", None))
-    except mx.MatrixError as exc:
-        print(f"matrix: {exc}", file=sys.stderr)
-        return None
-
-
 def _date(text: str | None) -> datetime | None:
-    if not text:
-        return None
-    d = datetime.fromisoformat(text)
-    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    return _dt(text) if text else None
 
 
 def cmd_match(args: argparse.Namespace) -> int:
-    from ..llm import LLMError
-    from .embed import EmbedError
-
-    matrix = load_matrix(args)
+    matrix = mx.load_for(args)
     if matrix is None:
         return 2
     until = _date(args.until)
@@ -163,35 +144,11 @@ def cmd_match(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_matrix(args: argparse.Namespace) -> int:
-    matrix = load_matrix(args)
-    if matrix is None:
-        return 2
-    print(f"{matrix.path}: {len(matrix.topics)} topics, {len(matrix.teams)} teams, "
-          f"{sum(len(t.members) for t in matrix.teams.values())} members; topic hash "
-          f"{matrix.topic_hash}" + (" (sample content)" if matrix.is_sample else ""))
-    for team in matrix.teams.values():
-        print(f"\n{team.name}" + (f"  <{team.mailing_list}>" if team.mailing_list else ""))
-        for m in team.members:
-            print(f"  {m.name} <{m.email}>")
-            for t in m.topics:
-                print(f"    {matrix.topics[t].name}")
-    return 0
-
-
-def add_parsers(sub, common) -> None:
+def add_parser(sub, common) -> None:
     p = sub.add_parser("match", help="match complaint reviews to the matrix's topics")
     common(p)
-    p.add_argument("--matrix", help=f"matrix file (default: ${mx.ENV_PATH}, else "
-                                    f"{mx.REAL}, else {mx.SAMPLE})")
+    mx.add_option(p)
     p.add_argument("--min-chars", type=int)
     p.add_argument("--since", help="first day to match (default: the reports' window)")
     p.add_argument("--until", help="last day to match (default: the newest review's day)")
     p.set_defaults(func=cmd_match)
-
-    p = sub.add_parser("matrix", help="check the team, member and topic matrix")
-    p.add_argument("--matrix", help="matrix file")
-    p.set_defaults(func=cmd_matrix)
-
-    from . import check
-    check.add_parser(sub, common)

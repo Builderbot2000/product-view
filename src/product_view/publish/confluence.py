@@ -20,12 +20,12 @@ import json
 import os
 import time
 import uuid
-from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlencode
 from urllib.request import Request, urlopen
 
+from ..config import load_dotenv
 from .storage import Attachment
 
 ENV_BASE_URL = "CONFLUENCE_BASE_URL"
@@ -35,22 +35,6 @@ ENV_TOKEN = "ATLASSIAN_TOKEN"
 
 class ConfluenceError(RuntimeError):
     pass
-
-
-def load_dotenv(path: Path = Path(".env")) -> None:
-    """Minimal KEY=VALUE reader; existing environment variables win."""
-    if not path.is_file():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip().removeprefix("export ").strip()
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
-        os.environ.setdefault(key, value)
 
 
 class Client:

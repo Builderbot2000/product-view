@@ -8,15 +8,15 @@ team's section links to its team page, where the members' reports sit.
 
 from __future__ import annotations
 
+from ..periods import SPARK_PERIODS
+from ..publish.storage import StoragePage
 from ..store import Store
 from . import blocks as b
 from . import svg
-from .issues import SPARK_PERIODS, by_change, by_volume
-from .pages import (LOZENGE, Canvas, _against, _brief, _kpi, _n, _period_ends, _usual,
-                    _vs_usual)
-from .team_pages import (footer, member_title, method, movers, no_topic, ordered, span,
-                         team_title, topic_table)
-from .topics import TopicReport
+from .data import TopicReport, by_change, by_volume
+from .parts import (Canvas, changed_tile, footer, kpi, member_title, method, movers, no_topic,
+                    ordered, period_pairs, span, team_title, topic_table)
+from .text import against, brief, period_ends, plural, usual, vs_usual
 
 TABLE_QUOTES = 2          # quotes under each topic in the overview's tables
 OVERVIEW_EXAMPLES = 10    # examples under "Did not fit a topic"
@@ -35,7 +35,7 @@ def _teams_of(r: TopicReport) -> dict[str, list[str]]:
 def _summary(r: TopicReport, team_rows: list) -> str:
     t = r.total
     first = (f"Here’s how the app did on the Play Store {span(r)}. "
-             f"{_n(t.now, 'reviewer')} left a negative review (1–3★), {_against(t)}.")
+             f"{plural(t.now, 'reviewer')} left a negative review (1–3★), {against(t)}.")
     if t.change in ("up", "new"):
         first += " So, a rougher period than usual."
     elif t.change == "down":
@@ -48,28 +48,26 @@ def _summary(r: TopicReport, team_rows: list) -> str:
     lead = None
     if rising or team_rows:
         team, s = (rising or team_rows)[0]
-        issues = r.of(team.topics)
-        lead = (next(iter(by_change([i for i in issues if i.change in ("up", "new")])), None)
-                or next(iter(by_volume([i for i in issues if i.now])), None))
+        topics = r.of(team.topics)
+        lead = (next(iter(by_change([t for t in topics if t.change in ("up", "new")])), None)
+                or next(iter(by_volume([t for t in topics if t.now])), None))
         opener = ("The biggest story is" if rising
                   else "No team’s total moved beyond normal variation; the busiest is")
         text = (f"{opener} <strong>{b.esc(team.name)}</strong>: "
-                f"{_n(s.now, 'negative review')} on its topics, {_against(s)}.")
+                f"{plural(s.now, 'negative review')} on its topics, {against(s)}.")
         if lead:
-            text += f" Leading it is {_brief(lead)}."
+            text += f" Leading it is {brief(lead)}."
         paras.append(text)
     if others := movers(list(r.topics.values()), lead):
         paras.append(others)
-    paras.append(f"{_n(r.no_topic.now, 'review')} fit none of the topics, {_against(r.no_topic)}.")
+    paras.append(f"{plural(r.no_topic.now, 'review')} fit none of the topics, {against(r.no_topic)}.")
     return "".join(f"<p>{p}</p>" for p in paras)
 
 
 def _pairs(store: Store, r: TopicReport, app_id: str) -> list[tuple[str, str]]:
-    from .team_pages import period_pairs
-
     versions = ", ".join(f"{v} ({n})" for v, n in r.versions_now.most_common(4))
     pairs = period_pairs(r, [("Topics", f"{len(r.topics)}, followed by "
-                                        f"{_n(len(r.matrix.teams), 'team')}")])
+                                        f"{plural(len(r.matrix.teams), 'team')}")])
     pairs.append(("App versions", b.esc(versions) + " " + b.muted("(negative reviews)")))
     meta = store.conn.execute(
         "SELECT * FROM app_metadata ORDER BY fetched_at DESC LIMIT 1").fetchone()
@@ -80,13 +78,13 @@ def _pairs(store: Store, r: TopicReport, app_id: str) -> list[tuple[str, str]]:
     return pairs
 
 
-def overview_page(store: Store, r: TopicReport, title: str, app_id: str):
+def overview_page(store: Store, r: TopicReport, title: str, app_id: str) -> StoragePage:
     c = Canvas()
     p = r.period
     teams = list(r.matrix.teams.values())
     team_rows = sorted(((t, r.union(t.topics)) for t in teams),
                        key=lambda x: (-x[1].now, -x[1].usual))
-    ends = _period_ends(p)
+    ends = period_ends(p)
 
     chart = c.add("teams.svg", svg.area_bars(
         [{"name": t.name, "now": s.now, "usual": s.usual, "change": s.change}
@@ -100,9 +98,9 @@ def overview_page(store: Store, r: TopicReport, title: str, app_id: str):
           "tone": b.tone(r.no_topic.change)}],
         ends, f"Reviews per period, last {SPARK_PERIODS}",
         f"{p.days}-day periods · dashed = usual · dot = this period"), 620)
-    heat_rows = by_volume([i for i in r.topics.values() if sum(i.series.spark())])[:HEAT_ROWS]
+    heat_rows = by_volume([t for t in r.topics.values() if sum(t.series.spark())])[:HEAT_ROWS]
     heat = (c.add("heatmap.svg", svg.heatmap(
-        [{"name": i.label, "values": i.series.spark()} for i in heat_rows], ends,
+        [{"name": t.name, "values": t.series.spark()} for t in heat_rows], ends,
         f"Negative reviews per topic, last {SPARK_PERIODS} periods",
         "Busiest this period first · outlined column = this period"), 620) + "<p />"
             if heat_rows else "")
@@ -114,24 +112,18 @@ def overview_page(store: Store, r: TopicReport, title: str, app_id: str):
              + "<p>Each team has its own page, with a report for each member under it:</p>"
              + f"<ul>{links}</ul>")
 
-    tiles = [_kpi(str(r.total.now), f"negative reviews in {p.days} days", _vs_usual(r.total),
-                  r.total.change, compact=True)]
     moved = by_change(list(r.topics.values()))
-    if moved:
-        top = moved[0]
-        tiles.append(_kpi(str(top.now), f"{LOZENGE[top.change]}: {top.label}",
-                          f"usual {_usual(top.usual)} · {_n(len(moved), 'topic')} changed",
-                          top.change, compact=True))
-    else:
-        tiles.append(_kpi("0", "topics changed", "all within normal variation", compact=True))
-    tiles.append(_kpi(str(r.no_topic.now), "fit no topic", _vs_usual(r.no_topic), compact=True))
+    tiles = [kpi(str(r.total.now), f"negative reviews in {p.days} days", vs_usual(r.total),
+                 r.total.change, compact=True),
+             changed_tile(moved, compact=True),
+             kpi(str(r.no_topic.now), "fit no topic", vs_usual(r.no_topic), compact=True)]
     header = b.section("two_equal", intro + "".join(tiles) + b.details(_pairs(store, r, app_id)),
                        heat + chart + "<p />" + trend)
 
     teams_of = _teams_of(r)
     team_col = ("Team", lambda tid: b.esc(", ".join(teams_of.get(tid, []))))
-    tid_of = {id(i): tid for tid, i in r.topics.items()}
-    changed_ids = [tid_of[id(i)] for i in moved]
+    tid_of = {id(t): tid for tid, t in r.topics.items()}
+    changed_ids = [tid_of[id(t)] for t in moved]
     changed = "<h2>What changed this period</h2>" + (
         f"<p>{b.muted('Topics whose count is well above or below usual (see How these numbers are made). Everything else moved within normal variation.')}</p>"
         + topic_table(r, changed_ids, c, team_col, TABLE_QUOTES)
@@ -141,7 +133,7 @@ def overview_page(store: Store, r: TopicReport, title: str, app_id: str):
     for team, s in team_rows:
         members = " · ".join(b.page_link(member_title(team, m), m.name) for m in team.members)
         by_team += (
-            f"<h3>{b.esc(team.name)} {b.muted(f'· {s.now} reviews, usual {_usual(s.usual)}')}</h3>"
+            f"<h3>{b.esc(team.name)} {b.muted(f'· {s.now} reviews, usual {usual(s.usual)}')}</h3>"
             f"<p>{b.muted('Team page: ')}{b.page_link(team_title(team), team.name)}"
             f"{b.muted(' · Members: ')}{members}</p>"
             + topic_table(r, ordered(r, team.topics), c, quotes=TABLE_QUOTES))

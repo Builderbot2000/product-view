@@ -59,9 +59,9 @@ class Review:
     ) -> "Review":
         """Map one google-play-scraper dict onto the normalized schema.
 
-        `userName` and `userImage` are deliberately dropped. Grouping
-        reviews into issues never needs reviewer identity, and not collecting it beats
-        collecting it and having to justify the retention later.
+        `userName` and `userImage` are deliberately dropped. Matching
+        reviews to topics never needs reviewer identity, and not collecting
+        it beats collecting it and having to justify the retention later.
         """
         return cls(
             review_id=raw["reviewId"],

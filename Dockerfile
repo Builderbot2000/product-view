@@ -54,7 +54,7 @@ RUN pip install --no-deps . && rm -rf src build
 # never need a download either.
 RUN if [ -n "$BAKE_MODELS" ]; then \
       HF_HUB_OFFLINE= python -c "from sentence_transformers import SentenceTransformer as S; \
-from product_view.topics.embed import QWEN, MINILM; \
+from product_view.matching.embed import QWEN, MINILM; \
 S(QWEN, device='cpu'); S('sentence-transformers/' + MINILM, device='cpu'); \
 from product_view.lang.translate import _model; _model()" \
       && chmod -R a+rX /cache; \

@@ -13,7 +13,7 @@ Each key labels every review of 120 drawn from its window. The whole window is
 matched, not just those 120, because the classifier trains on every unit it
 sees (self-training); scoring then reads only the keyed reviews.
 
-The fixtures ship inside the package (topics/acceptance/): the reviews (public
+The fixtures ship inside the package (matching/acceptance/): the reviews (public
 app-store text), the keys (review ids and labels) and the 22 topics the keys
 were labelled against. The check uses those topics, never the deployed matrix,
 so it runs before the real matrix exists and its result means the same thing
@@ -45,7 +45,11 @@ from datetime import datetime, timezone
 from importlib import resources
 from pathlib import Path
 
+from .. import matrix as mx
+from ..llm import LLMError
 from ..matrix import Topic
+from .embed import EmbedError
+from .run import match_reviews, open_embedder, open_llm
 
 WINDOWS = {"t1": "development", "t2": "held out"}
 PASS = {"precision": 0.70, "recall": 0.60, "false_alarm": 0.25}
@@ -123,15 +127,8 @@ def _detail(window: str, got: dict, want: dict, text: dict) -> None:
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    from ..commands import open_llm
-    from ..llm import LLMError
-    from . import match_reviews, open_embedder
-    from .embed import EmbedError
-
     tmap = topics()
     if args.matrix:
-        from .. import matrix as mx
-
         try:
             cand = mx.load(args.matrix).topics
         except mx.MatrixError as exc:

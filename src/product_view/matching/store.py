@@ -20,6 +20,10 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+def topics_db(data_dir: str | Path) -> Path:
+    return Path(data_dir) / "topics.db"
+
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
     run_id        TEXT PRIMARY KEY,

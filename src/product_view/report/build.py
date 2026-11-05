@@ -24,8 +24,15 @@ import sys
 from pathlib import Path
 
 from .. import config
+from .. import matrix as mx
+from ..matching.store import topics_db
+from ..publish.pages import ConfluenceError, publish_tree
 from ..store import Store
-from .pages import PageSpec
+from . import data
+from .member import member_page
+from .overview import overview_page
+from .parts import PageSpec, member_title, slug, team_title
+from .team import team_page
 
 
 def overview_title(args: argparse.Namespace) -> str:
@@ -33,15 +40,26 @@ def overview_title(args: argparse.Namespace) -> str:
             or args.title or f"Product View @ {args.app_name or args.app_id}")
 
 
-def _team_pages(args: argparse.Namespace) -> list[PageSpec] | int:
-    from ..topics import load_matrix, topic_db
-    from . import team_pages, topics
+def pages(store: Store, r: data.TopicReport, overview: str, app_id: str) -> list[PageSpec]:
+    """The overview, then each team page under it followed by its members'
+    reports: the same templates for every team and member in the matrix."""
+    specs = [PageSpec("overview", overview, overview_page(store, r, overview, app_id), None)]
+    for team in r.matrix.teams.values():
+        title = team_title(team)
+        specs.append(PageSpec(f"team-{team.id}", title, team_page(r, team, overview), overview))
+        for m in team.members:
+            specs.append(PageSpec(f"member-{team.id}-{slug(m.name)}", member_title(team, m),
+                                  member_page(r, team, m), title))
+    return specs
 
-    matrix = load_matrix(args)
+
+def build(args: argparse.Namespace) -> list[PageSpec] | int:
+    """Every page, or the exit status when they cannot be built."""
+    matrix = mx.load_for(args)
     if matrix is None:
         return 2
     with Store(Path(args.data_dir) / "reviews.db") as store:
-        report = topics.load(store, topic_db(args), matrix, args.period_days,
+        report = data.load(store, topics_db(args.data_dir), matrix, args.period_days,
                              args.baseline_periods, args.min_chars)
         if report is None:
             print("report: no topic matches yet; run `pv match` first", file=sys.stderr)
@@ -53,7 +71,7 @@ def _team_pages(args: argparse.Namespace) -> list[PageSpec] | int:
         if report.short_window:
             print(f"report: warning: run {report.run['run_id']} matched a shorter window than "
                   "the trend shows; older periods will read low", file=sys.stderr)
-        return team_pages.build_all(store, report, overview_title(args), args.app_id)
+        return pages(store, report, overview_title(args), args.app_id)
 
 
 def write(built: list[PageSpec], out: Path) -> None:
@@ -74,8 +92,6 @@ def publish(args: argparse.Namespace, built: list[PageSpec]) -> int:
         print("report: no space key; pass --space or set confluence.space in config.yaml",
               file=sys.stderr)
         return 2
-    from ..publish import ConfluenceError, publish_tree
-
     try:
         stale = publish_tree(args.space, [(s.title, s.page, s.parent) for s in built],
                              root_parent_id=args.parent_id, below=built[0].title)
@@ -91,7 +107,7 @@ def publish(args: argparse.Namespace, built: list[PageSpec]) -> int:
 
 
 def cmd_report(args: argparse.Namespace) -> int:
-    built = _team_pages(args)
+    built = build(args)
     if isinstance(built, int):
         return built
     write(built, Path(args.out))
@@ -102,8 +118,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 def add_parser(sub, common) -> None:
     p = sub.add_parser("report", help="build the overview, team pages and member reports")
     common(p)
-    p.add_argument("--matrix", help="matrix file (default: $PV_MATRIX, else matrix.yaml, "
-                                    "else matrix.sample.yaml)")
+    mx.add_option(p)
     p.add_argument("--period-days", type=int,
                    help="length of the reporting period (default from config: 28)")
     p.add_argument("--baseline-periods", type=int,

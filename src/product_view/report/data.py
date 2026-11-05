@@ -3,7 +3,8 @@
 Everything is derived here from the raw rows in topics.db (which units
 matched which topic) and reviews.db (dates, stars, versions, text). Every
 number is a count of distinct reviews (D10), and the period, "usual" and the
-change test are the ones the earlier pages use (render/issues.py).
+change test are periods.py's. A topic's row (`TopicCounts`) holds its
+`Series`, this period's quotes and app versions.
 
 "No topic" is a complaint review none of whose units matched a topic: the
 gaps in the topic list (D18). It is reported as a count with examples, never
@@ -17,9 +18,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..matching.store import TopicStore
 from ..matrix import Matrix
-from ..store import Store
-from .issues import SPARK_PERIODS, Issue, Period, Quote, Series
+from ..periods import Period, Series
+from ..store import COMPLAINTS, Store
 
 
 # Quote rank, lowest shown first. A match the classifier was sure of is wrong
@@ -34,22 +36,73 @@ def quote_rank(how: str, text: str) -> int:
     return 2 if len(text.split()) < SHORT_QUOTE_WORDS else QUOTE_RANK.get(how, 1)
 
 
-def periods_shown(baseline: int) -> int:
-    """Periods a report shows: its trend, and the baseline behind "usual"."""
-    return max(SPARK_PERIODS, baseline + 1)
-
-
 def _dt(text: str) -> datetime:
     d = datetime.fromisoformat(text)
     return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
 @dataclass
+class Quote:
+    text: str
+    score: int
+    thumbs: int
+    created: datetime
+    version: str | None
+    rank: int = 0                 # lower shows first: how surely the quote fits its topic
+    full: str = ""                # the whole review, when the quote is a part of it
+
+
+@dataclass
+class TopicCounts:
+    """One topic's row on a page: its reviews per period and this period's quotes."""
+    name: str
+    series: Series
+    quotes_now: dict[str, Quote] = field(default_factory=dict)   # review id -> its quote
+    versions_now: Counter = field(default_factory=Counter)
+
+    @property
+    def now(self) -> int:
+        return self.series.now
+
+    @property
+    def usual(self) -> float:
+        return self.series.usual
+
+    @property
+    def change(self) -> str:
+        return self.series.change
+
+    def recent_quotes(self, n: int = 3) -> list[Quote]:
+        """This period's quotes: surest fit first (`rank`), then most thumbs-up, then newest."""
+        return sorted(self.quotes_now.values(),
+                      key=lambda q: (q.rank, -q.thumbs, -q.created.timestamp()))[:n]
+
+
+# --- orderings (D12) --------------------------------------------------------
+
+CHANGE_ORDER = {"new": 0, "up": 1, "down": 2, "steady": 3, "quiet": 4}
+
+
+def by_volume(topics: list[TopicCounts]) -> list[TopicCounts]:
+    """This period's count, then the usual level."""
+    return sorted(topics, key=lambda t: (-t.now, -t.usual, t.name))
+
+
+def by_change(topics: list[TopicCounts]) -> list[TopicCounts]:
+    """New, then up (largest excess first), then down; steady topics dropped."""
+    moved = [t for t in topics if t.change in ("new", "up", "down")]
+    return sorted(moved, key=lambda t: (CHANGE_ORDER[t.change], -(t.now - t.usual)
+                                        if t.change != "down" else t.now - t.usual))
+
+
+# --- the report ---------------------------------------------------------------
+
+@dataclass
 class TopicReport:
     run: dict
     matrix: Matrix
     period: Period
-    topics: dict[str, Issue]            # topic id -> its counts, as an Issue row
+    topics: dict[str, TopicCounts]      # topic id -> its counts
     total: Series                       # every complaint review
     no_topic: Series                    # complaint reviews with no topic
     no_topic_now: list[Quote]           # this period's, most liked first
@@ -57,7 +110,7 @@ class TopicReport:
     min_chars: int = 0
     short_window: bool = False          # the run matched fewer periods than the trend shows
 
-    def of(self, topic_ids) -> list[Issue]:
+    def of(self, topic_ids) -> list[TopicCounts]:
         return [self.topics[t] for t in topic_ids]
 
     def union(self, topic_ids) -> Series:
@@ -71,9 +124,6 @@ class TopicReport:
 def load(store: Store, topic_db: Path, matrix: Matrix, days: int, baseline: int,
          min_chars: int = 20) -> TopicReport | None:
     """The latest finished run, sliced into periods. None when there is no run."""
-    from ..topics import STREAM
-    from ..topics.store import TopicStore
-
     if not topic_db.exists():
         return None
     with TopicStore(topic_db) as ts:
@@ -88,30 +138,29 @@ def load(store: Store, topic_db: Path, matrix: Matrix, days: int, baseline: int,
     period = Period(end, days, baseline)
     short = _dt(run["window_start"]) > end - (period.end - period.start) * period.n_buckets
 
-    rows = {r["review_id"]: r for r in store.stream(STREAM, min_chars=min_chars)
+    rows = {r["review_id"]: r for r in store.stream(COMPLAINTS, min_chars=min_chars)
             if r["created_at"]}
     quote = {(u["review_id"], u["seq"]): u["quote"] for u in units}
-    topics = {t.id: Issue(t.name, "issue", "negative", [], Series(period))
+    topics = {t.id: TopicCounts(t.name, Series(period))
               for t in matrix.topics.values()}
     on_topic: set[str] = set()
     for m in matches:
-        issue, r = topics.get(m["topic_id"]), rows.get(m["review_id"])
-        if issue is None or r is None:    # a topic since removed, or a review since dropped
+        counts, r = topics.get(m["topic_id"]), rows.get(m["review_id"])
+        if counts is None or r is None:    # a topic since removed, or a review since dropped
             continue
         rid = m["review_id"]
         created = _dt(r["created_at"])
-        issue.series.add(created, rid)
-        issue.all_time.add(rid)
+        counts.series.add(created, rid)
         on_topic.add(rid)
         if period.bucket(created) == 0:
             # One quote per review and topic: the review's surest-fitting piece.
             text = quote[(rid, m["seq"])]
             rank = quote_rank(m["how"], text)
-            held = issue.quotes_now.get(rid)
+            held = counts.quotes_now.get(rid)
             if held is None:
-                issue.versions_now[r["app_version"] or "unknown"] += 1
+                counts.versions_now[r["app_version"] or "unknown"] += 1
             if held is None or rank < held.rank:
-                issue.quotes_now[rid] = Quote(text, r["score"], r["thumbs_up"] or 0, created,
+                counts.quotes_now[rid] = Quote(text, r["score"], r["thumbs_up"] or 0, created,
                                               r["app_version"], rank,
                                               " ".join((r["content_en"] or "").split()))
 

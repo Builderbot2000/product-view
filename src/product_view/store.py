@@ -73,7 +73,7 @@ CREATE INDEX IF NOT EXISTS cache.ix_translations_lang ON translations(detected_l
 CACHE_TABLES = ("translations",)
 
 # Left in reviews.db by earlier versions and no longer used: whole-review
-# vectors, then the embedding-clustering results (replaced by the issue stage).
+# vectors, then the embedding-clustering results (both retired).
 # cache.db may still hold the old `segments` table; nothing reads it.
 OBSOLETE_TABLES = ("embeddings", "runs", "pain_points", "pain_point_members")
 
@@ -82,6 +82,9 @@ _REVIEW_COLUMNS = (
     "thumbs_up", "created_at", "app_version", "review_created_version",
     "reply_content", "replied_at", "fetched_at", "content_hash",
 )
+
+
+COMPLAINTS = "negative"   # the stream matched and reported (report-design.md D17): 1-3 star reviews
 
 
 def reset(path: Path) -> None:
@@ -260,23 +263,3 @@ class Store:
             "SUM(CASE WHEN content_en IS NULL THEN 1 ELSE 0 END) dropped "
             "FROM translations GROUP BY detected_lang ORDER BY n DESC"
         ).fetchall()
-
-    def reviews_by_id(self, review_ids: Sequence[str]) -> list[sqlite3.Row]:
-        """Fetch specific reviews, preserving the order given."""
-        if not review_ids:
-            return []
-        q = ",".join("?" * len(review_ids))
-        rows = {
-            r["review_id"]: r
-            for r in self.conn.execute(
-                f"""
-                SELECT r.review_id, r.content, r.score, r.created_at,
-                       t.detected_lang, t.content_en
-                  FROM reviews r
-                  LEFT JOIN translations t ON t.review_id = r.review_id
-                 WHERE r.review_id IN ({q})
-                """,
-                tuple(review_ids),
-            )
-        }
-        return [rows[i] for i in review_ids if i in rows]

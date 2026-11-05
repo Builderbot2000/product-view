@@ -8,14 +8,15 @@ Unknown keys are an error rather than ignored: a typo such as
 `cohesion_flor: 0.5` would otherwise run silently with the default, and the
 output would look like the setting had no effect.
 
-Nothing secret belongs here. Confluence credentials come from environment
-variables only (see publish/confluence.py).
+Nothing secret belongs here. Credentials come from environment variables
+only, which `load_dotenv` fills from a local `.env` file for development.
 """
 
 from __future__ import annotations
 
 import argparse
 import copy
+import os
 from pathlib import Path
 from typing import Any
 
@@ -171,3 +172,18 @@ def apply(args: argparse.Namespace, cfg: dict[str, Any]) -> None:
             setattr(args, dest, value)
     args.config = cfg
 
+
+def load_dotenv(path: Path = Path(".env")) -> None:
+    """Minimal KEY=VALUE reader; existing environment variables win."""
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip().removeprefix("export ").strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        os.environ.setdefault(key, value)

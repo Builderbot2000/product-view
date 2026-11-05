@@ -7,12 +7,11 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import config
-from .archive import iter_corpus
+from .ingest.archive import iter_corpus
+from .lang import detect, translate as mt
 from .store import Store, reset
 
 log = logging.getLogger(__name__)
@@ -59,8 +58,6 @@ def cmd_db_build(args: argparse.Namespace) -> int:
 # --- translate -------------------------------------------------------------
 
 def cmd_translate(args: argparse.Namespace) -> int:
-    from .lang import detect, translate as mt
-
     with _open(args) as store:
         pending = store.untranslated(min_chars=args.min_chars)
         if not pending:
@@ -120,7 +117,7 @@ def cmd_translate(args: argparse.Namespace) -> int:
         # silently would be the actual mistake.
         if dropped:
             print(f"\nDROPPED {len(dropped)} non-Latin-script reviews "
-                  f"(no translation model): they are excluded from the issues.")
+                  f"(no translation model): they are left out of matching and the report.")
         print("\ndetected languages:")
         for row in store.translation_summary()[:10]:
             note = f"  ({row['dropped']} dropped)" if row["dropped"] else ""
@@ -128,15 +125,7 @@ def cmd_translate(args: argparse.Namespace) -> int:
     return 0
 
 
-def open_llm(args: argparse.Namespace):
-    from .llm import LLM, LLMConfig
-
-    return LLM(LLMConfig.from_config(config.get(args.config, "llm")),
-               Path(args.data_dir) / "cache.db")
-
-
 def add_parsers(sub, common) -> None:
-    """Register the pipeline subcommands onto the existing parser."""
     p_db = sub.add_parser("db", help="database maintenance")
     db_sub = p_db.add_subparsers(dest="db_command", required=True)
     p_build = db_sub.add_parser(

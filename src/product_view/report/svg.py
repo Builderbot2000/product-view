@@ -154,7 +154,7 @@ def heatmap_width(n: int) -> int:
 
 
 def heatmap(rows: list[dict], periods: list[str], title: str, subtitle: str) -> str:
-    """Issues by period: one cell per count, green for few reviews to red for many.
+    """Topics by period: one cell per count, green for few reviews to red for many.
 
     rows: [{"name", "values" (oldest first)}]. One colour scale for the
     whole grid, so rows compare; the outlined last column is this period.
@@ -201,65 +201,3 @@ def heatmap(rows: list[dict], periods: list[str], title: str, subtitle: str) -> 
 STAR_COLOURS = {1: TONE["worse"][0], 2: "#DB7B4F", 3: NEUTRAL, 4: "#6DB07F",
                 5: TONE["better"][0]}
 DOT, DOT_GAP, DOTS_PER_ROW = 11, 4, 30
-
-
-def dots(scores: list[int]) -> str:
-    """A dot per reviewer, lowest stars first, wrapped in rows."""
-    step = DOT + DOT_GAP
-    out = []
-    for k, s in enumerate(sorted(scores)):
-        cx = (k % DOTS_PER_ROW) * step + DOT / 2 + 1
-        cy = (k // DOTS_PER_ROW) * step + DOT / 2 + 1
-        out.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{DOT / 2}" '
-                   f'fill="{STAR_COLOURS.get(s, NEUTRAL)}"/>')
-    rows = -(-len(scores) // DOTS_PER_ROW)
-    return _svg(dots_width(len(scores)), rows * step + 2, "".join(out))
-
-
-def dots_width(n: int) -> int:
-    return min(n, DOTS_PER_ROW) * (DOT + DOT_GAP) + 2
-
-
-# Categorical, checked with the dataviz validator (light): blue, aqua,
-# violet, then grey for every other version.
-VERSION_COLOURS = ["#2A78D6", "#1BAF7A", "#4A3AA7"]
-
-
-def version_width() -> int:
-    return 270 + 320 + 50
-
-
-def version_bars(rows: list[dict], versions: list[str], title: str, subtitle: str) -> str:
-    """Each issue's reviews this period, split by app version.
-
-    rows: [{"name", "counts": {version: n}}]; `versions` are the named ones,
-    newest first, and anything else is "other". Counts sit in wide segments.
-    """
-    label_w, bar_w, row_h, top = 270, 320, 28, 66
-    w, h = version_width(), top + row_h * len(rows) + 10
-    colours = dict(zip(versions, VERSION_COLOURS))
-    peak = max([sum(r["counts"].values()) for r in rows] + [1])
-    scale = bar_w / peak
-    out = [_text(0, 18, title, 15, INK, weight="600"), _text(0, 38, subtitle, 12)]
-    x = label_w
-    for v in versions + ["other"]:
-        label = f"v{v}" if v != "other" else "other / unknown"
-        out.append(f'<rect x="{x:.1f}" y="{49}" width="12" height="10" rx="2" '
-                   f'fill="{colours.get(v, NEUTRAL)}"/>' + _text(x + 17, 58, label, 11))
-        x += 17 + 6.5 * len(label) + 14
-    for k, r in enumerate(rows):
-        y = top + k * row_h
-        out.append(_text(label_w - 10, y + 15, _clip(r["name"]), 11, INK, "end"))
-        other = sum(n for v, n in r["counts"].items() if v not in colours)
-        x = label_w
-        for v, n in [(v, r["counts"].get(v, 0)) for v in versions] + [("other", other)]:
-            if not n:
-                continue
-            sw = n * scale
-            out.append(f'<rect x="{x:.1f}" y="{y + 3}" width="{max(sw - 2, 1):.1f}" '
-                       f'height="18" rx="2" fill="{colours.get(v, NEUTRAL)}"/>')
-            if sw >= 18:
-                out.append(_text(x + sw / 2 - 1, y + 16, n, 10, "#FFFFFF", "middle", "600"))
-            x += sw
-        out.append(_text(x + 6, y + 16, sum(r["counts"].values()), 11, MUTED))
-    return _svg(w, h, "".join(out))

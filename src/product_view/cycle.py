@@ -19,14 +19,22 @@ cycle never leaves half a report.
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 import socket
+import sqlite3
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+from . import matrix as mx
+from .ingest.commands import add_fetch_options, cmd_fetch
+from .matching.run import run_match
+from .matching.store import now, topics_db
+from .prepare import cmd_db_build, cmd_translate
+from .report import build as report
+from .store import Store
 
 log = logging.getLogger("cycle")
 
@@ -81,10 +89,6 @@ class Lock:
 
 
 def _record(db_path: Path, cycle_id: str, **fields) -> None:
-    import sqlite3
-
-    from .topics.store import now
-
     conn = sqlite3.connect(db_path)
     try:
         conn.executescript(CYCLES)
@@ -103,8 +107,6 @@ def _record(db_path: Path, cycle_id: str, **fields) -> None:
 
 
 def _review_count(args: argparse.Namespace) -> int:
-    from .store import Store
-
     path = Path(args.data_dir) / "reviews.db"
     if not path.exists():
         return 0
@@ -113,22 +115,16 @@ def _review_count(args: argparse.Namespace) -> int:
 
 
 def cmd_cycle(args: argparse.Namespace) -> int:
-    from . import render
-    from .cli import cmd_fetch
-    from .commands import cmd_db_build, cmd_translate
-    from .topics import load_matrix, run_match, topic_db
-    from .topics.store import now
-
     data = Path(args.data_dir)
     data.mkdir(parents=True, exist_ok=True)
     cycle_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    db = topic_db(args)
+    db = topics_db(args.data_dir)
     t0 = time.time()
     step = "lock"
     try:
         with Lock(data / LOCK):
             _record(db, cycle_id)
-            matrix = load_matrix(args)     # a broken matrix fails before any fetching
+            matrix = mx.load_for(args)     # a broken matrix fails before any fetching
             if matrix is None:
                 raise RuntimeError("the matrix file has problems (listed above)")
             before = _review_count(args)
@@ -158,16 +154,16 @@ def cmd_cycle(args: argparse.Namespace) -> int:
             step = "report"
             _record(db, cycle_id, step=step)
             print("\n== report", flush=True)
-            built = render._team_pages(args)
+            built = report.build(args)
             if isinstance(built, int):
                 raise RuntimeError(f"report exited with status {built}")
-            render.write(built, Path(args.out))
+            report.write(built, Path(args.out))
             published = 0
             if args.publish and args.space:
                 step = "publish"
                 _record(db, cycle_id, step=step)
                 print("\n== publish", flush=True)
-                if rc := render.publish(args, built):
+                if rc := report.publish(args, built):
                     raise RuntimeError(f"publish exited with status {rc}")
                 published = len(built)
             where = (f"{published} pages published to {args.space}" if published
@@ -194,16 +190,7 @@ def cmd_cycle(args: argparse.Namespace) -> int:
     return 0
 
 
-class JsonFormatter(logging.Formatter):
-    """One JSON object per line, for log collectors (PV_LOG_JSON=1)."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        return json.dumps({"time": datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
-                           "level": record.levelname, "logger": record.name,
-                           "message": record.getMessage()}, ensure_ascii=False)
-
-
-def add_parser(sub, common, add_fetch_options) -> None:
+def add_parser(sub, common) -> None:
     p = sub.add_parser("cycle", help="one full cycle: fetch, build, match, report, publish")
     common(p)
     add_fetch_options(p)
@@ -211,7 +198,7 @@ def add_parser(sub, common, add_fetch_options) -> None:
                    help="top up the archive from the Play Store first (default: on)")
     p.add_argument("--publish", action=argparse.BooleanOptionalAction, default=True,
                    help="publish to Confluence when confluence.space is set (default: on)")
-    p.add_argument("--matrix", help="matrix file")
+    mx.add_option(p)
     p.add_argument("--min-chars", type=int)
     p.add_argument("--out", default="out/report", help="output folder (default: out/report)")
     p.add_argument("--space", help="Confluence space key")

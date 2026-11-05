@@ -79,11 +79,6 @@ def anchor(name: str) -> str:
     return macro("anchor", {"": name})
 
 
-def anchor_link(name: str, text: str) -> str:
-    return (f'<ac:link ac:anchor="{esc(name)}">'
-            f"<ac:plain-text-link-body>{cdata(text)}</ac:plain-text-link-body></ac:link>")
-
-
 def page_link(title: str, text: str) -> str:
     return (f'<ac:link><ri:page ri:content-title="{esc(title)}" />'
             f"<ac:plain-text-link-body>{cdata(text)}</ac:plain-text-link-body></ac:link>")

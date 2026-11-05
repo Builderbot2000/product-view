@@ -30,4 +30,4 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"product_view.topics" = ["acceptance/*"]
+"product_view.matching" = ["acceptance/*"]

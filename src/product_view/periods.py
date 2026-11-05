@@ -1,16 +1,14 @@
-"""Periods, counts and quotes: what every report page is made of.
+"""Reporting periods, and the change test that reads a count as up, down or new.
 
 The report is a periodic overview (report-design.md D15): it counts what was
-said in the reporting period, against the periods before it. A row on a page
-(`Issue`, which the topic pages fill per topic) holds a `Series` of distinct
-reviews per period (D10), this period's quotes and app versions. The change
-test (`Series.change`) decides what reads as up, down or new.
+said in the reporting period, against the equal periods before it. A `Series`
+holds the distinct reviews per period (D10); `Series.change` tests this
+period's count against "usual", the mean of the baseline periods.
 """
 
 from __future__ import annotations
 
 import math
-from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -19,7 +17,11 @@ SIGNIFICANCE = 0.05       # Poisson tail probability that counts as a change
 MIN_CHANGE = 3            # fewer reviews than this never count as a change
 
 
-# --- periods and change -----------------------------------------------------
+def periods_shown(baseline: int) -> int:
+    """Periods a report shows: its trend, and the baseline behind "usual".
+    Matching covers the same window."""
+    return max(SPARK_PERIODS, baseline + 1)
+
 
 @dataclass(frozen=True)
 class Period:
@@ -38,7 +40,7 @@ class Period:
 
     @property
     def n_buckets(self) -> int:
-        return max(SPARK_PERIODS, self.baseline + 1)
+        return periods_shown(self.baseline)
 
     def bucket(self, created: datetime) -> int | None:
         if created >= self.end:
@@ -99,7 +101,7 @@ class Series:
         """new | up | down | steady | quiet, tested against a Poisson baseline.
 
         Counts per period are small (a 28-day period holds ~70 negative
-        reviews across ~25 issues), so a ratio alone would flag 1 -> 3 as
+        reviews across ~25 topics), so a ratio alone would flag 1 -> 3 as
         "x3". The test asks whether this period's count is surprising given
         the baseline rate, and ignores anything under MIN_CHANGE reviews.
         """
@@ -117,68 +119,3 @@ class Series:
     def spark(self) -> list[int]:
         """The last SPARK_PERIODS counts, oldest first."""
         return self.counts[:SPARK_PERIODS][::-1]
-
-
-# --- issues -----------------------------------------------------------------
-
-@dataclass
-class Quote:
-    text: str
-    score: int
-    thumbs: int
-    created: datetime
-    version: str | None
-    rank: int = 0                 # lower shows first: how surely the quote fits its topic
-    full: str = ""                # the whole review, when the quote is a part of it
-
-
-@dataclass
-class Issue:
-    label: str
-    kind: str                     # issue | mood (general sentiment, no single thing to fix)
-    polarity: str
-    areas: list[str]
-    series: Series
-    typical: str = ""             # the closest-matching point of all time
-    all_time: set[str] = field(default_factory=set)
-    quotes_now: dict[str, Quote] = field(default_factory=dict)
-    versions_now: Counter = field(default_factory=Counter)
-
-    @property
-    def now(self) -> int:
-        return self.series.now
-
-    @property
-    def usual(self) -> float:
-        return self.series.usual
-
-    @property
-    def change(self) -> str:
-        return self.series.change
-
-    @property
-    def quote(self) -> str:
-        """The standing "in users' words": the point that fits the issue best."""
-        return " ".join(self.typical.split())
-
-    def recent_quotes(self, n: int = 3) -> list[Quote]:
-        """This period's quotes: surest fit first (`rank`), then most thumbs-up, then newest."""
-        return sorted(self.quotes_now.values(),
-                      key=lambda q: (q.rank, -q.thumbs, -q.created.timestamp()))[:n]
-
-
-# --- orderings (D12) --------------------------------------------------------
-
-CHANGE_ORDER = {"new": 0, "up": 1, "down": 2, "steady": 3, "quiet": 4}
-
-
-def by_volume(issues: list[Issue]) -> list[Issue]:
-    """This period's count, then the usual level."""
-    return sorted(issues, key=lambda i: (-i.now, -i.usual, i.label))
-
-
-def by_change(issues: list[Issue]) -> list[Issue]:
-    """New, then up (largest excess first), then down; steady issues dropped."""
-    moved = [i for i in issues if i.change in ("new", "up", "down")]
-    return sorted(moved, key=lambda i: (CHANGE_ORDER[i.change], -(i.now - i.usual)
-                                        if i.change != "down" else i.now - i.usual))

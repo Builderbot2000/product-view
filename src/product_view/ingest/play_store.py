@@ -19,7 +19,7 @@ from typing import Callable, Iterator
 from google_play_scraper import Sort, app, reviews
 from google_play_scraper.features.reviews import _ContinuationToken
 
-from ..models import Review
+from .models import Review
 
 log = logging.getLogger(__name__)
 

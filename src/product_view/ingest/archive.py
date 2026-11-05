@@ -10,7 +10,6 @@ SQLite replaces this later (see project.md); nothing here assumes it won't.
 
 from __future__ import annotations
 
-import csv
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -106,18 +105,6 @@ class ReviewArchive:
                 fh.flush()
                 yield review
 
-    def export_csv(self, out_path: Path) -> int:
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        rows = 0
-        # newline="" is required on Windows or csv writes \r\r\n.
-        with out_path.open("w", encoding="utf-8-sig", newline="") as fh:
-            writer = csv.DictWriter(fh, fieldnames=CSV_COLUMNS, extrasaction="ignore")
-            writer.writeheader()
-            for row in self.read():
-                writer.writerow(row)
-                rows += 1
-        return rows
-
     # --- resume state ------------------------------------------------------
 
     def load_state(self) -> dict:
@@ -137,6 +124,3 @@ class ReviewArchive:
         tmp = self.state_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         tmp.replace(self.state_path)  # atomic on both POSIX and Windows
-
-    def clear_state(self) -> None:
-        self.state_path.unlink(missing_ok=True)

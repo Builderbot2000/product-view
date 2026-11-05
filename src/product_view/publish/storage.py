@@ -55,10 +55,6 @@ def convert(html: str, base_dir: Path | None = None) -> StoragePage:
     return StoragePage(body="".join(parser.out).strip(), attachments=parser.attachments)
 
 
-def convert_file(path: Path) -> StoragePage:
-    return convert(path.read_text(encoding="utf-8"), base_dir=path.parent)
-
-
 def _attrs(attrs: list[tuple[str, str | None]]) -> str:
     parts = []
     for name, value in attrs:
