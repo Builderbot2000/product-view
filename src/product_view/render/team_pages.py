@@ -167,7 +167,9 @@ def _topic_detail(r: TopicReport, tid: str) -> str:
         whole = [replace(q, text=q.full or q.text) for q in everyone]
         # Only when it adds something: reviews not quoted, or quotes cut from longer reviews.
         if len(everyone) > len(quotes) or any(q.full and q.full != q.text for q in quotes):
-            said += b.expand(f"All {_n(i.now, 'review')} in full, newest first",
+            label = ("The whole review" if len(everyone) == 1
+                     else f"All {_n(i.now, 'review')} in full, newest first")
+            said += b.expand(label,
                              "<ul>" + "".join(f"<li>{_quote(q, 4000)}</li>" for q in whole)
                              + "</ul>")
     else:
