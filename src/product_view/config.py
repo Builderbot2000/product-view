@@ -40,28 +40,12 @@ DEFAULTS: dict[str, Any] = {
         "sleep_seconds": 1.0,
     },
     "corpus": {
-        # Shared by translate, the issue stage and the report: a review
-        # shorter than this is never translated, so it must never be grouped either.
+        # Shared by translate, matching and the report: a review shorter
+        # than this is never translated, so it must never be matched either.
         "min_chars": 20,
     },
-    # The issue stage (issues/pipeline.py; llm-trials.md "Viability test").
-    "issues": {
-        "window_months": 12,     # reviews this recent are distilled and grouped
-        "sides": ["complaint", "praise"],
-        "min_cluster_size": 4,   # HDBSCAN on the uncovered points
-        "min_cluster_share": 0.0,  # min size at least this share of the points clustered; 0: off
-        "threshold": 0.75,       # a score at or above this is a match
-        "loops": 1,              # rounds of minting from leftovers per run
-        "batch": 15,             # points per scoring call
-        "compact_scores": False,  # scores as a bare list of letters (fewer output tokens)
-        "nearest": 0,            # score a point only against its N nearest concepts; 0: all
-        "mint_sample": 0,        # form and select new issues on at most this many points; 0: all
-        "join": 0.7,             # definition similarity at which a join with a live issue is checked
-        "overlap_cost": 1.0,     # selection: cost of each repeated match
-        "concept_cost": 2.0,     # selection: cost of each concept kept
-    },
-    # The language model behind the issue stage (issues/llm.py). Keys for an
-    # API provider come from the environment (OPENAI_API_KEY), never from here.
+    # The language model behind matching (llm.py). Keys for an API provider
+    # come from the environment (PV_LLM_API_KEY, OPENAI_API_KEY), never from here.
     "llm": {
         "provider": "ollama",    # ollama (local) | openai
         "models": {"fast": "qwen3.5:9b", "strong": "qwen3.5:9b"},
@@ -79,7 +63,7 @@ DEFAULTS: dict[str, Any] = {
         "prices": {},            # model -> [input, output] USD per 1M tokens
         "budget_usd": None,      # stop before spending past this; None: no limit
     },
-    # Embeddings for topic matching (topics/embed.py). The model is fixed by the
+    # Embeddings for topic matching (matching/embed.py). The model is fixed by the
     # method; this only says where it runs.
     "embed": {
         "backend": "local",      # local (in this process, CPU) | ollama (the same model, served)
@@ -91,7 +75,6 @@ DEFAULTS: dict[str, Any] = {
     "report": {
         "period_days": 28,
         "baseline_periods": 6,
-        "curation": "curation.yaml",
         "app_name": None,    # in page titles; None: the app id
         "overview": None,    # the overview page's title; None: "Product View @ <app_name>"
     },
@@ -115,10 +98,8 @@ FLAG_KEYS: dict[str, str] = {
     "page_size": "fetch.page_size",
     "sleep": "fetch.sleep_seconds",
     "min_chars": "corpus.min_chars",
-    "window_months": "issues.window_months",
     "period_days": "report.period_days",
     "baseline_periods": "report.baseline_periods",
-    "curation": "report.curation",
     "app_name": "report.app_name",
     "space": "confluence.space",
     "title": "confluence.title",
@@ -180,7 +161,7 @@ def apply(args: argparse.Namespace, cfg: dict[str, Any]) -> None:
     """Fill every flag left unset on the command line from the config.
 
     Sets attributes a subcommand's parser never declared too, which is what
-    lets `pv run` hand one namespace to every stage in turn.
+    lets `pv cycle` hand one namespace to every stage in turn.
     """
     for dest, key in FLAG_KEYS.items():
         if getattr(args, dest, None) is None:

@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..issues.llm import LLM, arr, obj
+from ..llm import LLM, arr, obj
 from ..matrix import Topic
 
 INSTRUCTION = ("Given a sentence from a mobile banking app review, identify the app feature "

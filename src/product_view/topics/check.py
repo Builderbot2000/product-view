@@ -124,7 +124,7 @@ def _detail(window: str, got: dict, want: dict, text: dict) -> None:
 
 def cmd_check(args: argparse.Namespace) -> int:
     from ..commands import open_llm
-    from ..issues.llm import LLMError
+    from ..llm import LLMError
     from . import match_reviews, open_embedder
     from .embed import EmbedError
 

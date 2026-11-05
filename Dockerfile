@@ -36,8 +36,7 @@ ENV PYTHONUNBUFFERED=1 \
     HF_HOME=/cache/huggingface \
     # Baked images never reach for the network for weights ("" leaves it off).
     HF_HUB_OFFLINE=${BAKE_MODELS:+1} \
-    HOME=/tmp \
-    NUMBA_CACHE_DIR=/tmp/numba
+    HOME=/tmp
 
 WORKDIR /app
 

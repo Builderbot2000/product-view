@@ -148,7 +148,7 @@ class OpenAIModel:
     cached in trials/runs/openai-cache.db, thread-safe. Reads OPENAI_API_KEY."""
 
     def __init__(self, model: str, effort: str = "none", budget: float = 5.0):
-        from product_view.issues.llm import LLM, LLMConfig
+        from product_view.llm import LLM, LLMConfig
 
         self.model = model
         self.llm = LLM(LLMConfig(provider="openai", fast=model, strong=model, temperature=None, seed=None,

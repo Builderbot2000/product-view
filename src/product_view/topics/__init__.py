@@ -148,7 +148,7 @@ def _date(text: str | None) -> datetime | None:
 
 
 def cmd_match(args: argparse.Namespace) -> int:
-    from ..issues.llm import LLMError
+    from ..llm import LLMError
     from .embed import EmbedError
 
     matrix = load_matrix(args)

@@ -9,9 +9,9 @@ app:
   country: ca
 
 # Holds raw/ and meta/ (the source archive, never deleted), export/ (CSV),
-# reviews.db (rebuilt clean on every `pv run` / `pv db build`), cache.db
-# (translations and model answers, kept because they cost time to recompute)
-# and issues.db (the issue codebook, kept: issues keep their identity across runs).
+# reviews.db (rebuilt clean on every `pv db build` / `pv cycle`), cache.db
+# (translations, model answers and embeddings, kept because they cost time to
+# recompute) and topics.db (every matching run and cycle, kept).
 data_dir: data
 
 fetch:
@@ -22,36 +22,17 @@ fetch:
   sleep_seconds: 1.0       # between pages; be polite
 
 corpus:
-  min_chars: 20            # shorter reviews are never translated or grouped
+  min_chars: 20            # shorter reviews are never translated or matched
 
-# `pv issues`: what reviews say, grouped into issues kept in data/issues.db.
-# Method and its validation: llm-trials.md ("Viability test").
-issues:
-  window_months: 4         # reviews this recent are distilled and grouped (demo standard, report-design D17; 12 for the full layout)
-  sides: [complaint]       # praise prompts are not validated; add praise back once they are
-  min_cluster_size: 4      # HDBSCAN on the points no issue covers yet
-  threshold: 0.75          # a score at or above this counts as a match
-  loops: 1                 # rounds of forming new issues per run
-  batch: 15                # points per scoring call (30 failed validation: precision -8 points)
-  compact_scores: false    # scores as a bare list of letters (failed validation: precision -10 points)
-  nearest: 0               # score a point only against its N nearest issues; 0: all (10: recall -5 points, not validated)
-  # Form and select new issues on a random sample of at most this many points, then
-  # score only the kept ones on the rest: keeps the cost linear in the corpus. Has
-  # no effect while a side has fewer points (12 months: about 2,600 complaints).
-  mint_sample: 3000
-  join: 0.7                # definition similarity at which a join with an existing issue is checked
-  overlap_cost: 1.0        # selection: cost of each repeated match
-  concept_cost: 2.0        # selection: cost of each issue kept
-
-# The language model behind `pv match` and `pv issues`. API keys are NOT here:
+# The language model behind `pv match`. API keys are NOT here:
 # an openai provider reads PV_LLM_API_KEY (else OPENAI_API_KEY) from the
 # environment or .env. PV_LLM_BASE_URL overrides base_url, and Ollama's default
 # address follows OLLAMA_HOST.
 llm:
   provider: ollama         # ollama (local) | openai (OpenAI, or any compatible server)
   models:
-    fast: qwen3.5:9b       # distill, score, breadth, area: most of the calls
-    strong: qwen3.5:9b     # naming issues
+    fast: qwen3.5:9b       # every matching call
+    strong: qwen3.5:9b     # unused by matching
   max_workers: 1           # parallel calls; keep 1 for a local GPU
   temperature: 0.0         # null: leave it out (some API models only accept the default)
   seed: 0
@@ -72,7 +53,6 @@ llm:
   #     gpt-5.4-nano: [0.20, 1.25]
   #     gpt-5.4-mini: [0.75, 4.50]
   #   budget_usd: 20                     # stop before spending past this; the cache keeps progress
-  # `pv issues --estimate` prints the calls, tokens and cost of a run before it starts.
 
 # Where `pv match` embeds reviews. The model is fixed by the matching method;
 # only where it runs is configurable.
@@ -81,11 +61,10 @@ embed:
   base_url: null           # ollama: null follows OLLAMA_HOST, else 127.0.0.1:11434
 
 # `pv report`: a periodic overview. Negative reviews run at ~55-80 a month,
-# so a period much shorter than 4 weeks leaves most issues at 0-3 reviews.
+# so a period much shorter than 4 weeks leaves most topics at 0-3 reviews.
 report:
   period_days: 28          # the reporting period, ending on the newest review's day
   baseline_periods: 3      # "usual" = mean of this many equal periods before it (demo standard D17; 6 with a 12-month window)
-  curation: curation.yaml  # product areas, for `pv issues`
   app_name: RBC Mobile     # overview title: "Product View @ <app_name>"; null: the app id
   overview: null           # the overview page's title; null: "Product View @ <app_name>"
 

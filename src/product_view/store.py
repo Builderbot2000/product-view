@@ -3,14 +3,14 @@
 Two files here, split by what they cost to recreate:
 
 - `reviews.db` -- reviews and listing snapshots. Rebuilt clean from the JSONL
-  archive on every `pv run` / `pv db build`.
-- `cache.db` -- translations (keyed by review_id), plus the model answers the
-  issue stage caches there (issues/llm.py). Model output that costs real time
-  to recompute, so it survives the rebuild. It is ATTACHed as schema `cache`;
+  archive on every `pv db build` (and so every `pv cycle`).
+- `cache.db` -- translations (keyed by review_id), plus the model answers and
+  embeddings matching caches there (llm.py, matching/embed.py). Model output
+  that costs real time to recompute, so it survives the rebuild. It is ATTACHed as schema `cache`;
   SQLite resolves unqualified table names across attached databases, so
   queries join the two as if they were one.
 
-The issue codebook is a third file, issues.db (issues/codebook.py), kept
+Matching runs go to a third file, topics.db (matching/store.py), kept
 across runs. JSONL stays the landing zone and is never touched here, so
 deleting reviews.db or cache.db is never data loss.
 """

@@ -1,6 +1,6 @@
 """One door to the language model, whichever provider is behind it.
 
-Every step of the issue stage calls `LLM.chat(system, user, schema, tier)`, or
+Matching calls `LLM.chat(system, user, schema, tier)`, or
 `LLM.run([Req, ...])` for many calls at once, and gets back dicts that match
 `schema`. Which model answers is configuration (`llm:` in config.yaml), so
 moving from the local model to an API model is a config change, not a code
@@ -23,8 +23,8 @@ with the schema in the prompt, for the rest of the run. JSON mode does not
 enforce the schema, so every answer is checked against it and asked for once
 more if it does not fit.
 
-Two tiers, as in LLooM: `fast` for the high-volume calls (distill, score,
-breadth, area) and `strong` for writing concepts (synthesize).
+Two tiers: `fast` for the high-volume calls and `strong` for any that need a
+larger model. Matching uses only `fast`.
 
 Every answer is cached in cache.db by its full request (model, prompts,
 schema), so an interrupted run resumes where it stopped and a repeated run is

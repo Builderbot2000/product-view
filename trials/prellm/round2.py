@@ -235,7 +235,7 @@ def vague_neutral(w: H.Window) -> np.ndarray:
 
 @lru_cache(maxsize=1)
 def _llm():
-    from product_view.issues.llm import LLM, LLMConfig
+    from product_view.llm import LLM, LLMConfig
     return LLM(LLMConfig(base_url=OLLAMA), CACHE / "llm-calls.db")
 
 
@@ -243,7 +243,7 @@ def review_clusters(w: H.Window, labels: np.ndarray, shown: int, how: str = "two
                     spread: bool = False) -> dict[int, str]:
     """One call per cluster on its `shown` members closest to the centre, or with `spread`
     on `shown` members evenly spaced across the closeness ranking (the second look)."""
-    from product_view.issues.llm import Req, enum, obj
+    from product_view.llm import Req, enum, obj
     prompt, answers = {"breadth": (REVIEW_BREADTH, ("specific", "broad", "general")),
                        "owner": (REVIEW_OWNER, ("specific", "broad", "general")),
                        "owner2": (REVIEW_OWNER2, ("specific", "broad", "general")),
@@ -280,7 +280,7 @@ Examples from another domain:
 def standalone_check(w: H.Window, labels: np.ndarray, ids: list, shown: int, how: str) -> dict:
     """S (round 12; sentence specificity in context, Li et al. 2016): one call per kept cluster
     on its members spread across the closeness ranking ("spread") or closest to the centre."""
-    from product_view.issues.llm import Req, enum, obj
+    from product_view.llm import Req, enum, obj
     cents = H.centres(w, labels)
     reqs = []
     for l in ids:
@@ -593,7 +593,7 @@ def merge_clusters(w: H.Window, labels: np.ndarray, k: int, shown: int) -> tuple
     """M (reduce after over-clustering; Janssens et al. 2025, LLM-assisted topic merging):
     each kept cluster's k nearest kept clusters by centre are candidate pairs; one call per
     pair on the members closest to each centre; pairs judged the same merge (union-find)."""
-    from product_view.issues.llm import Req, enum, obj
+    from product_view.llm import Req, enum, obj
     cents = H.centres(w, labels)
     ids = sorted(cents)
     if len(ids) < 2:
@@ -734,7 +734,7 @@ def attribute_causes(w: H.Window, labels: np.ndarray, how: str, min_sup: int = 3
             if conf[(s, c)] >= min_conf and shared[s] >= min_share:
                 rules.append((s, c))
     else:
-        from product_view.issues.llm import Req, enum, obj
+        from product_view.llm import Req, enum, obj
         cents = H.centres(w, labels)
         reqs = []
         for a, b in cand:

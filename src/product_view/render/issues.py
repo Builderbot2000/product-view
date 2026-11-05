@@ -5,9 +5,6 @@ said in the reporting period, against the periods before it. A row on a page
 (`Issue`, which the topic pages fill per topic) holds a `Series` of distinct
 reviews per period (D10), this period's quotes and app versions. The change
 test (`Series.change`) decides what reads as up, down or new.
-
-`load_taxonomy` reads the product areas in curation.yaml, which `pv issues`
-files its issues under.
 """
 
 from __future__ import annotations
@@ -16,34 +13,10 @@ import math
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from pathlib import Path
 
 SPARK_PERIODS = 12        # bars in every trend sparkline
 SIGNIFICANCE = 0.05       # Poisson tail probability that counts as a change
 MIN_CHANGE = 3            # fewer reviews than this never count as a change
-
-
-# --- taxonomy ---------------------------------------------------------------
-
-@dataclass(frozen=True)
-class Area:
-    id: str
-    name: str
-    description: str = ""
-
-
-@dataclass
-class Taxonomy:
-    areas: dict[str, Area]
-
-
-def load_taxonomy(path: Path) -> Taxonomy:
-    import yaml
-
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
-    data = data or {}
-    return Taxonomy({k: Area(k, v["name"], v.get("description", ""))
-                     for k, v in (data.get("areas") or {}).items()})
 
 
 # --- periods and change -----------------------------------------------------

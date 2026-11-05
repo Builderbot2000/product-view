@@ -3,9 +3,8 @@
 Ingest: `fetch` pulls raw reviews into a JSONL archive, `export` converts that
 to CSV, `info` summarizes what's on disk, `langs` probes locale coverage.
 
-Pipeline: `db build`, `translate`, `issues` (and `issues show`) -- each a
-stage reading and writing through SQLite, so any one re-runs in isolation.
-`run` chains them over a freshly rebuilt reviews.db. Those live in commands.py.
+Pipeline: `db build` and `translate`, each a stage reading and writing
+through SQLite, so any one re-runs in isolation. They live in commands.py.
 
 Topics: `match` matches complaint reviews to the matrix's topics, and `matrix`
 checks the matrix file. They live in topics/.
@@ -278,7 +277,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # The pipeline stages live in commands.py so this file stays parsing and
     # presentation for the ingest stage.
-    commands.add_parsers(sub, common, add_fetch_options)
+    commands.add_parsers(sub, common)
     topics.add_parsers(sub, common)
     render.add_parser(sub, common)
     cycle.add_parser(sub, common, add_fetch_options)
@@ -301,8 +300,8 @@ def add_fetch_options(p: argparse.ArgumentParser) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Review text is full of emoji and accents, and `issues show --detail`
-    # prints it. A default Windows console is cp1252 or gbk and raises
+    # Review text is full of emoji and accents, and commands such as
+    # `pv matrix` print it. A default Windows console is cp1252 or gbk and raises
     # UnicodeEncodeError on the first French quote, so the command dies on
     # output rather than on anything real. Library code already writes files
     # with an explicit encoding; this covers the terminal.
