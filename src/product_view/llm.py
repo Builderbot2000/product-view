@@ -1,8 +1,7 @@
 """One door to the language model, whichever provider is behind it.
 
-Matching calls `LLM.chat(system, user, schema, tier)`, or
-`LLM.run([Req, ...])` for many calls at once, and gets back dicts that match
-`schema`. Which model answers is configuration (`llm:` in config.yaml), so
+Matching calls `LLM.chat(system, user, schema, tier)`, or `LLM.map` to run
+many at once, and gets back dicts that match `schema`. Which model answers is configuration (`llm:` in config.yaml), so
 moving from the local model to an API model is a config change, not a code
 change.
 
@@ -30,14 +29,9 @@ Every answer is cached in cache.db by its full request (model, prompts,
 schema), so an interrupted run resumes where it stopped and a repeated run is
 free. Changing the model or a prompt simply misses the cache.
 
-Cost control:
-- `batch: true` (openai) sends the uncached requests of each `run` through
-  the Batch API: half price, answers within 24 hours. They land in the same
-  cache; a request the batch fails is retried live.
-- Tokens are counted from every reply. With `prices` (USD per 1M tokens, per
-  model) the spend is known, and `budget_usd` stops the run before a call or
-  a wave of batch jobs that would start past it. A stopped run resumes from
-  the cache.
+Tokens are counted from every reply. With `prices` (USD per 1M tokens, per
+model) the spend is known, and `budget_usd` stops the run before a call that
+would start past it. A stopped run resumes from the cache.
 """
 
 from __future__ import annotations
@@ -51,11 +45,10 @@ import threading
 import time
 import urllib.error
 import urllib.request
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, NamedTuple, TypeVar
+from typing import Any, Callable, Iterable, TypeVar
 
 from .config import load_dotenv
 
@@ -69,8 +62,6 @@ ENV_KEY = "PV_LLM_API_KEY"
 ENV_BASE_URL = "PV_LLM_BASE_URL"
 OPENAI_URL = "https://api.openai.com/v1"
 RETRY_STATUS = {408, 409, 429, 500, 502, 503, 504}
-BATCH_DISCOUNT = 0.5           # the Batch API's price, as a share of the live price
-BATCH_DONE = {"completed", "failed", "expired", "cancelled"}
 
 
 class LLMError(RuntimeError):
@@ -88,12 +79,8 @@ def arr(item: dict) -> dict:
     return {"type": "array", "items": item}
 
 
-def enum(*values: str) -> dict:
-    return {"type": "string", "enum": list(values)}
-
-
 def fits(value: Any, schema: dict) -> bool:
-    """Whether a reply matches the subset of JSON schema that obj/arr/enum build."""
+    """Whether a reply matches the subset of JSON schema that obj and arr build."""
     kind = schema.get("type")
     if kind == "object":
         return (isinstance(value, dict)
@@ -113,14 +100,6 @@ def fits(value: Any, schema: dict) -> bool:
     return True
 
 
-class Req(NamedTuple):
-    """One model call, as `LLM.run` takes it."""
-    system: str
-    user: str
-    schema: dict
-    tier: str = "fast"
-
-
 @dataclass
 class LLMConfig:
     provider: str = "ollama"                 # ollama | openai
@@ -133,10 +112,6 @@ class LLMConfig:
     timeout: float = 600.0
     retries: int = 5
     options: dict = field(default_factory=dict)   # extra request fields, passed through as given
-    batch: bool = False                      # openai: uncached requests go through the Batch API
-    batch_requests: int = 10000              # requests per batch job
-    batch_jobs: int = 4                      # batch jobs in flight at once
-    poll_seconds: float = 30.0
     prices: dict = field(default_factory=dict)   # model -> (input, output) USD per 1M tokens
     budget_usd: float | None = None          # stop before spending past this
 
@@ -154,10 +129,6 @@ class LLMConfig:
             timeout=float(section.get("timeout") or 600),
             retries=int(section.get("retries") or 5),
             options=dict(section.get("options") or {}),
-            batch=bool(section.get("batch")),
-            batch_requests=int(section.get("batch_requests") or 10000),
-            batch_jobs=int(section.get("batch_jobs") or 4),
-            poll_seconds=float(section.get("poll_seconds") or 30),
             prices={m: tuple(float(x) for x in v) for m, v in (section.get("prices") or {}).items()},
             budget_usd=section.get("budget_usd"),
         )
@@ -197,15 +168,10 @@ class LLM:
     def model(self, tier: str) -> str:
         return self.cfg.strong if tier == "strong" else self.cfg.fast
 
-    @property
-    def batching(self) -> bool:
-        return self.cfg.batch and self.cfg.provider == "openai"
-
     def describe(self) -> str:
         same = self.cfg.fast == self.cfg.strong
         return (f"{self.cfg.provider}: {self.cfg.fast}"
-                + ("" if same else f" (fast) + {self.cfg.strong} (strong)")
-                + (", batch API" if self.batching else ""))
+                + ("" if same else f" (fast) + {self.cfg.strong} (strong)"))
 
     def check(self) -> None:
         """Fail early, before a long run, when the provider can't be used."""
@@ -218,32 +184,23 @@ class LLM:
 
     # --- spend ---------------------------------------------------------------
 
-    def cost(self, model: str, tokens_in: float, tokens_out: float, batch: bool | None = None) -> float:
-        """USD at the configured prices; batch defaults to whether batching is on."""
+    def cost(self, model: str, tokens_in: float, tokens_out: float) -> float:
+        """USD at the configured prices."""
         p_in, p_out = self.cfg.prices.get(model, (0.0, 0.0))
-        batch = self.batching if batch is None else batch
-        return (tokens_in * p_in + tokens_out * p_out) / 1e6 * (BATCH_DISCOUNT if batch else 1.0)
+        return (tokens_in * p_in + tokens_out * p_out) / 1e6
 
-    def _charge(self, model: str, usage: dict, batch: bool = False) -> None:
+    def _charge(self, model: str, usage: dict) -> None:
         t_in, t_out = int(usage.get("in") or 0), int(usage.get("out") or 0)
         with self._lock:
             self.tokens_in += t_in
             self.tokens_out += t_out
-            self.spent += self.cost(model, t_in, t_out, batch)
+            self.spent += self.cost(model, t_in, t_out)
 
     def _within_budget(self) -> None:
         if self.cfg.budget_usd is not None and self.spent >= self.cfg.budget_usd:
             raise LLMError(f"budget reached: ${self.spent:.2f} spent of llm.budget_usd "
                            f"${self.cfg.budget_usd:.2f}. The answers so far are cached: raise "
                            "the budget and run again to continue")
-
-    def spend(self) -> str:
-        out = f"{self.tokens_in:,} tokens in, {self.tokens_out:,} out"
-        if self.cfg.prices:
-            out += f", ${self.spent:.2f}"
-            if self.cfg.budget_usd is not None:
-                out += f" of a ${self.cfg.budget_usd:.2f} budget"
-        return out
 
     # --- calls ---------------------------------------------------------------
 
@@ -293,13 +250,6 @@ class LLM:
     def complete(self, user: str, tier: str = "fast") -> str:
         """A plain-text answer to one user message, cached like chat()."""
         return self.chat("", user, None, tier)["text"]
-
-    def run(self, reqs: list[Req], label: str = "", every: int = 200) -> list[dict]:
-        """Many calls, answers in input order. With batching on, the uncached ones go
-        through the Batch API first, so the calls below are answered from the cache."""
-        if self.batching:
-            self._batch(reqs, label)
-        return self.map(lambda r: self.chat(*r), reqs, label=label, every=every)
 
     def map(self, fn: Callable[[T], R], items: Iterable[T], label: str = "",
             every: int = 50) -> list[R]:
@@ -401,105 +351,6 @@ class LLM:
             log.warning("llm call failed (attempt %d), retrying in %ds", attempt + 1, wait)
             time.sleep(wait)
         raise AssertionError("unreachable")
-
-    # --- Batch API (openai) ----------------------------------------------------
-
-    def _api(self, method: str, path: str, body: bytes | None = None,
-             content_type: str = "application/json") -> bytes:
-        headers = {"Authorization": f"Bearer {self._key}", "Content-Type": content_type}
-        for attempt in range(self.cfg.retries + 1):
-            req = urllib.request.Request(self._base + path, body, headers, method=method)
-            try:
-                with urllib.request.urlopen(req, timeout=self.cfg.timeout) as resp:
-                    return resp.read()
-            except urllib.error.HTTPError as exc:
-                detail = exc.read().decode("utf-8", "replace")[:300]
-                if exc.code not in RETRY_STATUS or attempt == self.cfg.retries:
-                    raise LLMError(f"openai {method} {path}: HTTP {exc.code}: {detail}") from None
-            except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
-                if attempt == self.cfg.retries:
-                    raise LLMError(f"openai {method} {path}: {exc}") from None
-            time.sleep(min(60, 2 ** attempt))
-        raise AssertionError("unreachable")
-
-    def _upload(self, lines: list[dict]) -> str:
-        """A JSONL file of requests, uploaded for the Batch API; returns its file id."""
-        boundary = f"pv{uuid.uuid4().hex}"
-        jsonl = "".join(json.dumps(x, ensure_ascii=False) + "\n" for x in lines).encode()
-        head = (f"--{boundary}\r\n"
-                'Content-Disposition: form-data; name="purpose"\r\n\r\nbatch\r\n'
-                f"--{boundary}\r\n"
-                'Content-Disposition: form-data; name="file"; filename="requests.jsonl"\r\n'
-                "Content-Type: application/jsonl\r\n\r\n").encode()
-        body = head + jsonl + f"\r\n--{boundary}--\r\n".encode()
-        return json.loads(self._api("POST", "/files", body,
-                                    f"multipart/form-data; boundary={boundary}"))["id"]
-
-    def _batch(self, reqs: list[Req], label: str) -> None:
-        """Answer every uncached request through the Batch API, into the cache."""
-        todo: dict[str, tuple[str, dict]] = {}
-        for r in reqs:
-            model = self.model(r.tier)
-            key = self._key_of(model, r.system, r.user, r.schema)
-            if key not in todo and self._cached(key) is None:
-                todo[key] = (model, self._openai_body(model, r.system, r.user, r.schema))
-        if not todo:
-            return
-        lines = [{"custom_id": k, "method": "POST", "url": "/v1/chat/completions", "body": b}
-                 for k, (_, b) in todo.items()]
-        size = self.cfg.batch_requests
-        chunks = [lines[i:i + size] for i in range(0, len(lines), size)]
-        print(f"    {label or 'batch'}: {len(lines)} requests in {len(chunks)} batch job(s)", flush=True)
-        # In waves of batch_jobs, so the budget is checked between them.
-        for w in range(0, len(chunks), self.cfg.batch_jobs):
-            self._within_budget()
-            pending = set()
-            for chunk in chunks[w:w + self.cfg.batch_jobs]:
-                job = json.loads(self._api("POST", "/batches", json.dumps(
-                    {"input_file_id": self._upload(chunk), "endpoint": "/v1/chat/completions",
-                     "completion_window": "24h"}).encode()))
-                pending.add(job["id"])
-            t0 = time.time()
-            while pending:
-                time.sleep(self.cfg.poll_seconds)
-                for jid in sorted(pending):
-                    job = json.loads(self._api("GET", f"/batches/{jid}"))
-                    n = job.get("request_counts") or {}
-                    print(f"    batch {jid}: {job['status']} {n.get('completed', 0)}/{n.get('total', '?')}"
-                          f"  {time.time() - t0:.0f}s", flush=True)
-                    if job["status"] in BATCH_DONE:
-                        pending.discard(jid)
-                        self._collect(job, todo)
-
-    def _collect(self, job: dict, todo: dict[str, tuple[str, dict]]) -> None:
-        """Cache a finished job's answers. A failed request is left out: run() retries it live."""
-        failed = 0
-        if job.get("output_file_id"):
-            raw = self._api("GET", f"/files/{job['output_file_id']}/content").decode("utf-8")
-            for line in raw.splitlines():
-                if not line.strip():
-                    continue
-                row = json.loads(line)
-                key, resp = row["custom_id"], row.get("response") or {}
-                try:
-                    if resp.get("status_code") != 200:
-                        raise KeyError("status_code")
-                    data = resp["body"]
-                    out = json.loads(data["choices"][0]["message"]["content"])
-                except (KeyError, IndexError, TypeError, json.JSONDecodeError):
-                    failed += 1
-                    continue
-                model = todo[key][0]
-                u = data.get("usage") or {}
-                self._charge(model, {"in": u.get("prompt_tokens"), "out": u.get("completion_tokens")},
-                             batch=True)
-                with self._lock:
-                    self.calls += 1
-                self._store(key, model, out)
-        failed += int((job.get("request_counts") or {}).get("failed") or 0)
-        if failed or job["status"] != "completed":
-            log.warning("batch %s %s: %d request(s) failed; they will be retried live",
-                        job["id"], job["status"], failed)
 
     def close(self) -> None:
         self._db.close()

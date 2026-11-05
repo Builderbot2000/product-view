@@ -48,7 +48,6 @@ llm:
   #   max_workers: 16
   #   temperature: null
   #   options: {reasoning_effort: none}  # passed through as given; reasoning is billed as output
-  #   batch: true                        # Batch API: half price, answers within 24 hours
   #   prices:                            # USD per 1M tokens [input, output]; confirm on openai.com
   #     gpt-5.4-nano: [0.20, 1.25]
   #     gpt-5.4-mini: [0.75, 4.50]

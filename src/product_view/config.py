@@ -57,10 +57,6 @@ DEFAULTS: dict[str, Any] = {
         "timeout": 600,
         "retries": 5,
         "options": {},           # extra request fields, passed through as given
-        "batch": False,          # openai: send uncached requests through the Batch API (half price)
-        "batch_requests": 10000,  # requests per batch job
-        "batch_jobs": 4,         # batch jobs in flight at once
-        "poll_seconds": 30,
         "prices": {},            # model -> [input, output] USD per 1M tokens
         "budget_usd": None,      # stop before spending past this; None: no limit
     },

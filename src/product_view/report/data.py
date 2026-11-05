@@ -15,12 +15,12 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 from ..matching.store import TopicStore
 from ..matrix import Matrix
-from ..periods import Period, Series
+from ..periods import Period, Series, utc
 from ..store import COMPLAINTS, Store
 
 
@@ -34,11 +34,6 @@ SHORT_QUOTE_WORDS = 5          # fewer words than this: shown only when nothing 
 
 def quote_rank(how: str, text: str) -> int:
     return 2 if len(text.split()) < SHORT_QUOTE_WORDS else QUOTE_RANK.get(how, 1)
-
-
-def _dt(text: str) -> datetime:
-    d = datetime.fromisoformat(text)
-    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
 @dataclass
@@ -134,9 +129,9 @@ def load(store: Store, topic_db: Path, matrix: Matrix, days: int, baseline: int,
         units = ts.units(run["run_id"])
         matches = ts.matches(run["run_id"])
 
-    end = _dt(run["window_end"])
+    end = utc(run["window_end"])
     period = Period(end, days, baseline)
-    short = _dt(run["window_start"]) > end - (period.end - period.start) * period.n_buckets
+    short = utc(run["window_start"]) > end - (period.end - period.start) * period.n_buckets
 
     rows = {r["review_id"]: r for r in store.stream(COMPLAINTS, min_chars=min_chars)
             if r["created_at"]}
@@ -149,7 +144,7 @@ def load(store: Store, topic_db: Path, matrix: Matrix, days: int, baseline: int,
         if counts is None or r is None:    # a topic since removed, or a review since dropped
             continue
         rid = m["review_id"]
-        created = _dt(r["created_at"])
+        created = utc(r["created_at"])
         counts.series.add(created, rid)
         on_topic.add(rid)
         if period.bucket(created) == 0:
@@ -169,7 +164,7 @@ def load(store: Store, topic_db: Path, matrix: Matrix, days: int, baseline: int,
     no_topic_now: list[Quote] = []
     versions: Counter = Counter()
     for rid, r in rows.items():
-        created = _dt(r["created_at"])
+        created = utc(r["created_at"])
         if period.bucket(created) is None:
             continue
         total.add(created, rid)

@@ -129,42 +129,40 @@ def cmd_cycle(args: argparse.Namespace) -> int:
                 raise RuntimeError("the matrix file has problems (listed above)")
             before = _review_count(args)
 
-            def run(name: str, fn) -> None:
+            def begin(name: str) -> None:
                 nonlocal step
                 step = name
                 _record(db, cycle_id, step=name)
                 print(f"\n== {name}", flush=True)
-                if rc := fn(args):
-                    raise RuntimeError(f"{name} exited with status {rc}")
+
+            def ok(rc: int) -> None:
+                if rc:
+                    raise RuntimeError(f"{step} exited with status {rc}")
 
             if args.fetch:
                 args.resume = False        # a top-up, never a backfill
                 args.full = False
-                run("fetch", cmd_fetch)
-            run("db build", cmd_db_build)
-            run("translate", cmd_translate)
+                begin("fetch")
+                ok(cmd_fetch(args))
+            begin("db build")
+            ok(cmd_db_build(args))
+            begin("translate")
+            ok(cmd_translate(args))
             new = _review_count(args) - before
 
-            step = "match"
-            _record(db, cycle_id, step=step)
-            print("\n== match", flush=True)
+            begin("match")
             match_run = run_match(args, matrix)
             _record(db, cycle_id, match_run=match_run)
 
-            step = "report"
-            _record(db, cycle_id, step=step)
-            print("\n== report", flush=True)
+            begin("report")
             built = report.build(args)
-            if isinstance(built, int):
-                raise RuntimeError(f"report exited with status {built}")
+            if isinstance(built, int):     # the exit status, when the pages cannot be built
+                ok(built)
             report.write(built, Path(args.out))
             published = 0
             if args.publish and args.space:
-                step = "publish"
-                _record(db, cycle_id, step=step)
-                print("\n== publish", flush=True)
-                if rc := report.publish(args, built):
-                    raise RuntimeError(f"publish exited with status {rc}")
+                begin("publish")
+                ok(report.publish(args, built))
                 published = len(built)
             where = (f"{published} pages published to {args.space}" if published
                      else f"{len(built)} pages written to {args.out}"

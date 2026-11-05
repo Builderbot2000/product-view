@@ -10,11 +10,17 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 SPARK_PERIODS = 12        # bars in every trend sparkline
 SIGNIFICANCE = 0.05       # Poisson tail probability that counts as a change
 MIN_CHANGE = 3            # fewer reviews than this never count as a change
+
+
+def utc(text: str) -> datetime:
+    """An ISO timestamp from the stores; one without a zone is taken as UTC."""
+    d = datetime.fromisoformat(text)
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
 def periods_shown(baseline: int) -> int:

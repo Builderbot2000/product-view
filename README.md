@@ -176,14 +176,12 @@ llm:
   max_workers: 16
   temperature: null                  # some API models only accept the default
   options: {reasoning_effort: none}  # any extra request fields, passed through as given
-  batch: true                        # Batch API: half price, answers within 24 hours
   prices: {gpt-5.4-nano: [0.20, 1.25], gpt-5.4-mini: [0.75, 4.50]}   # USD per 1M tokens
   budget_usd: 20                     # stop before spending past this
 ```
 
-The OpenAI connector works against the live API (live calls and Batch API
-jobs), but matching is validated only on the local model: run `pv
-check-matching` before using any other. Sending review text to OpenAI also
+The OpenAI connector works against the live API, but matching is validated
+only on the local model: run `pv check-matching` before using any other. Sending review text to OpenAI also
 still needs sign-off (llm-trials.md decision 7).
 
 **Cost.** Token use is counted from every reply, and `budget_usd` stops a run

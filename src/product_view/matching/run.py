@@ -19,7 +19,7 @@ from pathlib import Path
 from .. import config
 from .. import matrix as mx
 from ..llm import LLM, LLMConfig, LLMError
-from ..periods import periods_shown
+from ..periods import periods_shown, utc
 from ..store import COMPLAINTS, Store
 from . import method, units as um
 from .embed import Embedder, EmbedError
@@ -34,11 +34,6 @@ def window(store: Store, period_days: int, periods: int) -> tuple[datetime, date
     last = datetime.fromisoformat(newest)
     end = datetime(last.year, last.month, last.day, tzinfo=timezone.utc) + timedelta(days=1)
     return end - timedelta(days=period_days * periods), end
-
-
-def _dt(text: str) -> datetime:
-    d = datetime.fromisoformat(text)
-    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
 def open_llm(args: argparse.Namespace) -> LLM:
@@ -92,7 +87,7 @@ def run_match(args: argparse.Namespace, matrix: mx.Matrix,
                             periods_shown(report["baseline_periods"]))
         start, end = since or start, until or end
         rows = [r for r in store.stream(COMPLAINTS, min_chars=args.min_chars)
-                if r["created_at"] and start <= _dt(r["created_at"]) < end]
+                if r["created_at"] and start <= utc(r["created_at"]) < end]
         ts.start(run_id, matrix=str(matrix.path), topic_hash=matrix.topic_hash,
                  chat_model=llm.describe(), embed_model=emb.describe(),
                  window_start=start.isoformat(), window_end=end.isoformat(), reviews=len(rows))
@@ -128,7 +123,7 @@ def run_match(args: argparse.Namespace, matrix: mx.Matrix,
 
 
 def _date(text: str | None) -> datetime | None:
-    return _dt(text) if text else None
+    return utc(text) if text else None
 
 
 def cmd_match(args: argparse.Namespace) -> int:
