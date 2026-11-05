@@ -149,9 +149,10 @@ def _tiles(r: TopicReport, issues: list[Issue], mine: Series, caption: str) -> l
     return tiles
 
 
-def _topic_detail(r: TopicReport, tid: str, canvas: Canvas) -> str:
-    """One topic in full: change, counts against usual and the period before,
-    app versions, trend, up to MEMBER_QUOTES quotes, and every review in full."""
+def _topic_detail(r: TopicReport, tid: str) -> str:
+    """One topic's reviews: counts against usual and the period before, app
+    versions, up to MEMBER_QUOTES quotes, and every review in full. The
+    description and trend are in the table above, so not repeated here."""
     i = r.topics[tid]
     versions = ", ".join(f"{v} ({n})" for v, n in i.versions_now.most_common(4))
     facts = (f"{i.now} this period · {i.series.counts[1]} the period before · "
@@ -164,14 +165,15 @@ def _topic_detail(r: TopicReport, tid: str, canvas: Canvas) -> str:
                 + "".join(f"<li>{_quote(q)}</li>" for q in quotes) + "</ul>")
         everyone = sorted(i.quotes_now.values(), key=lambda q: -q.created.timestamp())
         whole = [replace(q, text=q.full or q.text) for q in everyone]
-        said += b.expand(f"All {_n(i.now, 'review')} in full, newest first",
-                         "<ul>" + "".join(f"<li>{_quote(q, 4000)}</li>" for q in whole) + "</ul>")
+        # Only when it adds something: reviews not quoted, or quotes cut from longer reviews.
+        if len(everyone) > len(quotes) or any(q.full and q.full != q.text for q in quotes):
+            said += b.expand(f"All {_n(i.now, 'review')} in full, newest first",
+                             "<ul>" + "".join(f"<li>{_quote(q, 4000)}</li>" for q in whole)
+                             + "</ul>")
     else:
         said = f"<p>{b.muted('No reviews on this topic this period.')}</p>"
     return (f"<h3>{b.esc(i.label)} {_lozenge(i.change, i.polarity)}</h3>"
-            f"<p>{b.muted(b.esc(r.matrix.topics[tid].description))}</p>"
-            f"<p>{b.muted(b.esc(facts))}</p>"
-            f"<p>{canvas.spark(f'topic-{tid}', i.series, i.polarity)}</p>" + said)
+            f"<p>{b.muted(b.esc(facts))}</p>" + said)
 
 
 def no_topic(r: TopicReport, examples: int = NO_TOPIC_EXAMPLES) -> str:
@@ -229,7 +231,7 @@ def method(r: TopicReport) -> str:
 
 def footer(r: TopicReport) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    text = f"Generated at {stamp} from run {r.run['run_id']}."
+    text = f"Generated at {stamp}."
     if r.matrix.is_sample:
         text += " Teams, people and topics are sample content."
     return f"<p>{b.muted(b.esc(text))}</p>"
@@ -311,9 +313,10 @@ def member_page(r: TopicReport, team: Team, member: Member):
     ids = list(member.topics)
     issues = r.of(ids)
     mine = r.union(ids)
-    names = _and([r.matrix.topics[t].name for t in ids])
+    # Topic names often contain "and", so each is bolded on its own to show where it ends.
+    names = _and([f"<strong>{b.esc(r.matrix.topics[t].name)}</strong>" for t in ids])
     first = (f"Here’s what Play Store reviewers said {span(r)} about "
-             f"<strong>{b.esc(names)}</strong>, the {'topic' if len(ids) == 1 else 'topics'} "
+             f"{names}, the {'topic' if len(ids) == 1 else 'topics'} "
              f"you own. {_n(mine.now, 'negative review')} touched "
              f"{'it' if len(ids) == 1 else 'at least one of them'}, {_against(mine)}, "
              f"out of {r.total.now} across the whole app.")
@@ -324,12 +327,13 @@ def member_page(r: TopicReport, team: Team, member: Member):
     paras.append(b.muted("Each topic’s reviews follow, the clearest first, with every one in "
                          "full under each topic. For the whole team, see ")
                  + b.page_link(team_title(team), team.name) + ".")
-    pairs = period_pairs(r, [("Your topics", b.esc(names)),
+    pairs = period_pairs(r, [("Your topics", "; ".join(b.esc(r.matrix.topics[t].name)
+                                                       for t in ids)),
                               ("Reviews", f"{mine.now} on your topics, {mine.counts[1]} the "
                                           f"period before, usual {_usual(mine.usual)}")])
     order = ordered(r, ids)
     table = "<h2>Your topics at a glance</h2>" + topic_table(r, order, c)
-    details = "<h2>What users said</h2>" + "".join(_topic_detail(r, t, c) for t in order)
+    details = "<h2>What users said</h2>" + "".join(_topic_detail(r, t) for t in order)
     body = b.layout(b.section("single", "".join(f"<p>{x}</p>" for x in paras) + b.details(pairs)
                               + table + details + method(r) + footer(r)))
     return c.done(body)
