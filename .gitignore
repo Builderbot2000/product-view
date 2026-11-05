@@ -3,6 +3,7 @@ data/
 out/
 __pycache__/
 *.pyc
+*.egg-info/
 .env
 trials/confluence/confluence-probe/*/ProbeDashboard/
 trials/runs/
