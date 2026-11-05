@@ -241,7 +241,7 @@ RBC's push to put AI to work inspired this project. Product View is my proposal 
     }
     yy += n * step + teamGap;
   }
-  caption(s, "Teams set the feature list; the tool never invents its own.", M, yy - 0.05, 8.1);
+  caption(s, "An example Ownership Matrix. The teams decide what goes in it.", M, yy - 0.05, 8.1);
   const musts = [
     ["Your features only", "Each owner sees just the features they own"],
     ["Public reviews only", "Only what customers posted on Google Play"],
@@ -257,32 +257,101 @@ RBC's push to put AI to work inspired this project. Product View is my proposal 
   });
   s.addNotes(
 `TALK TRACK (about 1 min)
-Here's what it has to do. It starts from one list: the teams, the people in each team, and the specific app features each person owns. The teams set the list; the tool never invents its own features, so "change password or PIN" means the same thing in every report.
+Here's what it has to do. It starts from one list, the Ownership Matrix: the teams, the people in each team, and the specific app features each person owns. The teams set it; the tool never invents its own features, so "change password or PIN" means the same thing in every report.
 And it has to fit the bank: each owner sees only their own features; it reads only what customers have posted publicly on Google Play; the data stays inside RBC's own cloud, Azure or AWS; every number is a count of real reviews and every quote links back to the review it came from; and it runs by itself every period.`);
 
-  // 5. How it works
+  // 5. At a glance: the whole project on one slide, in native shapes so it can be restyled.
+  // The cloud pieces (formerly their own slide) sit in a strip inside the cloud box, named
+  // generically so the cloud team picks the products (Kevin, 2026-11-04).
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "The proposal" });
-  s.addText("How it works: from app store to inbox", { placeholder: "title" });
-  const steps = [
-    [fa.FaCloudDownloadAlt, "Collect", "Gathers every new Google Play review each period"],
-    [fa.FaTags, "Sort", "AI reads each review and matches it to the features on the list, like “change password or PIN”"],
-    [fa.FaEnvelope, "Share", "Posts a page for each team on our wiki and emails each owner their report"],
+  s.addText("Product View at a glance", { placeholder: "title" });
+  const flowLine = (x1, y1, x2, y2, name) => s.addShape(pres.shapes.LINE, {
+    x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1), flipV: y2 < y1,
+    line: { color: C.accent1, width: 2.25, endArrowType: "triangle" }, objectName: name,
+  });
+  const srcX = M, srcW = 1.6, rowY = 2.1, rowH = 1.85;
+  const bx = 2.55, bw = 7.95, by = 1.4, bh = 4.55;
+  // Source, left
+  card(s, srcX, rowY, srcW, rowH, "Source card");
+  await iconCircle(s, fa.FaGooglePlay, srcX + 0.15, rowY + 0.15, 0.5, "Source");
+  text(s, "Google Play", { x: srcX + 0.15, y: rowY + 0.75, w: srcW - 0.25, h: 0.33, fontSize: 15, bold: true, color: C.text2 });
+  text(s, "Reviews customers post publicly", { x: srcX + 0.15, y: rowY + 1.08, w: srcW - 0.25, h: 0.7, fontSize: 12 });
+  // RBC's cloud boundary, middle
+  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: bx, y: by, w: bw, h: bh, rectRadius: 0.12, fill: { color: C.background1 }, line: { color: C.accent1, width: 1.5, dashType: "dash" }, objectName: "Cloud boundary" });
+  await iconCircle(s, fa.FaCloud, bx + 0.25, by + 0.1, 0.45, "Cloud boundary");
+  text(s, "Inside RBC's cloud (Azure or AWS)", { x: bx + 0.8, y: by + 0.1, w: 4.0, h: 0.45, fontSize: 15, bold: true, color: C.accent1, valign: "middle" });
+  await iconCircle(s, fa.FaCalendarCheck, bx + bw - 2.85, by + 0.12, 0.4, "Schedule", C.accent2, HEX.dk2);
+  text(s, "Runs itself every period", { x: bx + bw - 2.35, y: by + 0.1, w: 2.15, h: 0.45, fontSize: 13, bold: true, color: C.text2, valign: "middle" });
+  const pipe = [
+    [fa.FaCloudDownloadAlt, "Collect", "Picks up the latest Google Play reviews"],
+    [fa.FaTags, "Sort", "AI ties each complaint to a feature"],
+    [fa.FaChartBar, "Count", "Tallies each feature and spots what's rising"],
+    [fa.FaFileAlt, "Write", "Builds the team pages and owner reports"],
   ];
-  const sw = 3.6, gap = (CW - steps.length * sw) / (steps.length - 1);
-  for (let i = 0; i < steps.length; i++) {
-    const [Ic, head, body] = steps[i];
-    const x = M + i * (sw + gap), y = 1.75;
-    card(s, x, y, sw, 3.7, "Step card " + (i + 1));
-    await iconCircle(s, Ic, x + 0.3, y + 0.35, 0.95, "Step " + (i + 1));
-    text(s, "Step " + (i + 1), { x: x + 0.3, y: y + 1.5, w: sw - 0.6, h: 0.3, fontSize: 12, color: C.accent3, bold: true });
-    text(s, head, { x: x + 0.3, y: y + 1.85, w: sw - 0.6, h: 0.45, fontSize: 20, bold: true, color: C.text2 });
-    text(s, body, { x: x + 0.3, y: y + 2.4, w: sw - 0.6, h: 1.2, fontSize: 15 });
-    if (i < steps.length - 1) arrow(s, x + sw + gap / 2 - 0.17, y + 0.65, "Arrow " + (i + 1));
+  const px0 = bx + 0.25, pgap = 0.3, pw = (bw - 0.5 - 3 * pgap) / 4;
+  const colX = (i) => px0 + i * (pw + pgap);
+  for (let i = 0; i < pipe.length; i++) {
+    const [Ic, h, b] = pipe[i];
+    const x = colX(i);
+    card(s, x, rowY, pw, rowH, "Pipeline card " + (i + 1));
+    await iconCircle(s, Ic, x + 0.15, rowY + 0.15, 0.5, "Pipeline " + (i + 1));
+    text(s, String(i + 1), { x: x + pw - 0.45, y: rowY + 0.15, w: 0.3, h: 0.5, fontSize: 14, bold: true, color: C.accent3, align: "right", valign: "middle" });
+    text(s, h, { x: x + 0.15, y: rowY + 0.75, w: pw - 0.25, h: 0.33, fontSize: 15, bold: true, color: C.text2 });
+    text(s, b, { x: x + 0.15, y: rowY + 1.08, w: pw - 0.25, h: 0.72, fontSize: 12 });
+    if (i < pipe.length - 1) flowLine(x + pw + 0.03, rowY + rowH / 2, x + pw + pgap - 0.03, rowY + rowH / 2, "Pipeline arrow " + (i + 1));
   }
-  band(s, "It repeats every period on its own. Nobody has to start it.", 5.8, 0.6, "Repeat band");
+  flowLine(srcX + srcW + 0.03, rowY + rowH / 2, px0 - 0.03, rowY + rowH / 2, "Source arrow");
+  // What the run keeps, under the steps
+  const kY = 4.25, kH = 0.82;
+  const keep = [
+    [fa.FaSitemap, "Ownership Matrix", "Which team and person owns each feature", 0, 1],
+    [fa.FaDatabase, "Review history", "Every past review, so trends can look back 12 periods", 2, 3],
+  ];
+  for (const [Ic, h, b, from, to] of keep) {
+    const x = colX(from), w = colX(to) + pw - x;
+    card(s, x, kY, w, kH, h + " card", C.background2);
+    outline(s, x, kY, w, kH, h);
+    await iconCircle(s, Ic, x + 0.15, kY + 0.16, 0.5, h);
+    text(s, h, { x: x + 0.8, y: kY + 0.08, w: w - 0.95, h: 0.33, fontSize: 14, bold: true, color: C.text2 });
+    text(s, b, { x: x + 0.8, y: kY + 0.4, w: w - 0.95, h: 0.4, fontSize: 11 });
+  }
+  flowLine(colX(1) + pw / 2, kY - 0.03, colX(1) + pw / 2, rowY + rowH + 0.03, "Matrix arrow");
+  flowLine(colX(2) + pw / 2, kY - 0.03, colX(2) + pw / 2, rowY + rowH + 0.03, "History arrow");
+  // The standard cloud pieces it runs on
+  const pieces = [
+    [fa.FaCalendarCheck, "Scheduler"], [fa.FaRobot, "AI service"], [fa.FaDatabase, "Storage"],
+    [fa.FaKey, "Secret store"], [fa.FaPaperPlane, "Mail relay"], [fa.FaHeartbeat, "Monitoring"],
+  ];
+  const cY = 5.32, cH = 0.45, cgap = 0.1, cw = (bw - 0.5 - 5 * cgap) / 6;
+  for (let i = 0; i < pieces.length; i++) {
+    const [Ic, h] = pieces[i];
+    const x = px0 + i * (cw + cgap);
+    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y: cY, w: cw, h: cH, rectRadius: 0.06, fill: { color: C.accent1 }, line: { type: "none" }, objectName: "Cloud piece " + h });
+    s.addImage({ data: await icon(Ic, HEX.lt1), x: x + 0.09, y: cY + 0.125, w: 0.2, h: 0.2, objectName: "Cloud piece icon " + h });
+    text(s, h, { x: x + 0.34, y: cY, w: cw - 0.36, h: cH, fontSize: 10, bold: true, color: C.background1, valign: "middle" });
+  }
+  // Outputs, right
+  const ox = bx + bw + 0.35, ow = W - M - ox, oh = 1.2;
+  const outs = [
+    [fa.FaUsers, "Team page", "Each team's big picture, on our wiki", 1.85],
+    [fa.FaEnvelope, "Personal email", "Just the features they own", 3.2],
+  ];
+  for (const [Ic, h, b, y] of outs) {
+    card(s, ox, y, ow, oh, h + " card", C.accent1);
+    await iconCircle(s, Ic, ox + 0.15, y + 0.15, 0.45, h, C.background1, HEX.accent1);
+    text(s, h, { x: ox + 0.7, y: y + 0.15, w: ow - 0.8, h: 0.45, fontSize: 14, bold: true, color: C.background1, valign: "middle" });
+    text(s, b, { x: ox + 0.15, y: y + 0.65, w: ow - 0.25, h: 0.5, fontSize: 11, color: C.background1 });
+    flowLine(colX(3) + pw + 0.03, y + oh / 2, ox - 0.03, y + oh / 2, h + " arrow");
+  }
+  text(s, "Read by analysts, feature owners, engineering and customer support", { x: ox, y: 4.6, w: ow, h: 0.9, fontSize: 12, color: C.accent3 });
+  band(s, "Every period, customer reviews go in and every feature owner gets a report.", 6.15, 0.55, "Glance band");
   s.addNotes(
-`TALK TRACK (about 1 min)
-Here's the whole thing in three steps. Each period, it gathers every new review from Google Play. Then the AI reads each review and matches it to the features on the list, things as specific as "change password or PIN". A review can match several features, or none, and the ones that match none are still counted, so we can see if the list is missing something. Finally, it posts a page for each team on our internal wiki, Confluence, and emails each owner their own report. And it repeats every period without anyone starting it.`);
+`TALK TRACK (about 1.5 min)
+Here's the whole project on one page. Customers post reviews publicly on Google Play. Every period, Product View runs on its own inside RBC's cloud. First it picks up the latest reviews. Then the AI works out which feature each complaint is about, using the Ownership Matrix, our list of who owns which feature. Next it tallies each feature, compares it with a normal period and checks which app versions the complaints came from, drawing on the review history it keeps. Last, it writes the reports.
+Each team gets a page on our wiki with its big picture, and each owner gets an email with just the features they own. Analysts, feature owners, engineering and support all read them.
+Underneath, it runs on six standard pieces that both of our clouds already offer: a scheduler, an AI service, storage, a secret store for passwords, a mail relay and monitoring. The cloud team picks the product for each one.
+IF ASKED: a review can match several features, or none; the ones that match none are still counted, so we can see if the matrix is missing something.
+IF ASKED: the choice between Azure and AWS is the cloud team's; Product View ships as a standard container, so it moves between them without changes. The AI service can be any approved one inside RBC, including one we already run in-house; review text never goes to an outside service.`);
 
   // 6. How a report is put together
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "The proposal" });
@@ -309,12 +378,12 @@ Here's the whole thing in three steps. Each period, it gathers every new review 
     "The AI only decides which feature a review is about",
     "Every number is a plain count of real reviews",
     "Every quote links back to the review it came from",
-    "The feature list stays the same, so trends mean the same thing from one period to the next",
+    "The Ownership Matrix stays the same, so trends mean the same thing from one period to the next",
   ]), { isTextBox: true, x: tx + 0.4, y: 2.9, w: tw - 0.8, h: 3.4, fontSize: 16, color: C.text1, margin: 0, valign: "top", paraSpaceAfter: 12, objectName: "Trust list" });
   s.addNotes(
 `TALK TRACK (about 1 min)
 Once reviews are sorted, building a report is plain arithmetic. For every feature, every period: count how many customers complained about it in the latest period; compare that with a normal period, so anything rising or new stands out; trace which app versions the complaints came from, so a bad release shows up; and show customers' own words, with the star rating, date and version.
-That's why the numbers can be trusted. The AI has one narrow job, deciding which feature a review is about. Every number is a count of real reviews, and every quote links back to the review it came from, so anyone can check it. And because the feature list stays the same, a trend means the same thing from one period to the next.`);
+That's why the numbers can be trusted. The AI has one narrow job, deciding which feature a review is about. Every number is a count of real reviews, and every quote links back to the review it came from, so anyone can check it. And because the Ownership Matrix stays the same, a trend means the same thing from one period to the next.`);
 
   // 7. What teams receive
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "The proposal" });
@@ -349,142 +418,83 @@ That's why the numbers can be trusted. The AI has one narrow job, deciding which
 Here's what lands with each team: a team page showing where complaints are up against normal, and a personal email per feature, like this one, where sixteen complaints against a normal ten point straight at app version 4.66, with the customers' own words behind the number.
 A working demo is deployed and the Mobile product manager's feedback has been positive. I'll walk through it live right after these slides.`);
 
-  // 8. Running it in RBC's cloud: Azure or AWS
+  // 8. What we need: cards, cloud on one row and people on the other (Kevin, 2026-11-04).
   pres.addSection({ title: "Running it" });
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "Running it" });
-  s.addText("Running it in RBC's cloud: Azure or AWS", { placeholder: "title" });
-  const flow = [
-    [fa.FaMobileAlt, "Google Play", "Public reviews"],
-    [fa.FaCloud, "RBC's cloud", "Azure or AWS"],
-    [fa.FaUsers, "Our teams", "Wiki pages and emails"],
-  ];
-  const fw = 3.4, fgap = (CW - 3 * fw) / 2;
-  for (let i = 0; i < flow.length; i++) {
-    const [Ic, h, b] = flow[i];
-    const x = M + i * (fw + fgap), y = 1.5;
-    card(s, x, y, fw, 1.0, "Flow card " + (i + 1), i === 1 ? C.accent1 : C.background2);
-    await iconCircle(s, Ic, x + 0.22, y + 0.2, 0.6, "Flow " + (i + 1), i === 1 ? C.background1 : C.accent1, i === 1 ? HEX.accent1 : HEX.lt1);
-    text(s, h, { x: x + 1.0, y: y + 0.14, w: fw - 1.15, h: 0.4, fontSize: 17, bold: true, color: i === 1 ? C.background1 : C.text2 });
-    text(s, b, { x: x + 1.0, y: y + 0.52, w: fw - 1.15, h: 0.35, fontSize: 13, color: i === 1 ? C.background1 : C.text1 });
-    if (i < 2) arrow(s, x + fw + fgap / 2 - 0.17, y + 0.33, "Flow arrow " + (i + 1));
-  }
-  const svc = [
-    [fa.FaCalendarCheck, "Runs it on schedule", "Container Apps job", "ECS scheduled task"],
-    [fa.FaRobot, "The AI that sorts reviews", "Microsoft Foundry", "Bedrock"],
-    [fa.FaDatabase, "Stores the reviews", "Files", "EFS"],
-    [fa.FaKey, "Keeps passwords safe", "Key Vault", "Secrets Manager"],
-    [fa.FaPaperPlane, "Sends the emails", "Communication Services", "SES"],
-    [fa.FaHeartbeat, "Hosts and monitors it", "Registry · Monitor", "ECR · CloudWatch"],
-  ];
-  const sw3 = (CW - 2 * 0.3) / 3, sh3 = 1.3;
-  for (let i = 0; i < svc.length; i++) {
-    const [Ic, h, az, aws] = svc[i];
-    const x = M + (i % 3) * (sw3 + 0.3), y = 2.85 + Math.floor(i / 3) * (sh3 + 0.25);
-    card(s, x, y, sw3, sh3, "Service card " + (i + 1));
-    await iconCircle(s, Ic, x + 0.25, y + 0.3, 0.62, "Service " + (i + 1));
-    text(s, h, { x: x + 1.05, y: y + 0.22, w: sw3 - 1.25, h: 0.45, fontSize: 15, bold: true, color: C.text2 });
-    s.addText([
-      { text: "Azure: ", options: { bold: true } }, { text: az, options: { breakLine: true } },
-      { text: "AWS: ", options: { bold: true } }, { text: aws },
-    ], { isTextBox: true, x: x + 1.05, y: y + 0.62, w: sw3 - 1.25, h: 0.6, fontSize: 12, color: C.accent3, margin: 0, valign: "top", objectName: "Service options " + (i + 1) });
-  }
-  band(s, "Everything stays inside RBC's own cloud, whichever we choose. Team pages stay on our existing wiki.", 5.95, 0.6, "Cloud band");
-  s.addNotes(
-`TALK TRACK (about 1 min)
-To run this properly it needs a home at RBC, and it fits either of our clouds, Azure or AWS. Reviews come in from Google Play, each run happens inside RBC's cloud, and the results go out as wiki pages and emails.
-Each cloud has a ready-made service for every piece: a timer that starts each run, the AI that sorts reviews (Microsoft Foundry or Amazon Bedrock, inside our cloud rather than an outside service), storage, a safe for passwords, email, and monitoring.
-Everything stays inside RBC's own cloud, whichever we choose, and the team pages stay on the wiki we already use.
-
-IF ASKED: the choice between Azure and AWS is the cloud team's; Product View ships as a standard container, so it moves between them without changes. Microsoft and Amazon both state prompts and outputs are not used to train their models. The workload is small: one short run each period, over the reviews posted since the last one.`);
-
-  // 9. What we need
-  s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "Running it" });
   s.addText("What we need", { placeholder: "title" });
-  const colW = (CW - 0.4) / 2;
-  card(s, M, 1.55, colW, 4.35, "Cloud card");
-  await iconCircle(s, fa.FaCloud, M + 0.35, 1.8, 0.7, "Cloud");
-  text(s, "In the cloud: Azure or AWS", { x: M + 1.25, y: 1.8, w: colW - 1.5, h: 0.7, fontSize: 20, bold: true, color: C.text2, valign: "middle" });
-  s.addText(bullets([
-    "A cloud allocation for Product View, sized by our cloud team",
-    "Access to AI models through Microsoft Foundry or Amazon Bedrock",
-    "The services on the previous slide",
-    "Permission to send email to staff",
-  ]), { isTextBox: true, x: M + 0.4, y: 2.75, w: colW - 0.8, h: 3.0, fontSize: 16, color: C.text1, margin: 0, valign: "top", paraSpaceAfter: 12, objectName: "Cloud list" });
-  const px = M + colW + 0.4;
-  card(s, px, 1.55, colW, 4.35, "People card");
-  await iconCircle(s, fa.FaUserFriends, px + 0.35, 1.8, 0.7, "People");
-  text(s, "People and approvals", { x: px + 1.25, y: 1.8, w: colW - 1.5, h: 0.7, fontSize: 20, bold: true, color: C.text2, valign: "middle" });
-  const people = [
-    ["The feature list, kept up to date", "Mobile product leadership"],
-    ["An analyst to check the first month's reports", "Mobile analyst team"],
-    ["Sign-off to use cloud AI on public reviews", "Compliance"],
-    ["A space on our wiki", "Technology"],
-  ];
-  people.forEach(([h, o], i) => {
-    const y = 2.75 + i * 0.75;
-    text(s, h, { x: px + 0.4, y, w: colW - 0.8, h: 0.4, fontSize: 15, bold: true, color: C.text1 });
-    text(s, o + " (to confirm)", { x: px + 0.4, y: y + 0.36, w: colW - 0.8, h: 0.3, fontSize: 12, color: C.accent3 });
-  });
-  band(s, "The workload is small: one short run each period, over the reviews posted since the last one.", 6.15, 0.55, "Size band");
+  const needRow = async (label, LabelIc, items, y0, withOwner) => {
+    await iconCircle(s, LabelIc, M, y0, 0.38, label);
+    text(s, label, { x: M + 0.5, y: y0, w: 6, h: 0.38, fontSize: 16, bold: true, color: C.accent1, valign: "middle" });
+    const n = items.length, gapX = 0.2, w = (CW - (n - 1) * gapX) / n, h = 1.62, y = y0 + 0.5;
+    for (let i = 0; i < n; i++) {
+      const [Ic, head, detail, owner] = items[i];
+      const x = M + i * (w + gapX);
+      card(s, x, y, w, h, label + " card " + (i + 1));
+      await iconCircle(s, Ic, x + 0.18, y + 0.18, 0.5, label + " " + (i + 1));
+      text(s, head, { x: x + 0.8, y: y + 0.13, w: w - 0.92, h: 0.6, fontSize: 14, bold: true, color: C.text2, valign: "middle" });
+      text(s, detail, { x: x + 0.18, y: y + 0.82, w: w - 0.3, h: withOwner ? 0.45 : 0.72, fontSize: 12 });
+      if (withOwner) text(s, owner + " (to confirm)", { x: x + 0.18, y: y + 1.3, w: w - 0.3, h: 0.28, fontSize: 11, color: C.accent3 });
+    }
+  };
+  await needRow("In our cloud (Azure or AWS)", fa.FaCloud, [
+    [fa.FaServer, "Hosting", "Room to run the six pieces from the overview"],
+    [fa.FaRobot, "AI service", "An approved AI to sort the reviews"],
+    [fa.FaGooglePlay, "Google Play access", "So it can pick up new reviews each period"],
+    [fa.FaBook, "Wiki connection", "So it can post the team pages"],
+    [fa.FaPaperPlane, "Email", "A way to send email, and the OK to email staff"],
+  ], 1.45, false);
+  await needRow("People and approvals", fa.FaUserFriends, [
+    [fa.FaSitemap, "Ownership Matrix", "Someone to keep it current as teams change", "Mobile product leadership"],
+    [fa.FaSearch, "First-month check", "An analyst to review the first month's reports", "Mobile analyst team"],
+    [fa.FaShieldAlt, "Compliance sign-off", "Approval to use cloud AI on public reviews", "Compliance"],
+    [fa.FaFolderOpen, "A wiki space", "A home for the team pages", "Technology"],
+  ], 3.75, true);
+  band(s, "It's a light load. Each run is short and only reads the reviews posted since the last one.", 6.15, 0.55, "Size band");
   s.addNotes(
 `DRAFT, CONFIRM WITH KEVIN: the people, owners and cloud items are drafted; Kevin sets the final asks.
 
 TALK TRACK (about 1 min)
-Here's what it takes. In the cloud: an allocation sized by our cloud team, access to its AI models, the services on the previous slide, and permission to email staff.
-From people: someone to keep the feature list current, an analyst to check the first month's reports, Compliance sign-off to use cloud AI on public reviews, and a space on our wiki.
-The workload is small: one short run each period, over the reviews posted since the last one.`);
+Here's what it takes. The whole project runs in our cloud, so first it needs room to run, sized by our cloud team. It also needs an approved AI service, access to the app's Google Play reviews, a connection to our wiki, and a way to send email to staff.
+On the people side, we need someone to keep the Ownership Matrix current, an analyst to look over the first month's reports, Compliance to sign off on using cloud AI with public reviews, and a space on our wiki.
+And it's a light load: each run is short and only reads the reviews posted since the last one.
+IF ASKED about Google Play: today it reads the public review pages. As the app's owner, RBC could instead use Google's official Play Console API, which needs Play Console access.`);
 
-  // 10. Next steps and the decision
+  // 9. Next steps and thank you: the roadmap, the decision and the close on one slide (Kevin, 2026-11-04).
   pres.addSection({ title: "Next steps" });
   s = pres.addSlide({ masterName: "PV Title Only", sectionTitle: "Next steps" });
   s.addText("Next steps", { placeholder: "title" });
   const next = [
     ["Approve", "The project and a cloud allocation for a trial"],
     ["Set up in the cloud", "Move the demo onto RBC's Azure or AWS, connected to our wiki and email"],
-    ["Load the feature list", "The teams, the owners and the features each one owns"],
-    ["Trial with the Mobile team", "A few app releases, with an analyst checking the first month"],
+    ["Load the Ownership Matrix", "Who owns which feature, team by team"],
+    ["Trial with the Mobile team", "Run it for a few app releases, with an analyst checking the first month"],
   ];
-  const nw = (CW - 3 * 0.3) / 4, ny = 2.35;
-  s.addShape(pres.shapes.LINE, { x: M + 0.35, y: ny - 0.35, w: CW - 0.7, h: 0, line: { color: C.accent4, width: 2 }, objectName: "Timeline line" });
+  const nw = (CW - 3 * 0.3) / 4, ny = 1.95;
+  s.addShape(pres.shapes.LINE, { x: M + 0.3, y: ny - 0.3, w: CW - 0.6, h: 0, line: { color: C.accent4, width: 2 }, objectName: "Timeline line" });
   next.forEach(([h, b], i) => {
     const x = M + i * (nw + 0.3);
-    s.addShape(pres.shapes.OVAL, { x, y: ny - 0.7, w: 0.7, h: 0.7, fill: { color: C.accent1 }, line: { color: C.background1, width: 3 }, objectName: "Step dot " + (i + 1) });
-    text(s, String(i + 1), { x, y: ny - 0.7, w: 0.7, h: 0.7, fontSize: 20, bold: true, color: C.background1, align: "center", valign: "middle" });
-    card(s, x, ny + 0.3, nw, 2.5, "Next step card " + (i + 1));
-    text(s, h, { x: x + 0.3, y: ny + 0.55, w: nw - 0.6, h: 0.8, fontSize: 18, bold: true, color: C.text2 });
-    text(s, b, { x: x + 0.3, y: ny + 1.35, w: nw - 0.6, h: 1.35, fontSize: 15 });
+    s.addShape(pres.shapes.OVAL, { x, y: ny - 0.6, w: 0.6, h: 0.6, fill: { color: C.accent1 }, line: { color: C.background1, width: 3 }, objectName: "Step dot " + (i + 1) });
+    text(s, String(i + 1), { x, y: ny - 0.6, w: 0.6, h: 0.6, fontSize: 18, bold: true, color: C.background1, align: "center", valign: "middle" });
+    card(s, x, ny + 0.2, nw, 1.75, "Next step card " + (i + 1));
+    text(s, h, { x: x + 0.25, y: ny + 0.35, w: nw - 0.5, h: 0.62, fontSize: 16, bold: true, color: C.text2 });
+    text(s, b, { x: x + 0.25, y: ny + 0.98, w: nw - 0.5, h: 0.9, fontSize: 13 });
   });
-  text(s, "Then, if the trial goes well: more teams.", { x: M, y: 5.4, w: CW, h: 0.35, fontSize: 14, color: C.accent3 });
-  band(s, "Today: approve Product View and a cloud allocation for a trial with the Mobile team.", 6.0, 0.7, "Decision band");
+  text(s, "If the trial goes well, we bring in more teams.", { x: M, y: 4.0, w: CW, h: 0.3, fontSize: 13, color: C.accent3 });
+  band(s, "Today's ask: approval and a cloud allocation to trial Product View with the Mobile team.", 4.45, 0.6, "Decision band");
+  card(s, M, 5.3, CW, 1.4, "Thank you card");
+  text(s, "Thank you", { x: M + 0.35, y: 5.3, w: 3.0, h: 1.4, fontSize: 36, color: C.accent1, valign: "middle" });
+  s.addShape(pres.shapes.LINE, { x: M + 3.3, y: 5.55, w: 0, h: 0.9, line: { color: C.accent2, width: 3 }, objectName: "Thank you rule" });
+  s.addText([
+    { text: "Every customer heard. Every team knows what to fix next.", options: { breakLine: true } },
+    { text: "Up next: a live demo", options: { bold: true, color: C.text2, fontSize: 18 } },
+  ], { isTextBox: true, x: M + 3.6, y: 5.3, w: 6.4, h: 1.4, fontSize: 16, color: C.text1, margin: 0, valign: "middle", paraSpaceAfter: 6, objectName: "Thank you text" });
   s.addNotes(
 `DRAFT, CONFIRM WITH KEVIN: the decision line is drafted.
 
 TALK TRACK (about 1 min)
-Four steps. First, approve the project and a cloud allocation for a trial. Second, set it up on RBC's Azure or AWS, connected to our wiki and email. Third, load the feature list: the teams, the owners and the features each one owns. Fourth, a trial with the Mobile team over a few app releases, with an analyst checking the first month. If the trial goes well, we extend it to more teams.
-So what I'm asking for today: approval for Product View, and a cloud allocation for a trial with the Mobile team.`);
-
-  // 11. Closing
-  s = pres.addSlide({ masterName: "PV Closing", sectionTitle: "Next steps" });
-  s.addText("Every customer heard. Every team knows what to fix next.", { placeholder: "title" });
-  const close = [
-    [fa.FaTags, "Every review sorted", "Matched to the app features our teams own"],
-    [fa.FaEnvelopeOpenText, "Every team informed", "Its own report, in its inbox, every period"],
-    [fa.FaShieldAlt, "Inside RBC", "Runs on its own in our cloud, with numbers anyone can check"],
-  ];
-  const cw3 = (CW - 2 * 0.3) / 3;
-  for (let i = 0; i < close.length; i++) {
-    const [Ic, h, b] = close[i];
-    const x = M + i * (cw3 + 0.3), y = 2.45;
-    card(s, x, y, cw3, 2.15, "Closing card " + (i + 1), C.background1);
-    await iconCircle(s, Ic, x + 0.3, y + 0.3, 0.7, "Closing " + (i + 1));
-    text(s, h, { x: x + 1.2, y: y + 0.3, w: cw3 - 1.45, h: 0.7, fontSize: 19, bold: true, color: C.text2, valign: "middle" });
-    text(s, b, { x: x + 0.3, y: y + 1.2, w: cw3 - 0.6, h: 0.75, fontSize: 15 });
-  }
-  text(s, "The ask: approve Product View and a cloud allocation for a trial with the Mobile team.", { x: M, y: 4.95, w: 10.2, h: 0.5, fontSize: 18, bold: true, color: C.text2 });
-  text(s, "Next: see it working in a live demo", { x: M, y: 5.75, w: 9, h: 0.6, fontSize: 28, color: C.accent1 });
-  s.addNotes(
-`TALK TRACK (about 30 s)
-To sum up: Product View sorts every review by the app feature it's about, gives every team its own report in its inbox each period, and runs on its own inside RBC's cloud, with numbers anyone can check. What I'm asking for is approval and a cloud allocation for a trial with the Mobile team. Now let me show you the working demo; I'll take questions after.
+There are four steps. First, approve the project and a cloud allocation for a trial. Second, set it up in RBC's Azure or AWS and connect it to our wiki and email. Third, load the Ownership Matrix, so it knows who owns which feature. Fourth, run a trial with the Mobile team over a few app releases, with an analyst checking the first month. If that goes well, we bring in more teams.
+So my ask today is approval and a cloud allocation to trial Product View with the Mobile team.
+Thank you. The goal is simple: every customer heard, and every team knowing what to fix next. Let me show you the working demo now, and I'll take questions after.
 
 TIMING: the slides run about 10 minutes, leaving the rest of the 30-minute meeting for the demo and questions.`);
 
