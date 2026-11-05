@@ -112,7 +112,8 @@ def load(store: Store, topic_db: Path, matrix: Matrix, days: int, baseline: int,
                 issue.versions_now[r["app_version"] or "unknown"] += 1
             if held is None or rank < held.rank:
                 issue.quotes_now[rid] = Quote(text, r["score"], r["thumbs_up"] or 0, created,
-                                              r["app_version"], rank)
+                                              r["app_version"], rank,
+                                              " ".join((r["content_en"] or "").split()))
 
     seen = {u["review_id"] for u in units}
     total, no_topic = Series(period), Series(period)

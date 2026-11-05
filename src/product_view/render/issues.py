@@ -156,6 +156,7 @@ class Quote:
     created: datetime
     version: str | None
     rank: int = 0                 # lower shows first: how surely the quote fits its topic
+    full: str = ""                # the whole review, when the quote is a part of it
 
 
 @dataclass
