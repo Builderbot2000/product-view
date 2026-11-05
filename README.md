@@ -18,9 +18,6 @@ pv cycle --no-fetch --no-publish   # the same on the archive as it is, pages to 
 pv matrix                   # check the matrix file, and who owns what
 ```
 
-The earlier route, which formed its own issues instead of using a fixed topic
-list, is still here for reference (`pv run`, `pv issues`); no page uses it.
-
 ## Demo
 
 [Product View @ RBC Mobile](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/294942)
@@ -47,7 +44,7 @@ pip install -e .
 
 ### On Linux, install CPU-only torch first
 
-Translation and the issue stage pull `torch` (via `sentence-transformers` and
+Translation and matching pull `torch` (via `sentence-transformers` and
 `transformers`). On Windows and macOS the default PyPI wheel is CPU-only at
 ~250 MB, but **on Linux plain `pip install` resolves to the CUDA build at
 ~2.5 GB.** Unless you actually want GPU:
@@ -59,8 +56,8 @@ pip install -e .
 
 ### The first run downloads models
 
-`all-MiniLM-L6-v2` (~90 MB) on the first `pv issues`, and `opus-mt-fr-en`
-(~301 MB) on the first `pv translate`. Both are one-off, cached under the
+`Qwen3-Embedding-0.6B` (~1.2 GB) and `all-MiniLM-L6-v2` (~90 MB) on the first
+`pv match`, and `opus-mt-fr-en` (~301 MB) on the first `pv translate`. All are one-off, cached under the
 platform's user cache directory, and re-runs are no-ops. A cold first run
 pausing for a few minutes is the download, not a hang.
 
@@ -133,7 +130,7 @@ pv check-matching --window t1      # one window
 
 Runs the configured chat and embedding models through the same matching code
 as `pv match` on two fixed windows that ship with the package
-(`src/product_view/topics/acceptance/`): the development window (294 complaint
+(`src/product_view/matching/acceptance/`): the development window (294 complaint
 reviews) and the held-out one (204), each with an answer key for 120 drawn
 reviews, against the 22 topics the keys were written for (not the deployed
 matrix). Pass: precision at least 70%, recall at least 60%, false alarm at most
@@ -151,44 +148,15 @@ succeeded. It publishes when `confluence.space` is set, else it only writes
 the pages. `PV_LOG_JSON=1` makes log lines JSON. Email to members (D21) is
 deferred; until it lands, each member's report page is what they are sent to.
 
-### Grouping reviews into issues (the earlier route)
+### Preparing reviews
 
-Each stage reads and writes through SQLite, so any one re-runs in isolation.
-`pv run` chains them all.
+Each stage reads and writes through SQLite, so any one re-runs in isolation;
+`pv cycle` runs them in order.
 
 ```bash
 pv db build        # JSONL -> a fresh reviews.db (21,506 rows), plus listing snapshots
 pv translate       # detect language, French -> English, cached forever
-pv issues          # distill, score against the codebook, form new issues from what's left
-pv issues show --detail   # the codebook's live issues, criteria and example quotes
 ```
-
-`pv issues` uses a language model (see "Choosing the model" below). Its
-method, and the test it passed, are in [llm-trials.md](trials/llm-trials.md)
-("Viability test"):
-
-1. **Distill.** The model reads each review in the window (default: the last
-   12 months, `issues.window_months`) and lists every complaint and every
-   piece of praise as an exact quote, each restated as a short neutral
-   point. Star rating doesn't decide the side: a complaint in a 4-star review
-   is a complaint.
-2. **Score against the codebook.** Every point is checked against every live
-   issue's one-sentence definition. Live issues never change, so a new month
-   is counted against the same issues as the last.
-3. **Form new issues from what's left.** Points no issue covers are
-   clustered; the model names each specific problem in a cluster with a
-   definition; a breadth check drops catch-alls ("app is buggy") and sends
-   opinions ("frustrating") to general sentiment; a candidate that means the
-   same as a live issue joins it instead; and a selection step keeps the new
-   issues that cover the most points with the least overlap. Each new issue
-   is filed under one area from [curation.yaml](curation.yaml), whose areas
-   apply to any app.
-4. **Parent links** are recorded where one issue's matches contain most of
-   another's. They are reported, never merged.
-
-Every model answer is cached, so an interrupted run resumes and a repeated
-run is free; a monthly run distills only new reviews and forms issues only
-from what the existing ones don't cover.
 
 ### Choosing the model
 
@@ -204,7 +172,7 @@ To switch to OpenAI's small models, as planned in llm-trials.md decision 7:
 ```yaml
 llm:
   provider: openai
-  models: {fast: gpt-5.4-nano, strong: gpt-5.4-mini}   # fast: most calls; strong: naming issues
+  models: {fast: gpt-5.4-nano, strong: gpt-5.4-mini}   # matching uses only fast
   max_workers: 16
   temperature: null                  # some API models only accept the default
   options: {reasoning_effort: none}  # any extra request fields, passed through as given
@@ -214,35 +182,22 @@ llm:
 ```
 
 The OpenAI connector works against the live API (live calls and Batch API
-jobs), but the method **fails validation on GPT-5.4 nano and mini**: their
-scoring matches too much, and a first run built a catch-all issue that
-crowded out the specific ones (llm-trials.md, "OpenAI models, first check").
-Use the local model. Sending review text to OpenAI also still needs sign-off
-(llm-trials.md decision 7).
+jobs), but matching is validated only on the local model: run `pv
+check-matching` before using any other. Sending review text to OpenAI also
+still needs sign-off (llm-trials.md decision 7).
 
-**Cost.** `pv issues --estimate` prints the calls, tokens and cost a run would
-take, from the codebook's state and rates measured in the trials (about 2x
-either way). With the settings above, about $8 for the 12-month window and
-$80 for the whole archive. Scoring is nearly all of it. Forming new issues
-works on a sample of at most `issues.mint_sample` points, so cost grows with
-the corpus rather than its square (about $3,500 for the whole archive
-without it). Token use is counted from every reply, and `budget_usd` stops a
-run before it spends past the limit; answers already paid for stay cached.
-Three cheaper scoring settings exist but failed validation and are off:
-`compact_scores`, `batch: 30` and `nearest: 10` (llm-trials.md, "Cost
-controls"). The cache is keyed
-by model, so switching models re-runs every call instead of mixing answers;
-points are re-distilled too, and an existing codebook keeps its issues and
-re-scores the new points against them.
+**Cost.** Token use is counted from every reply, and `budget_usd` stops a run
+before it spends past the limit; answers already paid for stay cached. The
+cache is keyed by model, so switching models re-runs every call instead of
+mixing answers.
 
 ### What is kept, and what is rebuilt
 
 | File | Lifetime |
 |---|---|
 | `data/raw/`, `data/meta/`, `data/export/` | **Source.** Never deleted by the pipeline |
-| `data/reviews.db` | Deleted and rebuilt from `data/raw/` on every `pv db build` / `pv run` |
-| `data/cache.db` | Translations and every model answer. Kept across rebuilds; delete it only to force a redo |
-| `data/issues.db` | **The issue codebook.** Issues, the points each review made, and their raw scores. Kept: an issue's identity across runs is the point. Delete it only to start the issues over |
+| `data/reviews.db` | Deleted and rebuilt from `data/raw/` on every `pv db build` / `pv cycle` |
+| `data/cache.db` | Translations, every model answer and every embedding. Kept across rebuilds; delete it only to force a redo |
 | `data/topics.db` | Every matching run and what it matched (units, routes, matches), and every `pv cycle`. Kept; reports read the latest run |
 
 ### Always fetch all locales (the default)
@@ -308,8 +263,8 @@ and the pipeline read them merged and deduped. Alongside each, a
 score, total ratings, text-review count, rating histogram). The dashboard needs these
 as honest denominators — see the caveat below.
 
-Reviewer names and avatar URLs are **not** stored. Grouping reviews into
-issues never needs reviewer identity, and not collecting it beats justifying its retention later.
+Reviewer names and avatar URLs are **not** stored. Matching reviews to
+topics never needs reviewer identity, and not collecting it beats justifying its retention later.
 
 Timestamps are UTC ISO-8601. Files are UTF-8 (CSV export uses UTF-8 BOM so
 Excel on Windows renders accents and emoji correctly).
@@ -346,47 +301,53 @@ src/       the pv package, below
 
 ```
 src/product_view/
-├── cli.py              # argument parsing; fetch / export / info / langs
-├── commands.py         # db build / translate / issues / run
-├── cycle.py            # pv cycle: one full cycle, a lock, a run record, exit codes
-├── matrix.py           # the team -> member -> topic matrix: load, validate, hash
-├── config.py           # config.yaml: defaults, validation, flag precedence
-├── models.py           # Review — the contract between ingestion and the rest
-├── archive.py          # JSONL archive + resume state
+├── cli.py              # assembles the commands; each lives with the code it runs
+├── config.py           # config.yaml: defaults, validation, flag precedence; .env
 ├── store.py            # SQLite: reviews.db (rebuilt each run) + attached cache.db
+├── prepare.py          # pv db build, pv translate
+├── matrix.py           # the team -> member -> topic matrix: load, validate, hash; pv matrix
+├── periods.py          # reporting periods, "usual" and the change test
+├── llm.py              # model connectors: ollama, openai-compatible; cached, parallel
+├── cycle.py            # pv cycle: one full cycle, a lock, a run record, exit codes
 ├── ingest/
-│   ├── base.py         # ReviewSource protocol ← the swap point
-│   └── play_store.py   # google-play-scraper implementation
+│   ├── models.py       # Review — the contract between ingestion and the rest
+│   ├── archive.py      # JSONL archive + resume state
+│   ├── play_store.py   # google-play-scraper implementation
+│   └── commands.py     # pv fetch / export / info / langs
 ├── lang/
 │   ├── detect.py       # py3langid; Play's `lang` is NOT the review's language
 │   └── translate.py    # MarianMT fr→en, cached
-├── embed/
-│   └── encoder.py      # all-MiniLM-L6-v2, L2-normalized (clusters points in the issue stage)
-├── topics/             # pv match: method M
+├── matching/           # method M
+│   ├── run.py          # pv match: the window, one run, stored
 │   ├── units.py        # reviews -> complaint units
 │   ├── embed.py        # MiniLM and Qwen3 embeddings, cached; local or Ollama
 │   ├── method.py       # example complaints, classifier, gate, model step
-│   └── store.py        # topics.db: runs, units, matches
-├── issues/
-│   ├── llm.py          # model connectors: ollama, openai-compatible; cached, parallel
-│   ├── prompts.py      # the validated prompts
-│   ├── codebook.py     # issues.db: issues, points, raw scores, runs
-│   └── pipeline.py     # distill, score, cluster, name, screen, select, file
-├── render/             # pv report: overview, team and member pages; SVG charts
-└── publish/            # pv publish: Confluence REST
+│   ├── store.py        # topics.db: runs, units, matches
+│   └── check.py        # pv check-matching, with its fixtures in acceptance/
+├── report/             # pv report
+│   ├── data.py         # the latest run as counts per topic and period
+│   ├── text.py         # dates, quotes, lozenges and sentences
+│   ├── parts.py        # pieces every page shares: tables, tiles, method, footer
+│   ├── overview.py     # the overview page
+│   ├── team.py         # a team page
+│   ├── member.py       # a member's report
+│   ├── blocks.py, svg.py   # Confluence storage markup; SVG charts
+│   └── build.py        # the page tree: build, write, publish
+└── publish/            # Confluence REST: client, storage format, pv publish
+tests/                  # python -m unittest discover -s tests
 ```
 
-`models.Review` is the contract between ingestion and everything downstream.
+`ingest.models.Review` is the contract between ingestion and everything downstream.
 When reviews arrive from an internal feed instead of the Play Store, only
 `ingest/` changes.
 
 JSONL stays the raw landing zone. `data/reviews.db` is rebuilt from it every
 run and `data/cache.db` only holds model output, so losing either never loses
-data. `data/issues.db` is the one file worth backing up besides the archive.
+data. `data/topics.db` is the one file worth backing up besides the archive.
 
 ## Trends: always divide by the corpus
 
 October 2024 alone holds 1,663 negative reviews, 35× the ~48/month baseline,
-so on raw counts every issue spikes that month. The report counts each issue
+so on raw counts every topic spikes that month. The report counts each topic
 per period against its own usual level and tests the change, rather than
 comparing raw counts across months.
