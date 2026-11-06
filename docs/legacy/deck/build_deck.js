@@ -1,7 +1,7 @@
-// Build docs/deck/product-view-pitch.pptx: the proposal deck for senior managers (pitch-deck-brief.md,
+// Build docs/legacy/deck/product-view-pitch.pptx: the proposal deck for senior managers (pitch-deck-brief.md,
 // revisions of 2026-10-23 and 2026-11-02). Slide sources live in out/deck/sources.md, not in the deck.
-// Run from the repo root: NODE_PATH=<node_modules dir> PPTX_SKILL=<pptx skill dir> node docs/deck/build_deck.js
-// Needs pptxgenjs, react, react-dom, react-icons, sharp and js-yaml. Inputs are in docs/deck/assets/:
+// Run from the repo root: NODE_PATH=<node_modules dir> PPTX_SKILL=<pptx skill dir> node docs/legacy/deck/build_deck.js
+// Needs pptxgenjs, react, react-dom, react-icons, sharp and js-yaml. Inputs are in docs/legacy/deck/assets/:
 // two charts rasterised from the demo report (out/report-proofread/) and the logo.
 const fs = require("fs");
 const path = require("path");
@@ -12,8 +12,8 @@ const sharp = require("sharp");
 const fa = require("react-icons/fa");
 const { applyTheme } = require(process.env.PPTX_SKILL + "/scripts/apply_theme.js");
 
-const OUT = process.env.DECK_OUT || "docs/deck/product-view-pitch.pptx";
-const ASSETS = "docs/deck/assets";
+const OUT = process.env.DECK_OUT || "docs/legacy/deck/product-view-pitch.pptx";
+const ASSETS = "docs/legacy/deck/assets";
 
 // RBC brand guide 6.1, "Mass" palette: Bright Blue Tint 1 (digital primary) 006AC3, Bright Blue
 // 0051A5, Cool White E7EEF1, Warm Yellow FFC72C; Dark Blue 003168 is for High Net Worth only.

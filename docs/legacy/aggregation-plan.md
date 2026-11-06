@@ -44,7 +44,7 @@ Two decisions shape this plan:
    generated paraphrase. Every word in a pain point's message must be traceable to
    a real review. *Superseded 2026-10-08: a local LLM is being trialled for
    grouping and naming, because these clusters form around tone. See
-   [llm-trials.md](../trials/llm-trials.md).*
+   [llm-trials.md](../../trials/llm-trials.md).*
 2. **Positive and negative clustered separately**, so praise and complaints never
    contaminate each other's clusters.
 
@@ -575,8 +575,8 @@ databases are derived from it, so losing either one never loses data.
 `ingest/play_store.py` needed **no change** — `fetch_app_metadata()` already snapshotted
 the listing, and `db build` loads those snapshots from `data/meta/`.
 
-Reused as intended: `iter_corpus()` ([archive.py](../src/product_view/archive.py)) feeds the
-SQLite loader and returned exactly 21,506 rows; `Review` ([models.py](../src/product_view/models.py))
+Reused as intended: `iter_corpus()` ([archive.py](../../src/product_view/archive.py)) feeds the
+SQLite loader and returned exactly 21,506 rows; `Review` ([models.py](../../src/product_view/models.py))
 remained the schema contract.
 
 **Dependencies:** `numpy`, `scipy`, `scikit-learn`, `sentence-transformers`,

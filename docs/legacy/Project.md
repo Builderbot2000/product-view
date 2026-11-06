@@ -31,14 +31,14 @@ own issues. Each team has several members, each owning several topics. The
 application must also run entirely in containers, email each member a link to
 a report on their own topics, and collect the newest reviews on a schedule.
 Decisions D18–D22 and the open questions are in
-[report-design.md](report-design.md) §9. None of it is built yet.
+[report-design.md](../report-design.md) §9. None of it is built yet.
 
-- **Format, with invented content:** [matrix.sample.yaml](../matrix.sample.yaml).
+- **Format, with invented content:** [matrix.sample.yaml](../../matrix.sample.yaml).
   The real `matrix.yaml` is confidential and gitignored; Kevin populates it from
   the internal document, keeping the format.
 - **Superseded:** issue forming as the goal of `pv issues` and of the
   embedding-route trials (R03; [handoff-2026-10-18.md](handoff-2026-10-18.md));
-  "no app-specific curation" ([llm-trials.md](../trials/llm-trials.md) decision 4),
+  "no app-specific curation" ([llm-trials.md](../../trials/llm-trials.md) decision 4),
   since the topics are app-specific by design; role pages (report-design.md
   D16), replaced by team pages and member reports; delivery by @mentions and
   Slack (D9), replaced by email; and "no scheduler daemon" (§1 non-goals, §7).
@@ -56,22 +56,22 @@ Decisions D18–D22 and the open questions are in
 | (A) Fetch | **Done.** `pv fetch --all-langs`, `pv langs`, `pv export`, `pv info` |
 | (B) Store | **Done.** `pv db build` → SQLite, 21,506 rows |
 | (B2) Translate | **Done.** `pv translate` — detect + fr→en, cached |
-| (C–E) Issues | **Built 2026-10-13, not yet run on the full window.** `pv issues` (package [issues/](../src/product_view/issues/)) replaces embedding, clustering and labelling: a language model distills each review's complaint and praise points, scores them against a persistent codebook (`data/issues.db`), and forms new issues from what's left (cluster, name, breadth check, join, ILP selection, area). Validated on 3 × 100-review slices: structurally sound on held-out months, two marginal gates ([llm-trials.md](../trials/llm-trials.md), "Viability test"). Model is a setting: `ollama` (local Qwen3.5 9B) or `openai` (key in `.env`; connector checked offline, not yet live). Smoke-tested end to end with a stand-in model |
+| (C–E) Issues | **Built 2026-10-13, not yet run on the full window.** `pv issues` (package [issues/](../../src/product_view/issues/)) replaces embedding, clustering and labelling: a language model distills each review's complaint and praise points, scores them against a persistent codebook (`data/issues.db`), and forms new issues from what's left (cluster, name, breadth check, join, ILP selection, area). Validated on 3 × 100-review slices: structurally sound on held-out months, two marginal gates ([llm-trials.md](../../trials/llm-trials.md), "Viability test"). Model is a setting: `ollama` (local Qwen3.5 9B) or `openai` (key in `.env`; connector checked offline, not yet live). Smoke-tested end to end with a stand-in model |
 | End to end | **Rewired 2026-10-13, not yet run.** `pv run [--fetch]` — rebuilds `reviews.db` clean, then translate → issues (complaint and praise sides) over the last 12 months |
-| Config | **Done.** [config.yaml](../config.yaml); flag > config > built-in default; unknown keys are an error |
-| Container | **Built and verified 2026-09-29** on Docker Desktop 4.30 (Windows). Image 1.46 GB, torch `2.14.0+cpu`. `pv run` in the container took 1m49s on warm caches: 43 negative / 51 positive pain points. The resulting `reviews.db` passes `integrity_check`, and host and container `pv painpoints` output match. Not re-verified since the issue stage replaced clustering; the image has no local model, so a container run needs `llm.provider: openai`. [Dockerfile](../Dockerfile) + [compose.yaml](../compose.yaml) |
-| (F) Render | **Demo version built 2026-10-03; reads the issue codebook since 2026-10-13.** `pv report [--publish]` builds a **periodic** page tree in Confluence storage format: a hub (every area) and one page per role (only that role's areas), with SVG charts. Live on the demo site. Decisions, page plans and progress: [report-design.md](report-design.md); remaining work: "Remaining work" below |
+| Config | **Done.** [config.yaml](../../config.yaml); flag > config > built-in default; unknown keys are an error |
+| Container | **Built and verified 2026-09-29** on Docker Desktop 4.30 (Windows). Image 1.46 GB, torch `2.14.0+cpu`. `pv run` in the container took 1m49s on warm caches: 43 negative / 51 positive pain points. The resulting `reviews.db` passes `integrity_check`, and host and container `pv painpoints` output match. Not re-verified since the issue stage replaced clustering; the image has no local model, so a container run needs `llm.provider: openai`. [Dockerfile](../../Dockerfile) + [compose.yaml](../../compose.yaml) |
+| (F) Render | **Demo version built 2026-10-03; reads the issue codebook since 2026-10-13.** `pv report [--publish]` builds a **periodic** page tree in Confluence storage format: a hub (every area) and one page per role (only that role's areas), with SVG charts. Live on the demo site. Decisions, page plans and progress: [report-design.md](../report-design.md); remaining work: "Remaining work" below |
 | (G) Publish | **Built 2026-09-30 (`ff32053`); extended 2026-10-03 (uncommitted).** `pv publish FILE` takes HTML (converted) or a storage-format `.xhtml` (passed through, full width, attachments read from its folder). `publish_tree` publishes a parent page then its children. Transient 5xx on attachment writes are retried. No tests yet. See §2 (G) |
 
-Code lives in [src/product_view/](../src/product_view/): [cli.py](../src/product_view/cli.py)
-(parsing + ingest), [commands.py](../src/product_view/commands.py) (pipeline stages + `run`),
-[config.py](../src/product_view/config.py) (YAML loading),
-[models.py](../src/product_view/models.py), [archive.py](../src/product_view/archive.py),
-[store.py](../src/product_view/store.py), and the
-[ingest/](../src/product_view/ingest/), [lang/](../src/product_view/lang/),
-[embed/](../src/product_view/embed/), [issues/](../src/product_view/issues/),
-[render/](../src/product_view/render/) and [publish/](../src/product_view/publish/)
-packages. Areas (app-agnostic) and roles are in [curation.yaml](../curation.yaml).
+Code lives in [src/product_view/](../../src/product_view/): [cli.py](../../src/product_view/cli.py)
+(parsing + ingest), [commands.py](../../src/product_view/commands.py) (pipeline stages + `run`),
+[config.py](../../src/product_view/config.py) (YAML loading),
+[models.py](../../src/product_view/models.py), [archive.py](../../src/product_view/archive.py),
+[store.py](../../src/product_view/store.py), and the
+[ingest/](../../src/product_view/ingest/), [lang/](../../src/product_view/lang/),
+[embed/](../../src/product_view/embed/), [issues/](../../src/product_view/issues/),
+[render/](../../src/product_view/render/) and [publish/](../../src/product_view/publish/)
+packages. Areas (app-agnostic) and roles are in [curation.yaml](../../curation.yaml).
 
 ### Environment
 
@@ -224,7 +224,7 @@ These cost real time to discover:
 - **Prompt examples get copied.** With banking examples in the extraction
   prompt, Qwen3.5 9B reused one example phrase word for word in 33 of 44
   reviews, which faked clean grouping. Prompt examples come from an unrelated
-  domain (food delivery). See [llm-trials.md](../trials/llm-trials.md) trials 1–2.
+  domain (food delivery). See [llm-trials.md](../../trials/llm-trials.md) trials 1–2.
 - **Qwen3.5 thinks by default.** Send `"think": false` to Ollama, or reasoning
   text costs time and can leak into the output.
 - **Check `abi3` when auditing wheels.** `igraph` and `leidenalg` ship `cp38-abi3` /
@@ -237,7 +237,7 @@ These cost real time to discover:
    by tone, not topic, so grouping moves to a **local** LLM (Qwen3.5 9B through
    Ollama). It stays fully local and needs no credentials; review text still never
    leaves the machine. Determinism now rests on temperature 0 plus a per-review
-   cache. Pending compliance approval of the model. See [llm-trials.md](../trials/llm-trials.md).
+   cache. Pending compliance approval of the model. See [llm-trials.md](../../trials/llm-trials.md).
    **Revised 2026-10-09:** the model moves to OpenAI's small models through the
    API (GPT-5.4 nano + mini), which conflicts with the local-only rule above and
    needs sign-off before a full run. Hand curation (`curation.yaml` labels and
@@ -262,7 +262,7 @@ These cost real time to discover:
   kevintangcyberium.atlassian.net, space `MFS`, by reading each page in the
   browser and through the REST `view` body. Two probes:
   - **Probe 1, HTML through `pv publish`** (page 98532, from
-    [ProbeDashboard.html](../trials/confluence/confluence-probe/Product%20View%20Probe/ProbeDashboard.html)).
+    [ProbeDashboard.html](../../trials/confluence/confluence-probe/Product%20View%20Probe/ProbeDashboard.html)).
     Survives: headings, bold/italic, inline code, links, lists, blockquote,
     tables, `<pre>`, superscript, `text-align`, emoji/French/CJK, `<hr>`,
     inline SVG and data: URI images (both become attachments), `<details>`
@@ -272,7 +272,7 @@ These cost real time to discover:
     `href="#id"` anchors (Confluence prefixes heading ids) and relative links
     to other pages. Page title: the HTML `<title>`.
   - **Probe 2, raw storage format**
-    ([trials/confluence/build_confluence_probe_native.py](../trials/confluence/build_confluence_probe_native.py),
+    ([trials/confluence/build_confluence_probe_native.py](../../trials/confluence/build_confluence_probe_native.py),
     page 294964). **All render:** full-width page (content properties
     `content-appearance-published` / `-draft` = `full-width`, set over REST);
     `ac:layout` sections (`three_equal`, `two_right_sidebar`, …);
@@ -285,7 +285,7 @@ These cost real time to discover:
     table; `toc`; `<time>`; emoticons; `code`; `details` (page properties);
     `chart` (renders, but the look is dated).
   - **Probe 3, `excerpt-include` across pages** (2026-11-02,
-    [trials/confluence/build_confluence_probe_excerpt.py](../trials/confluence/build_confluence_probe_excerpt.py),
+    [trials/confluence/build_confluence_probe_excerpt.py](../../trials/confluence/build_confluence_probe_excerpt.py),
     source page 6160393, target page 6160416). **Works:** a table with a
     `status` lozenge and an SVG image both render on the including page. The
     image resolves to the source page's attachment even when `ri:attachment`
@@ -317,9 +317,9 @@ These cost real time to discover:
   login clusters are all tightly packed (`new phone` ↔ `garbage app` 0.852).
 
   **What was built:**
-  - `pv embed` splits reviews finely ([segment.py](../trials/prellm/legacy/segment.py)).
+  - `pv embed` splits reviews finely ([segment.py](../../trials/prellm/legacy/segment.py)).
   - `pv cluster` re-joins adjacent segments into complaint units
-    ([units.py](../trials/prellm/legacy/units.py)) and clusters those units.
+    ([units.py](../../trials/prellm/legacy/units.py)) and clusters those units.
     A review can sit in several pain points, and `size` counts distinct
     reviews.
   - Titles are real user sentences, anchored to the top keyword. For example:
@@ -355,7 +355,7 @@ These cost real time to discover:
 ### Remaining work
 
 Recorded 2026-10-03, after the periodic, role-split report went live. Detail
-for the report items is in [report-design.md](report-design.md) §6.
+for the report items is in [report-design.md](../report-design.md) §6.
 
 **Report (F)**
 1. **Quote quality.** A period quote is the review's most central unit in the
@@ -366,7 +366,7 @@ for the report items is in [report-design.md](report-design.md) §6.
    areas in `curation.yaml` are a first guess at the org.
 3. **Labels from the company-approved internal model** (D6), replacing hand
    labels. Overtaken by the LLM grouping spike (2026-10-08): a local Qwen3.5 9B
-   names issues as part of grouping them ([llm-trials.md](../trials/llm-trials.md)).
+   names issues as part of grouping them ([llm-trials.md](../../trials/llm-trials.md)).
    Whether compliance approves that model is still open.
 4. ~~**Curating new clusters.**~~ **Dropped 2026-10-09:** no app-specific hand
    labels (llm-trials.md decision 4). Issue names and areas come from the LLM
@@ -442,8 +442,8 @@ fetch ─▶ store ─▶ translate ─▶ issues ─▶ render ─▶ publish
 
 Until 2026-10-13 (C), (D) and (E) were embed, cluster and label, described
 below as they were built. They are replaced by the issue stage: see
-[README.md](../README.md) ("Grouping reviews into issues") and
-[llm-trials.md](../trials/llm-trials.md) for the method and its validation.
+[README.md](../../README.md) ("Grouping reviews into issues") and
+[llm-trials.md](../../trials/llm-trials.md) for the method and its validation.
 
 Each stage is a CLI subcommand and reads/writes through the store, so any stage
 can be re-run in isolation. That matters for iteration: re-clustering should not
@@ -648,7 +648,7 @@ deterministic output that does not drift between runs.
 
 *Since 2026-10-08 a local-LLM replacement for (D) and (E) is being trialled,
 because these extractive titles name tone clusters, not issues. See
-[llm-trials.md](../trials/llm-trials.md). This section describes what `pv run` does today.*
+[llm-trials.md](../../trials/llm-trials.md). This section describes what `pv run` does today.*
 
 - **Title** — a real user sentence: the most central 3–10-word complaint unit
   containing one of the top 3 c-TF-IDF keywords. Leading connectives and
@@ -668,7 +668,7 @@ because these extractive titles name tone clusters, not issues. See
 
 ### (F) Render — `pv report`
 
-**Full decisions, page plans and progress: [report-design.md](report-design.md).**
+**Full decisions, page plans and progress: [report-design.md](../report-design.md).**
 
 **Built 2026-10-03.** `pv report` writes Confluence storage format plus SVG
 charts, one folder per page under `out/report/`; `--publish` pushes the tree
@@ -683,10 +683,10 @@ conversion drops every layout and styling feature (§0 "Still open").
 - **By area and role.** Issues are filed under product areas; each role reads
   some areas and gets its own page. The hub shows all areas, what changed,
   general sentiment, what users liked, and the method.
-- **Curation** ([curation.yaml](../curation.yaml)): areas (with keywords for
+- **Curation** ([curation.yaml](../../curation.yaml)): areas (with keywords for
   filing uncurated clusters), roles, and labels with kind, areas and anchor
   reviews. Clusters under one label merge; counts are distinct reviews.
-- **Code** ([render/](../src/product_view/render/)): `blocks.py` (storage
+- **Code** ([render/](../../src/product_view/render/)): `blocks.py` (storage
   helpers), `svg.py` (sparklines, area chart), `issues.py` (period, change
   test, label matching, areas), `pages.py` (hub and role pages).
 
@@ -707,7 +707,7 @@ needs no one to upload anything.
 - **Overwrite in place.** The page with the same title in `confluence.space`
   is updated (a new version in its history); if none exists it is created,
   under `confluence.parent_id` if set. This settles open question 4.
-- **Conversion** ([publish/storage.py](../src/product_view/publish/storage.py)):
+- **Conversion** ([publish/storage.py](../../src/product_view/publish/storage.py)):
   only `<body>` is kept and re-serialized as well-formed XHTML. `<script>`,
   `<style>`, `<button>` and `on*` attributes are dropped. `<details>` becomes the
   expand macro. Local, data: URI and inline-SVG images become page attachments.
@@ -798,13 +798,13 @@ Windows is the one that breaks, so it is the one to be explicit about:
 
 ## 5. Configuration
 
-**Built.** [config.yaml](../config.yaml) holds settings that are safe to commit. Secrets
+**Built.** [config.yaml](../../config.yaml) holds settings that are safe to commit. Secrets
 go in environment variables only: today that means the Confluence credentials
 (`CONFLUENCE_BASE_URL`, `CONFLUENCE_USER`, `ATLASSIAN_TOKEN`), read from the
 environment or a gitignored `.env`.
 
 - **Precedence:** command-line flag > `config.yaml` > built-in default in
-  [config.py](../src/product_view/config.py). Any flag config can supply defaults to
+  [config.py](../../src/product_view/config.py). Any flag config can supply defaults to
   `None` in argparse, so an unset flag can be told apart from one explicitly set.
 - **Location:** `./config.yaml` if present, or `pv --config PATH <command>`. If the
   default file is missing, the built-in defaults apply. If an explicit path is
@@ -828,7 +828,7 @@ environment or a gitignored `.env`.
 | # | Milestone | Deliverable |
 |---|-----------|-------------|
 | 0 | Skeleton ✅ | **Done.** Repo, `pyproject.toml`, CLI, JSONL archive. SQLite deferred to milestone 3, where it earns its place |
-| 1 | Confluence spike ✅ | **Done 2026-11-02.** Probe built with [trials/confluence/build_confluence_probe.py](../trials/confluence/build_confluence_probe.py). Checks 1–11 and 13–16 are in §0 "Still open" (probe 1). Republished over REST on 2026-11-02 (page 6127631) for the rest: **12** dark-mode media query fails (the class survives, but `<style>` is dropped, so no rule applies); **17** an image from the page's media folder becomes an attachment of the page and renders; **20** publishing the same page again updates it in place as version 2 with unchanged attachments skipped (the zip importer this check was written for is retired). `excerpt-include` and the native macros: probes 2 and 3 |
+| 1 | Confluence spike ✅ | **Done 2026-11-02.** Probe built with [trials/confluence/build_confluence_probe.py](../../trials/confluence/build_confluence_probe.py). Checks 1–11 and 13–16 are in §0 "Still open" (probe 1). Republished over REST on 2026-11-02 (page 6127631) for the rest: **12** dark-mode media query fails (the class survives, but `<style>` is dropped, so no rule applies); **17** an image from the page's media folder becomes an attachment of the page and renders; **20** publishing the same page again updates it in place as version 2 with unchanged attachments skipped (the zip importer this check was written for is retired). `excerpt-include` and the native macros: probes 2 and 3 |
 | 2 | Ingest ✅ | **Done.** `pv fetch --all-langs` backfilled 21,506 RBC reviews across 18 locales, resumable and deduped; `pv langs` probes coverage; `pv export` → CSV; `pv info` → summary with store-listing contrast |
 | 3 | Cluster ✅ | **Done.** `pv db build`, `pv translate`, `pv embed`, `pv cluster`, `pv painpoints`. Complaint-unit clustering: 43 negative / 51 positive pain points, 0 reviews uncovered, deterministic, three strategies behind one interface. Design in [aggregation-plan.md](aggregation-plan.md) |
 | 4 | Render ✅ (demo, uncommitted) | `pv report` emits a periodic hub plus role pages in Confluence storage format with SVG charts (2026-10-03). Remaining: §0 "Remaining work" |

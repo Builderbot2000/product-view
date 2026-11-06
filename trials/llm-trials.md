@@ -91,7 +91,7 @@ In this folder, grouped by trial: [extract/](extract/) (trials 1–11),
 OpenAI checks) and [prellm/](prellm/) (the embedding-route upgrade trials).
 Run from the repo root with `.venv/Scripts/python.exe -X utf8`. Output goes
 to `trials/runs/` (gitignored, local only). Criteria and results are also
-tabulated in [requirements.xlsx](../docs/requirements.xlsx).
+tabulated in [requirements.xlsx](../docs/legacy/requirements.xlsx).
 
 | Script | Does |
 |---|---|
@@ -1276,7 +1276,7 @@ by a team member would be the independent check.
 
 ## Embedding route, round 6: symptom and cause (set 2026-10-14, before running)
 
-Kevin chose option 2 of the handoff (docs/handoff-2026-10-14.md). Diagnosis on V3
+Kevin chose option 2 of the handoff (docs/legacy/handoff-2026-10-14.md). Diagnosis on V3
 (now development data): in the "can't log in" grab-bag, the sentences the key
 files under another cause share a review with a sentence in that cause's
 cluster ("I can't log in" beside "it keeps saying to update when there is no

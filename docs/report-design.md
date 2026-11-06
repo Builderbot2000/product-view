@@ -1,7 +1,7 @@
 # Report design: decisions and plan
 
 Design decisions for stage (F) `pv report`, made 2026-10-03. Read with
-[Project.md](Project.md): §0 "Still open" has the Confluence probe results, and
+[Project.md](legacy/Project.md): §0 "Still open" has the Confluence probe results, and
 §2 (F) and (G) have the render and publish summaries. This file has the detail
 and the next steps, written so a fresh session can start building.
 

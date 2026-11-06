@@ -58,7 +58,7 @@ the tool.
 
 - **Tool:** load the `anthropic-skills:pptx` skill and follow it. The output is
   a real `.pptx` file, because it will go through RBC's own channels.
-- **Output:** `docs/deck/product-view-pitch.pptx`, committed to the repo. `*.pptx`
+- **Output:** `docs/legacy/deck/product-view-pitch.pptx`, committed to the repo. `*.pptx`
   is tracked by Git LFS (`.gitattributes`), so check `git lfs ls-files` lists the
   deck before pushing. Put working chart images in `out/deck/assets/`, which is
   gitignored. The deck itself carries them.
@@ -73,10 +73,10 @@ beyond what they say.
 | File | What to take from it |
 |---|---|
 | [Project.md](Project.md), §0 | What's built, corpus facts, the Oct 2024 incident, settled decisions |
-| [report-design.md](report-design.md) §1, §2, §5 | Who the report serves, the role pages, what the hub page shows |
+| [report-design.md](../report-design.md) §1, §2, §5 | Who the report serves, the role pages, what the hub page shows |
 | [handoff-2026-10-18.md](handoff-2026-10-18.md) | Where issue grouping stands: the pass bar, held-out results, what's left |
-| [llm-trials.md](../trials/llm-trials.md), "Why" | The three faults that motivated using a language model |
-| [README.md](../README.md), "Demo" | The live Confluence hub page |
+| [llm-trials.md](../../trials/llm-trials.md), "Why" | The three faults that motivated using a language model |
+| [README.md](../../README.md), "Demo" | The live Confluence hub page |
 | `out/report/` and `out/report-proofread/` | Rendered report pages and their SVG charts |
 
 ## Audience
@@ -93,7 +93,7 @@ know this project, and they won't read code.
 > every period", not containers or a scheduler; "period", not week or four weeks (revised 2026-11-03: the run frequency isn't fixed yet).
 > Technical names (Ollama, Qwen, SMTP, embeddings, YAML) go only in speaker
 > notes, for questions. Mark anything not yet built as planned on the slide
-> itself. The generator is `docs/deck/build_deck.js`.
+> itself. The generator is `docs/legacy/deck/build_deck.js`.
 >
 > **Revised again 2026-10-23 (supersedes the story arc, honesty slide and
 > appendix below):** the deck proposes the whole project; Azure resources come

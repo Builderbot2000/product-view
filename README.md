@@ -2,7 +2,6 @@
 
 Match Google Play Store reviews to the app features each team follows, and
 publish an overview, a page per team and a report per team member to Confluence. See
-[project.md](docs/Project.md) for the full plan and
 [production-plan.md](docs/production-plan.md) for the service being built.
 
 Reviews are scraped into a JSONL archive, loaded into SQLite and translated.
@@ -56,11 +55,11 @@ listed after publishing, for archiving by hand.
 | [qa.md](docs/qa.md) | Answers to common questions about the method, pipeline, report and deployment, each linked to the code. Includes one review traced step by step |
 | [report-design.md](docs/report-design.md) | Decisions behind the report: who it's for, Confluence building blocks, visual language, the pages |
 | [production-plan.md](docs/production-plan.md) | The work from trial code to a portable, scheduled service |
-| [Project.md](docs/Project.md) | The original plan and its open questions |
 | [topic-trials.md](trials/topic-trials.md) | The matching trials, round by round, and the held-out test |
 | [llm-trials.md](trials/llm-trials.md) | Earlier trials of an AI model grouping reviews, before the fixed topic list, and the model decisions |
-| [demo-notes.md](docs/deck/demo-notes.md) | Notes for the senior manager walkthrough |
+| [demo-notes.md](docs/demo-notes.md) | Notes for the senior manager walkthrough |
 | [matrix.sample.yaml](matrix.sample.yaml) | The Ownership Matrix format, and how to write a topic's description |
+| [legacy/](docs/legacy/) | Superseded documents, kept for history: the original pain-point clustering plan, old handoffs, the requirements workbook and the dropped pitch deck |
 
 ## Setup
 
@@ -326,7 +325,7 @@ listing and finds an unexplained gap will stop trusting the whole dashboard.
 ## Layout
 
 ```
-docs/      architecture diagrams, Q&A sheet, report design, production plan, original plan, demo notes
+docs/      architecture diagrams, Q&A sheet, report design, production plan, demo notes; legacy/ for superseded documents
 trials/    every experiment: the trial logs (topic-trials.md, llm-trials.md), scripts by trial, runs/ (output, gitignored)
 src/       the pv package, below
 ```
