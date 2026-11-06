@@ -1,18 +1,22 @@
 # Product View architecture
 
+Two diagrams: the whole system, and one review's journey from Google Play to a report.
+
+## The whole system
+
 Each box is a component and the steps inside it, in order. Solid arrows carry data,
 labelled with the store between the two; dotted arrows are calls.
 
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 28, "padding": 6}} }%%
-flowchart LR
+%%{init: {"flowchart": {"nodeSpacing": 18, "rankSpacing": 30, "padding": 8, "wrappingWidth": 250}} }%%
+flowchart TB
     SCHED([Scheduler]) -.-> CYCLE
     PLAY([Google Play]) --> INGEST
     MX[/Ownership Matrix/] --> MATCH
     MX --> REPORT
 
     subgraph CYCLE["pv cycle"]
-        direction TB
+        direction LR
         C1["`**Take lock**
 Only one cycle runs per data volume.`"] --> C2["`**Validate matrix**
 A broken matrix stops the cycle before fetching.`"] --> C3["`**Run stages**
@@ -22,7 +26,7 @@ Done, a step failed, or another cycle holds the lock.`"]
     end
 
     subgraph INGEST["fetch"]
-        direction TB
+        direction LR
         I1["`**Each locale**
 Play splits reviews by locale, so every one is read.`"] --> I2["`**Page newest first**
 200 reviews a page, a second apart.`"] --> I3["`**Stop at known IDs**
@@ -31,21 +35,21 @@ The raw archive, never deleted.`"]
     end
 
     subgraph PREP["db build"]
-        direction TB
+        direction LR
         P1["`**Rebuild reviews.db**
 A fresh database from the archive on every run.`"] --> P2["`**Dedupe by review_id**
 Locales overlap, so each review is kept once.`"]
     end
 
     subgraph LANG["translate"]
-        direction TB
+        direction LR
         L1["`**Detect language**
 The review's own language, not the locale it came from.`"] --> L2["`**French → English**
 A local MarianMT model; translations are cached.`"]
     end
 
     subgraph MATCH["match"]
-        direction TB
+        direction LR
         M1["`**1–3★ in window**
 Complaints from the reporting period and the periods before it.`"] --> M2["`**Split into units**
 One unit per complaint, by sentence and clause.`"] --> M3["`**Example complaints per topic**
@@ -60,7 +64,7 @@ Units and their topics, kept for every run.`"]
     end
 
     subgraph REPORT["report"]
-        direction TB
+        direction LR
         R1["`**Counts per period**
 Distinct reviews per topic in each 28-day period.`"] --> R2["`**Change vs usual**
 Up, down or new against the 3 periods before.`"] --> R3["`**Rank quotes**
@@ -69,14 +73,14 @@ One template for each level of the tree.`"]
     end
 
     subgraph PUB["publish"]
-        direction TB
+        direction LR
         U1["`**To storage format**
 HTML and SVG charts converted for Confluence.`"] --> U2["`**Parents, then children**
 Stable titles, so each run is a new page version.`"]
     end
 
     subgraph MODEL["llm.py · embed.py"]
-        direction TB
+        direction LR
         Q1["`**Cache lookup**
 Every answer and embedding is cached by model.`"] --> Q2["`**Call model**
 The chat model or the embedding model.`"] --> Q3["`**Cache answer**
@@ -84,7 +88,7 @@ A weekly run pays only for new reviews.`"]
     end
 
     subgraph CHECK["check-matching"]
-        direction TB
+        direction LR
         K1["`**Fixed windows t1, t2**
 Two shipped samples with answer keys.`"] --> K2["`**Score vs keys**
 Precision, recall and false alarms.`"] --> K3["`**Pass / fail**
