@@ -12,6 +12,11 @@ and `pv report` turns the matches into a Confluence page tree: an overview of
 every team and topic, a page per team, and a report per member. `pv cycle` does all of it once and exits, for a scheduler
 to start.
 
+The [architecture page](docs/architecture.md) has two diagrams: the whole
+system, and one real review followed from Google Play to the number on a
+member's report. The [Q&A sheet](docs/qa.md) answers common questions about the
+method, the report and running it at RBC, each with a link to the code.
+
 ```bash
 pv cycle                    # fetch, build, translate, match, report, publish; then exit
 pv cycle --no-fetch --no-publish   # the same on the archive as it is, pages to out/report
@@ -20,13 +25,42 @@ pv matrix                   # check the matrix file, and who owns what
 
 ## Demo
 
-[Product View @ RBC Mobile](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/294942)
-is the overview page built by `pv report --publish --space MFS` on the demo
-Confluence site. A page per team sits under it, and each member's report under
-their team page, all from one template whatever the number of teams. Teams,
-people and topics are the sample matrix. Pages left under the overview by
-teams or members no longer in the matrix are listed after publishing, for
-archiving by hand. Viewing it requires access to that site.
+The demo pages are on the demo Confluence site, built by
+`pv report --publish --space MFS` from the sample matrix (invented teams,
+people and topics). Viewing them requires access to that site.
+
+[Product View @ RBC Mobile](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7144019) is the overview of every team and
+topic. Each team page sits under it, and each member's report under their team
+page, all from one template whatever the number of teams:
+
+| Team page | Member reports |
+|---|---|
+| [Sign-in & security](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7013146) | [Alex Martin](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7144136), [Priya Shah](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7144163) |
+| [Payments & transfers](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7144200) | [Jordan Lee](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7111296), [Sophie Tremblay](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7078879) |
+| [Accounts & settings](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7372840) | [Daniel Okafor](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7078920), [Maria Lopez](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7144245) |
+| [App platform (Engineering / QA)](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7078945) | [Chris Wong](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7013257), [Nadia Haddad](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7078994) |
+| [Support / CX](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7013286) | [Sam Gagnon](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7079031) |
+
+[Priya Shah's report](https://kevintangcyberium.atlassian.net/wiki/spaces/MFS/pages/7144163) is the one traced step by step in the
+[Q&A sheet](docs/qa.md#one-review-from-play-store-to-the-report) and the
+[journey diagram](docs/architecture.md#one-review-from-play-store-to-the-report).
+
+Pages left under the overview by teams or members no longer in the matrix are
+listed after publishing, for archiving by hand.
+
+## Documentation
+
+| Document | What it holds |
+|---|---|
+| [architecture.md](docs/architecture.md) | The system diagram, and one review's journey from Google Play to a report. [architecture.html](docs/architecture.html) draws the same diagrams in a browser |
+| [qa.md](docs/qa.md) | Answers to common questions about the method, pipeline, report and deployment, each linked to the code. Includes one review traced step by step |
+| [report-design.md](docs/report-design.md) | Decisions behind the report: who it's for, Confluence building blocks, visual language, the pages |
+| [production-plan.md](docs/production-plan.md) | The work from trial code to a portable, scheduled service |
+| [Project.md](docs/Project.md) | The original plan and its open questions |
+| [topic-trials.md](trials/topic-trials.md) | The matching trials, round by round, and the held-out test |
+| [llm-trials.md](trials/llm-trials.md) | Earlier trials of an AI model grouping reviews, before the fixed topic list, and the model decisions |
+| [demo-notes.md](docs/deck/demo-notes.md) | Notes for the senior manager walkthrough |
+| [matrix.sample.yaml](matrix.sample.yaml) | The Ownership Matrix format, and how to write a topic's description |
 
 ## Setup
 
@@ -292,8 +326,8 @@ listing and finds an unexplained gap will stop trusting the whole dashboard.
 ## Layout
 
 ```
-docs/      the plan (Project.md), requirements.xlsx, report and old clustering design
-trials/    every experiment: the trial log (llm-trials.md), scripts by trial, runs/ (output, gitignored)
+docs/      architecture diagrams, Q&A sheet, report design, production plan, original plan, demo notes
+trials/    every experiment: the trial logs (topic-trials.md, llm-trials.md), scripts by trial, runs/ (output, gitignored)
 src/       the pv package, below
 ```
 
