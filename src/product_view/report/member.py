@@ -74,7 +74,7 @@ def member_page(r: TopicReport, team: Team, member: Member) -> StoragePage:
                               ("Reviews", f"{mine.now} on your topics, {mine.counts[1]} the "
                                           f"period before, usual {usual(mine.usual)}")])
     order = ordered(r, ids)
-    table = "<h2>Your topics at a glance</h2>" + topic_table(r, order, c)
+    table = "<h2>Your topics at a glance</h2>" + topic_table(r, order, c, quotes=1)
     details = "<h2>What users said</h2>" + "".join(_topic_detail(r, t) for t in order)
     body = b.layout(b.section("single", "".join(f"<p>{x}</p>" for x in paras) + b.details(pairs)
                               + table + details + method(r) + footer(r)))

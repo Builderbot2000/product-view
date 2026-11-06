@@ -128,7 +128,7 @@ def ordered(r: TopicReport, ids) -> list[str]:
 def topic_table(r: TopicReport, ids: list[str], canvas: Canvas, column=None,
                 quotes: int = 0) -> str:
     """A row per topic: name and description (and up to `quotes` of this
-    period's quotes), an optional (header, cell function) column, then this
+    period's quotes, or a note that there were none), an optional (header, cell function) column, then this
     period, usual, change and the trend."""
     rows = []
     for tid in ids:
@@ -137,6 +137,8 @@ def topic_table(r: TopicReport, ids: list[str], canvas: Canvas, column=None,
                  + b.muted(b.esc(r.matrix.topics[tid].description)))
         for q in t.recent_quotes(quotes):
             first += "<br />" + quote(q, 160)
+        if quotes and not t.now:
+            first += "<br />" + b.muted("No reviews this period.")
         row = [first] + ([column[1](tid)] if column else [])
         row += [str(t.now), usual(t.usual), change_cell(t.change),
                 canvas.spark(f"topic-{tid}", t.series)]
