@@ -1,0 +1,155 @@
+# Proofread of the report built 2026-10-08 (period Aug 26 – Sep 22), for the demo.
+#
+# A layer beside the pipeline's output, not an edit to it: apply.py copies
+# out/report to out/report-proofread and applies these corrections there.
+# Every correction was checked against the period's 83 negative reviews in
+# reviews.db. Counts, "usual" and UP/DOWN flags are the pipeline's, except
+# where a `replace` below says otherwise.
+#
+# Ops, applied in this order on every page:
+#   remove   issue rows and detail sections whose quotes are all off topic
+#   move     an issue filed under the wrong area
+#   drop     an off-topic quote (table cells and quote lists)
+#   swap     a quote replaced everywhere, by another from the same period
+#   add      a quote added to an issue's table cell and quote list, if missing
+#   rename   an issue's name everywhere; drops its (auto-labelled) marker
+#   replace  exact page text, for counts and sentences
+
+remove:
+  # The sarcasm cluster ("Way to go RBC"); its one quote is about trusted devices.
+  - "Credit card payment-due info missing"
+  # Neither quote is about a sign-out button.
+  - "No sign-out button"
+
+move:
+  # Four of its five quotes are the ID photo check when trusting a new device.
+  - name: "Mobile cheque deposit fails"
+    from_area: "Payments & transfers"
+    to_area: "Sign-in & security"
+    source: role-payments          # page the row and detail section are copied from
+    remove_from: [role-payments]
+    add_to: [role-identity]
+    relabel_in: [role-support]
+
+drop:
+  - "The app is ok, you see all your accounts in one place and you can perform many actions"
+  - "The restaurant works"          # mistranslation of "le reste fonctionne", the rest works
+  - "Edit: Got it working with Exploit Protection Compatibility Mode"
+  - "Why a thumbprint and a password to get in then it prints a code"
+  - "Ai keeps repeating it self"
+  - "Update: I logged the whole thing"
+  - "It takes hours to get one reply while they keep my card locked"
+  - "I have now got a tap, my debit card."
+  - "it's impossible to take the cliché for the reverse"
+  - "Also some features are only online and not in the app"
+  - "worst app and service, i have been using this app from 2 years"
+  - "App will behave normally"
+  - "no deposit from phone"
+  - "for the past year or so we have been unable to view our savings account"
+  - "it's my PC at home"
+  - "I can't download it, since my phone is not compatible with this version"
+  - "Canadian citizen, Canadian account, Canadian currency"
+  - "there's no better than you"
+  - "that goes for most banks nowadays)"
+  - "It's 2026, figure it out"
+  - "everytime i have to get an otp to login to this app"
+  - "I'm looking forward to the new app"   # a hope, not a like of the design
+
+swap:
+  - from: "bravo vhampion how I do now to install the application?"
+    to: "at 80 years old, changes are frustrating!"
+    meta: "2★ · Sep 9 · v4.66"
+  - from: "That was our Child Tax Credit saving!"
+    to: "for the past year or so we have been unable to view our savings account both on the app and our web browsers on our computers"
+    meta: "1★ · Sep 21 · v4.67"
+  - from: "Your banking system should not be failing when customers are trying to send money"
+    to: "going to switch banks I'm done!"
+    meta: "1★ · Sep 14 · v4.67"
+  - from: "It doesnt even show up when using the atm machines in the actual bank"
+    to: "after 15ish years im now closing all accounts and switching banks"
+    meta: "1★ · Sep 15 · v4.67"
+  - from: "It seems like when you step foot outside of Canada, RBC doesn't let you place any trades"
+    to: "RBC sucks"
+    meta: "1★ · Sep 10 · v4.67"
+  # Praise that undercuts itself, and a hope rather than praise.
+  - from: "I like this app and it's comparable to the Scotiabank app"
+    to: "pretty good app well organised and it works well"
+    meta: "4★ · Sep 18 · v4.67"
+  - from: "I hope it will be easy to navigate for seniors like me"
+    to: "very easy to use and secured"
+    meta: "5★ · Sep 9 · v4.66"
+
+add:
+  - issue: "'Technical difficulties, try again later' error"
+    text: "always shows an error"
+    meta: "1★ · Aug 30 · v4.66 · 1 👍"
+  - issue: "It wont let me log in to the app"
+    text: "I could not login to the app few days"
+    meta: "1★ · Sep 7 · v4.66"
+  - issue: "It wont let me log in to the app"
+    text: "can't download new app so cant access my account!!"
+    meta: "1★ · Sep 16 · v4.34"
+  - issue: "It doesn't work half the time"
+    text: "It hasn't been working in my app for three days!. I deleted it, re-downloaded it, and it still doesn't work!!!"
+    meta: "1★ · Sep 18 · v4.67"
+  - issue: "It doesn't work half the time"
+    text: "\"When it works it works, when it doesn't....\""
+    meta: "2★ · Sep 22 · v4.67"
+  - issue: "App won't open; reinstalling doesn't help"
+    text: "Please improve your maintenance scheduling and communication"
+    meta: "1★ · Sep 12 · 2 👍"
+  - issue: "App won't open; reinstalling doesn't help"
+    text: "this app used to work flawlessly, now you have to jump thru hoops and still nothing works"
+    meta: "1★ · Sep 3 · v4.66 · 1 👍"
+  - issue: "Say other banks' apps are better"
+    text: "I can't see past transactions easily as other banks do"
+    meta: "3★ · Sep 2 · v4.66"
+
+rename:
+  "It wont let me log in to the app": "Can't log in to the app"
+  "It doesn't work half the time": "App often doesn't work"
+  "App won't open; reinstalling doesn't help": "App has got worse and often fails"
+  "RBC you are not doing the app thing well": "Angry at RBC over unfixed problems"
+  "Never had a problem before and now, it's constantly crashing": "App crashes"
+  "Not compatible with my phone anymore": "Not compatible with older phones"
+  "Doesn't remember card number": "Sign-in rejects my identity details"
+  "Permissions and security concerns": "Too many security steps at sign-in"
+  "Horrible password reset function. I put in the right password": "New sign-in steps lock people out"
+  "Mobile cheque deposit fails": "ID photo check fails when trusting a new device"
+  "Doesn't show payment due info, just balance and transactions": "Can't see transactions or accounts"
+  "Use the browser instead!": "No capture button when photographing ID"
+  "It says I've lost my internet connection": "'Lost connection' message"
+  "Don't have bank card": "Likes the credit score section"
+  "The best Bank ever": "Best bank ever"
+  "This application Helps me everyday with all of my transactions": "Helps with everyday banking"
+  "General dissatisfaction (no specific complaint)": "General dissatisfaction (no specific complaint)"
+
+replace:
+  # "Leading" read as the area's biggest issue; 2FA (16) is. This is its biggest rise.
+  - from: "Leading it is “Can&#x27;t log in to the app” (6, usually 1.8)."
+    to: "Its biggest rise is “Can&#x27;t log in to the app” (6, usually 1.8)."
+  # A team whose one area shares its name needn't list it twice.
+  - from: "<![CDATA[UI & design]]></ac:plain-text-link-body></ac:link> <span style=\"color: #596069;\">· UI &amp; design</span>"
+    to: "<![CDATA[UI & design]]></ac:plain-text-link-body></ac:link>"
+  - from: "<![CDATA[Sign-in & security]]></ac:plain-text-link-body></ac:link> <span style=\"color: #596069;\">· Sign-in &amp; security</span>"
+    to: "<![CDATA[Sign-in & security]]></ac:plain-text-link-body></ac:link>"
+  # Only the top four versions were listed; they summed to 68 of 75.
+  - from: "4.66 (33), 4.67 (22), unknown (11), 4.34 (2) "
+    to: "4.66 (33), 4.67 (22), unknown (11), 4.34 (2), other (7) "
+  # Read from every review this period: 5 say they are leaving RBC, not 12.
+  # The "usual" behind 7.7 came from the same mis-grouping, so it is left out.
+  - from: "<p>12 reviewers said they’re switching banks, against a usual 7.7.</p>"
+    to: "<p>5 reviewers said they’re leaving RBC.</p>"
+  - from: "<h2><span style=\"color: #16191D;\">12</span></h2><p><strong>say they&#x27;re switching banks</strong><br /><span style=\"color: #596069;\">usual 7.7 · within normal variation</span></p>"
+    to: "<h2><span style=\"color: #16191D;\">5</span></h2><p><strong>say they&#x27;re leaving RBC</strong><br /><span style=\"color: #596069;\">read from every review this period</span></p>"
+  - from: "<td style=\"text-align: right;\">12</td><td style=\"text-align: right;\">7.7</td><td><ac:structured-macro ac:name=\"status\"><ac:parameter ac:name=\"colour\">Grey</ac:parameter><ac:parameter ac:name=\"title\">steady</ac:parameter></ac:structured-macro></td><td><ac:image ac:width=\"129\"><ri:attachment ri:filename=\"spark-neg-say-they-re-switching-banks.svg\" /></ac:image></td>"
+    to: "<td style=\"text-align: right;\">5</td><td style=\"text-align: right;\">–</td><td></td><td></td>"
+  - from: "<strong>Say they&#x27;re switching banks</strong>"
+    to: "<strong>Say they&#x27;re leaving RBC</strong>"
+  # Every issue name has now been checked, so the (auto-labelled) explanation goes.
+  - from: "Issues that have been checked have a short name and a product area such as Payments, which is how each team’s page shows only the areas it looks after. Issues not yet checked are marked <em>(auto-labelled)</em>: their name is one reviewer’s own sentence and their area is guessed from keywords, so both may be rough."
+    to: "Each issue has a short name and a product area such as Payments, which is how each team’s page shows only the areas it looks after."
+
+# Replaces the "Generated by pv report ... from run ..." line, which named the
+# tool and its runs to readers.
+footer: "Built on Oct 8, 2026 from Google Play reviews up to Sep 22, 2026."
