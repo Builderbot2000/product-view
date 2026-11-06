@@ -32,11 +32,50 @@
 | What did you try before this? | Six rounds, each written down before it ran, plus a final test on the sample kept aside | [trials/topic-trials.md](../trials/topic-trials.md) |
 | How do topics get changed? | Edit the topic's description in the Ownership Matrix. The next run re-matches everything | [matrix.sample.yaml](../matrix.sample.yaml) (the guidance on writing descriptions is at the top) |
 
+## One review, from Play Store to the report
+
+A real 1★ review from Sep 17, 2026, followed to the number at the top of Priya Shah's report: **"Trusted device and ID check: 12 reviews, well above the usual 4.7."** The run uses the sample Ownership Matrix and the reporting period Aug 26 – Sep 22, 2026. The same journey as a diagram: [architecture.md](architecture.md#one-review-from-play-store-to-the-report).
+
+> *"Keeps asking to send in photos of IDs and selfies after submitting and accepting. Figure your stuff out, please."*
+
+| Stage | What this review looks like there | Code |
+|---|---|---|
+| 1. Fetched | Google Play returns it with its star rating, date, app version and thumbs-up. The reviewer's name and photo are dropped on arrival | [play_store.py:172](../src/product_view/ingest/play_store.py#L172), [models.py:57](../src/product_view/ingest/models.py#L57) |
+| 2. Raw archive | One line added to `data/raw/com.rbc.mobile.android_en_ca.jsonl`: `review_id 6d9545b4…`, `score 1`, `created_at 2026-09-17T20:57:22Z`, `app_version 4.67`, `thumbs_up 1` | [archive.py:91](../src/product_view/ingest/archive.py#L91) |
+| 3. Review database | All language files merged, each review kept once, into the `reviews` table of `reviews.db` | [prepare.py:30](../src/product_view/prepare.py#L30), [store.py:148](../src/product_view/store.py#L148) |
+| 4. Language | Detected as English (99.9% sure), so the text goes through unchanged. A French review would be translated here, with the original kept | [prepare.py:60](../src/product_view/prepare.py#L60), [detect.py:71](../src/product_view/lang/detect.py#L71) |
+| 5. Picked for matching | 1–3 stars and inside the 12 periods the report shows, so it's one of 747 complaint reviews in the run | [store.py:192](../src/product_view/store.py#L192), [run.py:86-90](../src/product_view/matching/run.py#L86-L90) |
+| 6. Cut into complaints | Two pieces: **(0)** "Keeps asking to send in photos of IDs and selfies after submitting and accepting" and **(1)** "Figure your stuff out, please" | [units.py:80](../src/product_view/matching/units.py#L80) |
+| 7. Scored against every topic | Piece 0 scores 0.83 for "Trusted device and ID check", with no other topic close. Piece 1 tops out at 0.45 | [method.py:106](../src/product_view/matching/method.py#L106) |
+| 8. Routed | Piece 0 is "sure" (≥ 0.8, runner-up < 0.5): matched with no AI call. Piece 1 is "misc" (< 0.6): no topic | [method.py:139](../src/product_view/matching/method.py#L139), thresholds at [method.py:36-37](../src/product_view/matching/method.py#L36-L37) |
+| 9. Stored | `topics.db`, run `20261104T234449Z`: both pieces in `units` with route and score; one row in `matches`: piece 0 → `trusted-device`, `how = sure` | [run.py:103-108](../src/product_view/matching/run.py#L103-L108), [matching/store.py:47-65](../src/product_view/matching/store.py#L47-L65) |
+| 10. Counted | Sep 17 falls in this period, so the review is added to the topic's set for period 0. It's a set of review ids, so a review counts once however many pieces match | [report/data.py:142-148](../src/product_view/report/data.py#L142-L148), [periods.py:51](../src/product_view/periods.py#L51), [periods.py:83](../src/product_view/periods.py#L83) |
+| 11. This period and usual | 12 distinct reviews this period. The 3 periods before held 9, 4 and 1, so usual = 14 ÷ 3 = 4.7 | [periods.py:97-103](../src/product_view/periods.py#L97-L103) |
+| 12. Up or down | With a usual of 4.7, a count of 12 or more happens by chance about 3 times in 1,000. That's under the 5% bar, so the topic is **up** | [periods.py:106-123](../src/product_view/periods.py#L106-L123), bar at [periods.py:16-17](../src/product_view/periods.py#L16-L17) |
+| 13. Its quote | Its matched piece becomes its quote. "Sure" matches are listed before the AI's, so it's among the 5 quotes shown under the topic | [report/data.py:150-160](../src/product_view/report/data.py#L150-L160), ranking at [report/data.py:31-36](../src/product_view/report/data.py#L31-L36) |
+| 14. On the page | The topic moved most among Priya's topics, so it leads her report: "The one to look at first is 'Trusted device and ID check': 12 reviews, well above the usual 4.7." It's also a row in the topic table, with its 12-period trend | [parts.py:166](../src/product_view/report/parts.py#L166), [text.py:69](../src/product_view/report/text.py#L69), [parts.py:128](../src/product_view/report/parts.py#L128), [member.py:53](../src/product_view/report/member.py#L53) |
+| 15. Also counted | The same review counts toward 75 complaints across the whole app this period, and toward the Sign-in & security team page and Sam Gagnon's report, which share this topic | [report/data.py:163-170](../src/product_view/report/data.py#L163-L170), [team.py:43](../src/product_view/report/team.py#L43) |
+
+The same trail in the data files:
+
+```sql
+-- data/reviews.db
+SELECT review_id, score, created_at, app_version, content
+  FROM reviews WHERE review_id = '6d9545b4-88cf-4834-b4a6-23950985be4a';
+
+-- data/topics.db
+SELECT seq, route, best_topic, p1, text FROM units
+ WHERE run_id = '20261104T234449Z' AND review_id = '6d9545b4-88cf-4834-b4a6-23950985be4a';
+SELECT seq, topic_id, how FROM matches
+ WHERE run_id = '20261104T234449Z' AND review_id = '6d9545b4-88cf-4834-b4a6-23950985be4a';
+```
+
 ## Where is it in the code?
 
 | Question | Answer | Show |
 |---|---|---|
 | Where is the diagram of the whole system? | The architecture page | [architecture.md](architecture.md) |
+| Where is the diagram of one review's journey? | Below the system diagram, on the same page | [architecture.md](architecture.md#one-review-from-play-store-to-the-report) |
 | Where does a run start? | `pv cycle` runs every step once, in order | [cycle.py:117](../src/product_view/cycle.py#L117) |
 | Where are all the commands listed? | The command-line entry point; each command lives with the code it runs | [cli.py:1](../src/product_view/cli.py#L1) |
 | Where are the settings? | One settings file. Built-in defaults fill in anything it leaves out | [config.yaml](../config.yaml), defaults at [config.py:27](../src/product_view/config.py#L27) |
