@@ -72,7 +72,7 @@ follows one real review through every step, to the number at the top of
 
 | Document | What it covers |
 |---|---|
-| [Architecture](docs/architecture.md) | Two diagrams: the whole system, and one review's journey from Google Play to a report. [Open in a browser](docs/architecture.html) |
+| [Architecture](docs/architecture.md) | Two diagrams: the whole system, and one review's journey from Google Play to a report. Images: [system](docs/diagrams/system.png), [journey](docs/diagrams/journey.png) |
 | [Q&A sheet](docs/qa.md) | Answers to common questions about the method, the reports and running it at RBC, each linked to the code |
 | [Report design](docs/report-design.md) | Why the pages look and count the way they do |
 | [Production plan](docs/production-plan.md) | What it takes to run Product View as a service |
